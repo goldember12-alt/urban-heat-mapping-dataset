@@ -108,14 +108,31 @@ New manual verification in this session (memory-safe uncapped Phoenix rerun):
   - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
   - CLI result: `rows=4735561`; `blocked_stages=` (empty).
   - Log summary: dropped `7306` open-water cells and `762` cells with `<3` ECOSTRESS passes; output GeoPackage and parquet were saved successfully.
+- Opened and validated the saved uncapped Phoenix parquet outputs:
+  - Final filtered row count: `4,735,561`.
+  - Non-null counts:
+    - `lst_median_may_aug`: `4,735,561`
+    - `ndvi_median_may_aug`: `4,735,537`
+    - `n_valid_ecostress_passes`: `4,735,561`
+  - `lst_median_may_aug` summary (Kelvin): min `302.49`, p1 `307.96`, p5 `310.65`, median `315.26`, p95 `318.61`, p99 `321.39`, max `330.35`.
+  - `ndvi_median_may_aug` summary: min `0.0254`, p1 `0.0916`, p5 `0.1278`, median `0.1960`, p95 `0.3318`, p99 `0.4458`, max `0.7368`.
+  - Impossible-value checks: no `lst_median_may_aug` values `<250 K`, `>350 K`, or `==0`; no NDVI values `<-0.2`, `>1.0`, `==0`, or `==1.0`.
+  - Spike check: LST top rounded 0.01 K bucket share is about `0.21%`; NDVI top rounded 0.01 bucket share is about `9.66%`, which is consistent with concentration around the central NDVI range rather than a fill-value spike.
+  - Filter reconciliation:
+    - Unfiltered rows: `4,743,629`
+    - Rows after the open-water filter expression: `4,736,323`
+    - Final rows after ECOSTRESS-pass filter: `4,735,561`
+    - The logged `<3` ECOSTRESS-pass drop of `762` rows matches exactly.
+    - The logged open-water-stage drop of `7,306` rows also matches the filter expression; `7,286` of those rows have `land_cover_class == 11`, and the remaining `20` rows were excluded because the same boolean mask also drops missing `land_cover_class` values.
 - Manual verification status for the fix:
   - Implemented and manually verified that the prior NumPy allocation crash in `sample_median_from_raster_stack` no longer occurs in the uncapped live Phoenix run.
-  - The `<3` ECOSTRESS-pass filter executed in the uncapped run, which confirms `n_valid_ecostress_passes` remained populated enough for rule filtering.
-  - Full-output post-save non-null counts were not independently re-queried in this session.
+  - Post-fix ECOSTRESS output fields and NDVI distributions were validated from the saved parquet artifacts.
+  - Phoenix is ready to proceed to the next uncapped city validation.
 
 ## Immediate Next Step
 
-Manually inspect the updated uncapped Phoenix output for LST/NDVI distribution sanity after the memory-safe refactor, then proceed to the next uncapped city or a broader batch run.
+Proceed to the next uncapped city run using the same workflow; Phoenix uncapped output, ECOSTRESS pass counts, and post-filter distributions are now manually validated.
+
 ## Current Output Structure
 
 - `data_processed/study_areas/`
@@ -137,11 +154,30 @@ Current verified final output files exist:
 ## Not Started Yet / Open Issues
 
 - ECOSTRESS LST currently uses product-provided LST layer without additional cloud/QC masking in feature assembly; if stricter quality filtering is required, that policy is still open.
-- The updated uncapped Phoenix output was verified by successful end-to-end rerun, but full-output post-save non-null counts/distribution stats were not independently re-queried in this session.
 - Real NDVI and ECOSTRESS acquisition completeness for all 30 cities remains pending.
+- Additional uncapped city-by-city validation is still needed to confirm the memory-safe median path behaves consistently beyond Phoenix.
 - Full 30-city end-to-end run at 30 m remains pending data availability and runtime.
 ## Checkpoint Log
 
+### 2026-03-08 - Checkpoint: Phoenix Post-Fix ECOSTRESS Output Validated
+
+- Date / checkpoint:
+  - 2026-03-08 saved-output validation after the uncapped Phoenix rerun.
+- Change made:
+  - Opened the filtered and unfiltered Phoenix parquet artifacts and validated post-fix row counts, non-null counts, distribution summaries, and filter-drop consistency.
+- Files touched:
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
+- Test status:
+  - No new code tests were added in this checkpoint; prior status remains `51 passed`.
+- Manual verification status:
+  - Filtered Phoenix output row count is `4,735,561`.
+  - Non-null counts: `lst_median_may_aug=4,735,561`, `ndvi_median_may_aug=4,735,537`, `n_valid_ecostress_passes=4,735,561`.
+  - Distribution summaries are within expected ranges and no impossible fill-like values were found in the checked fields.
+  - Open-water-stage row drop (`7,306`) and `<3` ECOSTRESS-pass row drop (`762`) reconcile with the saved unfiltered/filtered parquet artifacts.
+- Next recommended step:
+  - Proceed to the next uncapped city and repeat the same post-save validation checks.
 ### 2026-03-08 - Checkpoint: Memory-Safe LST Stack Median Verified on Uncapped Phoenix
 
 - Date / checkpoint:
