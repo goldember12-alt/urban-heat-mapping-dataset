@@ -16,34 +16,36 @@ Implemented in code:
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
 - Deterministic AppEEARS preflight/audit path that computes expected per-city study area, AOI, raw download, and status-summary paths; validates AOI CRS; and writes machine-readable preflight outputs.
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
+- Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
-- Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including what remains automated vs manual.
+- Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
+- Phoenix-only summary CLI now profiles the materialized Phoenix analysis dataset and writes a research-style markdown deliverable with supporting tables and figures.
 
 Standardization status:
 
-- Study-area and 30 m grid generation are already standardized for one-city and all-city execution.
+- Study-area and 30 m grid generation are standardized for one-city and all-city execution.
 - AppEEARS acquisition is standardized in code for all 30 cities.
 - Support-layer acquisition/prep is standardized in code around deterministic per-city raw-input paths plus deterministic prepared outputs.
-- The current remaining blocker for all-city support-layer prep is now raw DEM/NLCD/hydro population for 29 cities, not missing study areas or grids.
+- Reusable upstream caches for support-layer acquisition now live under `data_raw/cache/`.
+- The current remaining blocker for all-city support-layer prep is execution of the new raw acquisition stage for the remaining 29 cities, not missing code paths.
 
 ## Testing Status
 
 As of 2026-03-08:
 
-- `63 passed` via:
+- `69 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest -q"`
 
 Test-verified in the latest checkpoint:
 
-- `process_all_cities(...)` uses the full 30-city list when `city_ids` is omitted
-- `process_all_cities(...)` honors explicit city subsets
-- all-city support-layer preflight path uses the full 30-city list when `--city-ids` is omitted
-- deterministic expected DEM/NLCD/hydro raw paths are emitted correctly
-- missing-prerequisite handling reports blocked rows deterministically
-- city-specific raw-folder recursive discovery assumptions are codified and tested
-- support-layer prep writes deterministic prepared outputs from standardized raw inputs
-- feature discovery prefers prepared support outputs without breaking raw fallback behavior
+- DEM TNM Access product deduplication keeps the newest tile version per 1x1 degree tile.
+- Annual NLCD bundle member selection resolves the 2021 land-cover raster deterministically.
+- NHDPlus HR water export reads the expected water layers and ignores unrelated layers.
+- The raw acquisition runner skips already materialized deterministic outputs unless `--force` is passed.
+- Prior coverage for city processing, AppEEARS acquisition, support-layer preflight/prep, and feature assembly still passes.
+- Phoenix summary dataset selection prefers the canonical per-city feature parquet over intermediate and merged alternatives.
+- Phoenix preprocessing-audit logic counts open-water and low-ECOSTRESS-pass drops deterministically.
 
 ## Manual Verification Status
 
@@ -51,13 +53,16 @@ Implemented:
 
 - `src.run_city_processing` and `src.run_city_batch_processing` generate study areas and 30 m grids.
 - `src.run_support_layers --preflight-only` serves as the deterministic prerequisite audit for support-layer readiness.
+- `src.run_raw_data_acquisition` performs deterministic raw DEM/NLCD/hydro acquisition and clipping into the standardized raw folders, with reusable caches and summary outputs.
 - `src.run_support_layers` performs deterministic support-layer prep once raw support inputs exist.
+- `src.summarize_phoenix_dataset` generates a Phoenix-only markdown summary plus deterministic supporting CSV tables and PNG figures under `outputs/`.
 
 Test-verified:
 
-- Batch city-processing coverage is now included in `tests/test_batch_city_processing.py`.
-- Support-layer audit, prep, and prepared-output discovery are covered by `tests/test_support_layers.py`.
-- The latest full-suite result is `63 passed`.
+- Batch city-processing coverage is included in `tests/test_batch_city_processing.py`.
+- AppEEARS acquisition coverage is included in `tests/test_appeears_acquisition.py`.
+- Support-layer audit, raw acquisition helpers, prep, and prepared-output discovery are covered by `tests/test_support_layers.py` and `tests/test_raw_data_acquisition.py`.
+- The latest full-suite result is `69 passed`.
 
 Manually verified:
 
@@ -72,8 +77,8 @@ Manually verified:
   - `data_processed/support_layers/support_layers_preflight_summary.json`
   - `data_processed/support_layers/support_layers_preflight_summary.csv`
   - readiness counts: `True/True=1`, `False/False=29`
-  - the 29 blocked rows now share `prep_blocking_reasons=dem_source_missing;nlcd_land_cover_source_missing;nlcd_impervious_source_missing;hydro_source_missing`
-- Ran the real workspace support-layer prep CLI for Phoenix:
+  - the 29 blocked rows share `prep_blocking_reasons=dem_source_missing;nlcd_land_cover_source_missing;nlcd_impervious_source_missing;hydro_source_missing`
+- Ran the real workspace Phoenix support-layer prep CLI:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_support_layers --city-ids 1"`
 - Observed output:
   - `data_processed/support_layers/support_layers_prep_summary.json`
@@ -85,7 +90,20 @@ Manually verified:
   - `data_processed/appeears_status/appeears_ndvi_preflight_summary.json`
   - `data_processed/appeears_status/appeears_ndvi_preflight_summary.csv`
   - readiness counts: `True=1`, `False=29`
-  - the 29 blocked rows now share `blocking_reason=aoi_missing`
+  - the 29 blocked rows share `blocking_reason=aoi_missing`
+- Ran the real workspace raw acquisition CLI against the already-materialized Phoenix raw inputs:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command \".venv\Scripts\python.exe -m src.run_raw_data_acquisition --city-ids 1 --dataset all\""`
+- Observed output:
+  - `data_processed/support_layers/raw_data_acquisition_summary.json`
+  - `data_processed/support_layers/raw_data_acquisition_summary.csv`
+  - status counts: `dem/skipped_existing=1`, `nlcd/skipped_existing=1`, `hydro/skipped_existing=1`
+- Ran the real workspace Phoenix summary CLI:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.summarize_phoenix_dataset"`
+- Observed output:
+  - `outputs/phoenix_data_summary.md`
+  - `outputs/phoenix_data_summary/tables/*.csv`
+  - `outputs/phoenix_data_summary/figures/*.png`
+  - `dataset_consistency_check.csv` confirms the canonical per-city feature parquet matches the Phoenix filtered intermediate row count (`4,735,561`).
 
 Currently materialized on disk:
 
@@ -93,6 +111,7 @@ Currently materialized on disk:
 - `data_processed/city_grids/`: all 30 cities at 30 m
 - `data_processed/batch_city_processing_summary_30m.csv`
 - `data_processed/appeears_aoi/`: Phoenix only
+- `data_raw/cache/`: ready for reusable DEM/NLCD/hydro downloads but not yet populated by a full all-city acquisition run
 - `data_raw/dem/`: Phoenix only
 - `data_raw/nlcd/`: Phoenix only
 - `data_raw/hydro/`: Phoenix only
@@ -101,6 +120,8 @@ Currently materialized on disk:
 - `data_processed/support_layers/`:
   - `support_layers_preflight_summary.json`
   - `support_layers_preflight_summary.csv`
+  - `raw_data_acquisition_summary.json`
+  - `raw_data_acquisition_summary.csv`
   - `support_layers_prep_summary.json`
   - `support_layers_prep_summary.csv`
   - `01_phoenix_az/dem_prepared.tif`
@@ -114,12 +135,13 @@ Currently materialized on disk:
 
 Explicit blocker statement:
 
-- Yes: the current real blocker for all-30-city support-layer prep is missing standardized raw DEM/NLCD/hydro inputs for 29 cities.
-- Yes: the current real blocker for all-30-city AppEEARS acquisition is now missing AOIs for 29 cities, not missing study areas.
+- The prior manual blocker for standardized DEM/NLCD/hydro population is resolved in code.
+- The current practical blocker for all-30-city support-layer prep is running the new raw acquisition stage for the remaining 29 cities and waiting for large official downloads to complete.
+- The current real blocker for all-30-city AppEEARS acquisition is still missing AOIs for 29 cities, not missing study areas.
 
 ## Immediate Next Step
 
-Populate the standardized per-city raw DEM, NLCD land-cover, NLCD impervious, and hydro files for the remaining 29 cities, rerun `src.run_support_layers --preflight-only`, and then run all-city support-layer prep.
+Run `src.run_raw_data_acquisition --all-missing`, monitor `data_processed/support_layers/raw_data_acquisition_summary.csv` for failed city/dataset rows, rerun missing subsets as needed, then rerun `src.run_support_layers --preflight-only` and all-city support-layer prep.
 
 ## Current Output Structure
 
@@ -132,6 +154,9 @@ Populate the standardized per-city raw DEM, NLCD land-cover, NLCD impervious, an
 - `data_processed/intermediate/city_features/`
 - `data_processed/city_features/`
 - `data_processed/final/`
+- `outputs/phoenix_data_summary.md`
+- `outputs/phoenix_data_summary/`
+- `data_raw/cache/`
 - `data_raw/dem/<city_slug>/`
 - `data_raw/nlcd/<city_slug>/`
 - `data_raw/hydro/<city_slug>/`
@@ -140,16 +165,69 @@ Populate the standardized per-city raw DEM, NLCD land-cover, NLCD impervious, an
 
 ## Not Started Yet / Open Issues
 
-- Standardized DEM raw folders are not yet populated for 29 cities.
-- Standardized NLCD raw folders are not yet populated for 29 cities.
-- Standardized hydro raw folders are not yet populated for 29 cities.
+- Full all-city raw DEM acquisition has not been executed yet.
+- Full all-city raw NLCD acquisition/clipping has not been executed yet.
+- Full all-city raw hydro acquisition/clipping has not been executed yet.
 - Full support-layer prep has not yet been materialized beyond Phoenix.
 - AOIs are still only materialized for Phoenix.
 - Full all-city AppEEARS acquisition has not started beyond Phoenix-ready assets.
 - Additional uncapped city-by-city feature validation beyond Phoenix is still pending.
-- Full 30-city end-to-end dataset generation at 30 m remains pending data availability and runtime.
+- Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 
 ## Checkpoint Log
+
+### 2026-03-08 - Checkpoint: Phoenix Data Summary Deliverable Added
+
+- Date / checkpoint:
+  - 2026-03-08 Phoenix-only summary deliverable generated from the materialized analysis dataset.
+- Change made:
+  - Added `src/summarize_phoenix_dataset.py` to select the canonical Phoenix-only analysis table, compute concise descriptive statistics, and write a polished markdown summary.
+  - Added deterministic supporting CSV tables and PNG figures under `outputs/phoenix_data_summary/`.
+  - Added tests for Phoenix dataset selection priority and preprocessing-audit logic.
+- Files touched:
+  - `src/summarize_phoenix_dataset.py`
+  - `tests/test_summarize_phoenix_dataset.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.summarize_phoenix_dataset"`
+- Test status:
+  - `69 passed` (`pytest -q`).
+- Manual verification status:
+  - Real workspace run wrote `outputs/phoenix_data_summary.md` plus supporting tables and four figures under `outputs/phoenix_data_summary/`.
+  - `dataset_consistency_check.csv` confirms the canonical per-city feature table matches the Phoenix filtered intermediate row count (`4,735,561`).
+- Next recommended step:
+  - Manually review the generated Phoenix figures and narrative for presentation preferences, then reuse the same CLI pattern for other cities if needed.
+### 2026-03-08 - Checkpoint: Raw Support-Layer Acquisition Pipeline Added
+
+- Date / checkpoint:
+  - 2026-03-08 raw DEM/NLCD/hydro acquisition automation.
+- Change made:
+  - Added a restartable raw acquisition runner that fills deterministic city raw DEM, NLCD, and hydro paths from official USGS/MRLC sources.
+  - Added reusable `data_raw/cache/` download/extraction caches for DEM tiles, Annual NLCD bundles, and NHDPlus HR HU4 packages.
+  - Added machine-readable raw acquisition summary outputs under `data_processed/support_layers/`.
+  - Added tests for TNM tile deduplication, Annual NLCD bundle member selection, NHDPlus HR water-layer extraction, and skip/idempotence behavior.
+  - Updated README and workflow docs to document the new raw acquisition stage and CLI usage.
+- Files touched:
+  - `src/config.py`
+  - `src/raw_data_acquisition.py`
+  - `src/run_raw_data_acquisition.py`
+  - `tests/test_raw_data_acquisition.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_raw_data_acquisition --all-missing"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_raw_data_acquisition --city-ids 1 2 3 --dataset dem"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_raw_data_acquisition --dataset nlcd --all-missing"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_raw_data_acquisition --dataset hydro --all-missing"`
+- Test status:
+  - `67 passed` (`pytest -q`).
+- Manual verification status:
+  - Real workspace CLI run for Phoenix produced the new raw acquisition summary and correctly skipped all already-existing deterministic outputs.
+  - Official endpoint assumptions were verified during implementation against TNM Access, MRLC Annual NLCD bundle URLs, and TNM NHDPlus HR product queries.
+  - Full multi-city download execution has not been run yet.
+- Next recommended step:
+  - Execute `src.run_raw_data_acquisition --all-missing`, then rerun support-layer preflight and prep.
 
 ### 2026-03-08 - Checkpoint: All-City Study Areas And 30 m Grids Materialized
 
@@ -237,3 +315,11 @@ Populate the standardized per-city raw DEM, NLCD land-cover, NLCD impervious, an
   - Phoenix was the only currently materialized ready city for AppEEARS prerequisites at that time.
 - Next recommended step:
   - Materialize study areas for all cities, rerun preflight, and proceed to all-city AOI export and AppEEARS submit-only acquisition.
+
+
+
+
+
+
+
+

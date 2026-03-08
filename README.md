@@ -15,13 +15,14 @@ Target analytic unit: one row per 30 m grid cell per city.
 5. AppEEARS AOI export from city study areas (`data_processed/appeears_aoi/*.geojson`, EPSG:4326).
 6. AppEEARS acquisition runner (submit, poll, download, resumable state) for NDVI and ECOSTRESS.
 7. Support-layer preflight audit for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
-8. Support-layer prep runner that clips deterministic per-city support files into `data_processed/support_layers/<city_stem>/`.
-9. Generic raster alignment framework to city grid template.
-10. DEM extraction (aligned).
-11. NLCD land-cover and impervious extraction (aligned).
-12. Hydrography distance-to-water raster generation and extraction.
-13. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
-14. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
+8. Raw support-layer acquisition runner for official USGS 3DEP, MRLC Annual NLCD, and USGS NHDPlus HR sources.
+9. Support-layer prep runner that clips deterministic per-city support files into `data_processed/support_layers/<city_stem>/`.
+10. Generic raster alignment framework to city grid template.
+11. DEM extraction (aligned).
+12. NLCD land-cover and impervious extraction (aligned).
+13. Hydrography distance-to-water raster generation and extraction.
+14. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
+15. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
 
 ## Required Final Columns
 
@@ -62,6 +63,8 @@ The repo now treats support layers as a deterministic per-city raw-input contrac
 - `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_impervious_30m.tif`
 - `data_raw/hydro/<city_slug>/<city_slug>_nhdplus_water.gpkg`
 
+The raw acquisition stage caches reusable upstream downloads under `data_raw/cache/` and then clips deterministic city-specific outputs into the raw contract above.
+
 The standardized prep stage keeps those raw files immutable and writes deterministic prepared outputs to:
 
 - `data_processed/support_layers/<city_stem>/dem_prepared.tif`
@@ -76,14 +79,16 @@ The standardized prep stage keeps those raw files immutable and writes determini
 Automated:
 
 - Study areas and 30 m grids are already automated for one city via `src.run_city_processing` and for all 30 cities via `src.run_city_batch_processing`.
-- The prerequisite audit is already automated via `src.run_support_layers --preflight-only`.
-- Support-layer clipping/prep is already automated via `src.run_support_layers`.
+- The prerequisite audit is automated via `src.run_support_layers --preflight-only`.
+- Raw support-layer acquisition is automated via `src.run_raw_data_acquisition`.
+- Support-layer clipping/prep is automated via `src.run_support_layers`.
 
-Manual:
+Operational notes:
 
-- DEM, NLCD land cover, NLCD impervious, and hydro raw source files still need to be populated manually into the deterministic per-city raw paths.
-- Use `data_processed/support_layers/support_layers_preflight_summary.csv` as the canonical manifest of which city-specific raw files are still missing.
-- Once files are populated, rerun support-layer preflight and then run support-layer prep for the same city set.
+- The MRLC Annual NLCD cache downloads are large and are intentionally reused across cities.
+- The raw acquisition runner is restartable: it skips completed deterministic outputs unless `--force` is passed and reuses cached DEM tiles, NLCD bundles, and NHDPlus HR packages.
+- Use `data_processed/support_layers/raw_data_acquisition_summary.csv` as the canonical machine-readable status summary for the new acquisition stage.
+- After raw acquisition completes, rerun `src.run_support_layers --preflight-only` and then run `src.run_support_layers` for the same city set.
 
 ## CLI Entrypoints
 
@@ -131,6 +136,32 @@ Support-layer preflight only:
 .venv\Scripts\python.exe -m src.run_support_layers --preflight-only
 ```
 
+Acquire raw support layers for all currently missing cities:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_raw_data_acquisition --all-missing
+```
+
+Acquire one dataset group for selected cities:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_raw_data_acquisition --city-ids 1 2 3 --dataset dem
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_raw_data_acquisition --dataset nlcd --all-missing
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_raw_data_acquisition --dataset hydro --all-missing
+```
+
+Force rebuilding requested deterministic raw outputs:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_raw_data_acquisition --city-ids 1 --force
+```
+
 Prepare support layers for one city:
 
 ```powershell
@@ -147,6 +178,12 @@ Supported support-layer mode flag:
 
 - `--preflight-only`
 - `--overwrite`
+
+Supported raw acquisition mode flags:
+
+- `--all-missing`
+- `--dataset {all,dem,nlcd,hydro}`
+- `--force`
 
 Supported AppEEARS acquisition modes:
 
@@ -183,6 +220,7 @@ End-to-end pipeline orchestrator:
 ## Data Layout
 
 - `data_raw/` immutable source data
+- `data_raw/cache/` reusable upstream download/extraction cache for DEM, NLCD, and hydro packages
 - `data_raw/dem/<city_slug>/` city-specific DEM source files
 - `data_raw/nlcd/<city_slug>/` city-specific NLCD land-cover and impervious source files
 - `data_raw/hydro/<city_slug>/` city-specific hydro source files
@@ -191,7 +229,7 @@ End-to-end pipeline orchestrator:
 - `data_processed/study_areas/` city buffered study areas
 - `data_processed/appeears_aoi/` AppEEARS AOI GeoJSON exports
 - `data_processed/appeears_status/` preflight JSON/CSV plus acquisition summary JSON/CSV per product type
-- `data_processed/support_layers/` support-layer preflight summary, prep summary, and per-city prepared support artifacts
+- `data_processed/support_layers/` support-layer preflight summary, raw acquisition summary, prep summary, and per-city prepared support artifacts
 - `data_processed/city_grids/` city master grids
 - `data_processed/intermediate/` aligned rasters + unfiltered/filtered city feature tables
 - `data_processed/city_features/` per-city feature outputs + batch summary
