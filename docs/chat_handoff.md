@@ -22,19 +22,20 @@ Implemented end-to-end pipeline components now include:
   - AppEEARS API client with env-only auth (`src/appeears_client.py`).
   - Resumable submit/poll/download orchestration with machine-readable per-city status summaries (`src/appeears_acquisition.py`).
   - Acquisition CLI entrypoint (`src/run_appeears_acquisition.py`).
+- AppEEARS-to-feature ingestion update:
+  - Feature source discovery now scans `data_raw/ndvi/<city_slug>/` and `data_raw/ecostress/<city_slug>/` recursively and selects science layers only (`_NDVI_` for NDVI, `_LST_` for ECOSTRESS) with legacy top-level fallback (`src/feature_assembly.py`).
 
 ## Testing Status
 
 As of 2026-03-08:
 
-- `46 passed` via:
+- `48 passed` via:
   - `.venv\Scripts\python.exe -m pytest -q`
 
-New tests added for acquisition stage:
+Focused ingestion/file-selection tests now include:
 
-- `tests/test_appeears_aoi.py`
-- `tests/test_appeears_client.py`
-- `tests/test_appeears_acquisition.py`
+- `tests/test_feature_assembly.py::test_discover_default_feature_sources_uses_city_appeears_layer_files`
+- `tests/test_feature_assembly.py::test_discover_default_feature_sources_falls_back_to_top_level_when_city_folder_missing`
 
 ## Manual Verification Status
 
@@ -49,23 +50,24 @@ Implemented and manually executed previously:
   - Output: `data_processed/batch_city_processing_summary_500m.csv` with `status=ok` for city 1.
 - Ran partial end-to-end pipeline (existing grid only, capped cells):
   - `.venv\Scripts\python.exe -m src.run_full_pipeline --skip-city-processing --existing-grids-only --city-ids 1 --max-cells 5000`
-- Verified produced artifacts:
-  - `data_processed/city_features/01_phoenix_az_features.gpkg`
-  - `data_processed/city_features/01_phoenix_az_features.parquet`
-  - `data_processed/city_features/feature_extraction_summary_30m.csv`
-  - `data_processed/intermediate/city_features/01_phoenix_az_features_unfiltered.parquet`
-  - `data_processed/intermediate/city_features/01_phoenix_az_features_filtered.parquet`
-  - `data_processed/final/final_dataset.parquet`
-  - `data_processed/final/final_dataset.csv`
 
-New acquisition stage manual verification in this session:
+New manual verification in this session (real Phoenix AppEEARS raw downloads wired into feature extraction):
 
-- Test-verified only (no live AppEEARS API run performed in this sandboxed session).
-- Not manually verified against real AppEEARS task submission/download yet.
+- Confirmed discovered feature inputs for Phoenix (`city_id=1`) from raw AppEEARS directories:
+  - `ndvi_count=9` files from `data_raw/ndvi/phoenix/...*_NDVI_*.tif`
+  - `lst_count=61` files from `data_raw/ecostress/phoenix/...*_LST_*.tif`
+- Ran one-city extraction with existing CLI and real AppEEARS files:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 1000`
+  - CLI result: `rows=998`; `blocked_stages=dem;hydro_distance;nlcd_impervious;nlcd_land_cover`
+- Verified Phoenix per-city output columns are populated in `data_processed/city_features/01_phoenix_az_features.parquet`:
+  - `ndvi_median_may_aug`: 998 non-null
+  - `lst_median_may_aug`: 998 non-null
+  - `n_valid_ecostress_passes`: 998 non-null
+  - `n_valid_ecostress_passes` range: 34 to 37
 
 ## Immediate Next Step
 
-Set AppEEARS credentials in environment variables and run one live city acquisition per product to verify real API submission/poll/download and raw file placement.
+Validate and apply scale-factor/units normalization for AppEEARS NDVI and ECOSTRESS LST values before broader multi-city runs, then rerun Phoenix without `--max-cells`.
 
 ## Current Output Structure
 
@@ -87,12 +89,32 @@ Current verified final output files exist:
 
 ## Not Started Yet / Open Issues
 
-- Live AppEEARS API interaction (auth + submit + poll + download) has not been manually run in this session.
+- NDVI values in Phoenix output currently appear unscaled raw integer-like magnitudes (example range observed: ~1823 to ~2385), so NDVI scaling/normalization still needs explicit handling verification.
+- DEM/NLCD/hydro feature stages remain blocked for this run due missing corresponding raw inputs in local folders.
 - Real NDVI and ECOSTRESS acquisition completeness for all 30 cities remains pending.
 - Full 30-city end-to-end run at 30 m remains pending data availability and runtime.
 
 ## Checkpoint Log
 
+### 2026-03-08 - Milestone: Phoenix Real AppEEARS Downloads Wired Into Feature Extraction
+
+- Change made:
+  - Updated feature-source discovery to use city-specific recursive AppEEARS folders for NDVI and ECOSTRESS and select only science layers (`_NDVI_`, `_LST_`).
+  - Kept fallback to legacy top-level raster discovery if city-specific folders are absent.
+  - Added focused tests for ingestion/file-selection behavior.
+- Files touched:
+  - `src/feature_assembly.py`
+  - `tests/test_feature_assembly.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 1000`
+- Test status:
+  - `48 passed` (`pytest -q`).
+- Manual verification status:
+  - Real Phoenix AppEEARS NDVI and ECOSTRESS files were discovered and consumed in one-city extraction.
+  - Output columns `ndvi_median_may_aug`, `lst_median_may_aug`, and `n_valid_ecostress_passes` were confirmed non-null for all 998 retained rows in the capped run.
+- Next recommended step:
+  - Confirm and implement NDVI/LST unit scaling rules, then run uncapped Phoenix extraction and check summary distribution sanity.
 ### 2026-03-08 - Milestone: ECOSTRESS Product/Layer Defaults Corrected via Live AppEEARS Metadata
 
 - Live issue observed:
@@ -264,6 +286,7 @@ Current verified final output files exist:
   - Command completed successfully with `status=ok` summary output.
 - Next recommended step:
   - Execute stage-1 batch run for all cities at target settings when full compute/network run is intended.
+
 
 
 

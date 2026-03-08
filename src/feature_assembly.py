@@ -96,6 +96,28 @@ def _city_slug(city_name: str) -> str:
 def _city_stem(city: pd.Series) -> str:
     return f"{int(city['city_id']):02d}_{_city_slug(str(city['city_name']))}_{str(city['state']).lower()}"
 
+def _discover_city_product_rasters(
+    product_root: Path,
+    city_name: str,
+    include_name_tokens: tuple[str, ...],
+) -> list[Path]:
+    """Discover AppEEARS rasters for one city/product by scanning the city slug subfolder recursively."""
+    city_dir = product_root / _city_slug(city_name)
+    if not city_dir.exists():
+        return []
+
+    candidates: list[Path] = []
+    for pattern in ("*.tif", "*.tiff"):
+        candidates.extend(sorted(path for path in city_dir.rglob(pattern) if path.is_file()))
+
+    if not candidates:
+        return []
+
+    tokens = tuple(token.lower() for token in include_name_tokens if token)
+    if not tokens:
+        return candidates
+
+    return [path for path in candidates if any(token in path.name.lower() for token in tokens)]
 
 def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
     """Discover optional feature source files from default raw-data folders."""
@@ -114,12 +136,23 @@ def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
         for pattern in ["*.gpkg", "*.shp", "*.geojson", "*.json"]:
             hydro_candidates.extend(sorted(RAW_HYDRO.glob(pattern)))
     hydro = first_existing(hydro_candidates)
+    ndvi_city = _discover_city_product_rasters(
+        product_root=RAW_NDVI,
+        city_name=city_name,
+        include_name_tokens=("_ndvi_",),
+    )
+    if not ndvi_city:
+        ndvi_candidates = discover_rasters(RAW_NDVI)
+        ndvi_city = choose_city_or_global_files(ndvi_candidates, city_name=city_name, city_id=city_id)
 
-    ndvi_candidates = discover_rasters(RAW_NDVI)
-    ndvi_city = choose_city_or_global_files(ndvi_candidates, city_name=city_name, city_id=city_id)
-
-    lst_candidates = discover_rasters(RAW_ECOSTRESS)
-    lst_city = choose_city_or_global_files(lst_candidates, city_name=city_name, city_id=city_id)
+    lst_city = _discover_city_product_rasters(
+        product_root=RAW_ECOSTRESS,
+        city_name=city_name,
+        include_name_tokens=("_lst_",),
+    )
+    if not lst_city:
+        lst_candidates = discover_rasters(RAW_ECOSTRESS)
+        lst_city = choose_city_or_global_files(lst_candidates, city_name=city_name, city_id=city_id)
 
     return FeatureSourceConfig(
         dem_raster=dem,
@@ -516,3 +549,4 @@ def assemble_final_dataset(
     logger.info("Saved final parquet: %s", parquet_path)
     logger.info("Saved final csv: %s", csv_path)
     return FinalDatasetResult(final_df=final_df, parquet_path=parquet_path, csv_path=csv_path)
+
