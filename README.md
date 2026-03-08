@@ -1,235 +1,104 @@
-\# STAT 5630 Final Project – Urban Heat Dataset Construction
+# STAT 5630 Final Project - Urban Heat Dataset Construction
 
+## Project Overview
 
+This repository builds a reproducible Python geospatial workflow for constructing a cross-city urban heat dataset for 30 U.S. cities.
 
-\## Project Overview
+Target analytic unit: one row per 30 m grid cell per city.
 
-This project builds a reproducible Python workflow for constructing a 30 m cell-level urban heat dataset for 30 U.S. cities across three climate groups: hot/arid, hot/humid, and mild/cool. The goal is to create a consistent cross-city geospatial dataset that can be used to study how land-surface characteristics such as impervious cover, land cover, vegetation, elevation, and proximity to water are associated with urban heat risk.
+## Implemented Pipeline Stages
 
+Implemented:
 
+1. City boundary and 2 km buffered study area construction from Census urban-area lookup.
+2. Master 30 m city grid generation.
+3. Batch city boundary/grid runner.
+4. Generic raster alignment framework to city grid template.
+5. DEM extraction (aligned).
+6. NLCD land-cover and impervious extraction (aligned).
+7. Hydrography distance-to-water raster generation and extraction.
+8. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
+9. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
 
-\## Unit of Observation
+Wired but data-blocked in this workspace:
 
-The final analytic dataset is constructed at the 30 m × 30 m grid-cell level. Each row in the final dataset represents one grid cell within a city study area.
+- NDVI median May-Aug stage (requires source rasters in `data_raw/ndvi/`).
+- ECOSTRESS/AppEEARS LST median + valid-pass stage (requires source rasters in `data_raw/ecostress/`).
 
+## Required Final Columns
 
+- `city_id`
+- `city_name`
+- `climate_group`
+- `cell_id`
+- `centroid_lon`
+- `centroid_lat`
+- `impervious_pct`
+- `land_cover_class`
+- `elevation_m`
+- `dist_to_water_m`
+- `ndvi_median_may_aug`
+- `lst_median_may_aug`
+- `n_valid_ecostress_passes`
+- `hotspot_10pct`
 
-\## Study Cities
+## Data Rules Implemented
 
+- Drop open-water cells when NLCD land-cover class is available.
+- If LST is available, drop cells with `n_valid_ecostress_passes < 3`.
+- Compute `hotspot_10pct` within each city from city-level LST distribution (90th percentile threshold).
 
+## CLI Entrypoints
 
-\### Hot / arid
+Initial city points + figure:
 
-\- Phoenix, AZ
-
-\- Tucson, AZ
-
-\- Las Vegas, NV
-
-\- Albuquerque, NM
-
-\- El Paso, TX
-
-\- Denver, CO
-
-\- Salt Lake City, UT
-
-\- Fresno, CA
-
-\- Bakersfield, CA
-
-\- Reno, NV
-
-
-
-\### Hot / humid
-
-\- Houston, TX
-
-\- Columbia, SC
-
-\- Richmond, VA
-
-\- New Orleans, LA
-
-\- Tampa, FL
-
-\- Miami, FL
-
-\- Jacksonville, FL
-
-\- Atlanta, GA
-
-\- Charlotte, NC
-
-\- Nashville, TN
-
-
-
-\### Mild / cool
-
-\- Seattle, WA
-
-\- Portland, OR
-
-\- San Francisco, CA
-
-\- San Jose, CA
-
-\- Los Angeles, CA
-
-\- San Diego, CA
-
-\- Chicago, IL
-
-\- Minneapolis, MN
-
-\- Detroit, MI
-
-\- Boston, MA
-
-
-
-\## Planned Final Dataset Columns
-
-The final dataset is expected to include the following core fields:
-
-
-
-\- `city\_id`
-
-\- `city\_name`
-
-\- `state`
-
-\- `climate\_group`
-
-\- `cell\_id`
-
-\- `centroid\_lon`
-
-\- `centroid\_lat`
-
-\- `impervious\_pct`
-
-\- `land\_cover\_class`
-
-\- `elevation\_m`
-
-\- `dist\_to\_water\_m`
-
-\- `ndvi\_median\_may\_aug`
-
-\- `lst\_median\_may\_aug`
-
-\- `n\_valid\_ecostress\_passes`
-
-\- `hotspot\_10pct`
-
-
-
-Additional intermediate or diagnostic columns may be added as needed during processing.
-
-
-
-\## Planned Workflow
-
-The intended workflow is:
-
-
-
-1\. Define each city study area from a city-center point and urban area boundary.
-
-2\. Buffer the study area and project it to a local projected CRS.
-
-3\. Build a master 30 m grid for each city.
-
-4\. Align all predictor rasters and vector-derived layers to the master grid.
-
-5\. Construct predictor variables:
-
-&nbsp;  - NLCD land cover
-
-&nbsp;  - NLCD impervious surface
-
-&nbsp;  - elevation
-
-&nbsp;  - distance to water
-
-&nbsp;  - NDVI
-
-6\. Construct the response variable from ECOSTRESS land surface temperature.
-
-7\. Clean and assemble the final per-city datasets.
-
-8\. Merge all cities into one final analytic dataset.
-
-9\. Create summary figures and documentation.
-
-
-
-\## Repository Structure
-
-
-
-\- `data\_raw/`  
-
-&nbsp; Raw downloaded source data. These files should remain unchanged after download.
-
-
-
-\- `data\_processed/`  
-
-&nbsp; Intermediate and final processed datasets, including city-level outputs and the final merged dataset.
-
-
-
-\- `docs/`  
-
-&nbsp; Project documentation, workflow notes, and data dictionary files.
-
-
-
-\- `figures/`  
-
-&nbsp; Maps, plots, and other exported visualizations.
-
-
-
-\- `notebooks/`  
-
-&nbsp; Jupyter notebooks for exploration, debugging, and figure development.
-
-
-
-\- `src/`  
-
-&nbsp; Python source code for the reproducible data-processing pipeline.
-
-
-
-\- `tests/`  
-
-&nbsp; Tests for core processing functions and dataset validation.
-
-
-
-\## Notes
-
-This repository is intended to support both dataset construction and documentation of the full geospatial workflow used in the project.
-
-
-## Current City Processing Entrypoint
-
-The repository now includes a reusable single-city pipeline entrypoint for boundary + study area + grid creation:
-
-```bash
-python -m src.run_city_processing --city-name Phoenix
+```powershell
+.venv\Scripts\python.exe -m src.run_initial_outputs
 ```
 
-Outputs are written to:
+One city boundary/grid:
 
-- `data_processed/study_areas/`
-- `data_processed/city_grids/`
+```powershell
+.venv\Scripts\python.exe -m src.run_city_processing --city-name Phoenix
+```
 
-Use `--city-id` instead of `--city-name` if preferred.
+Batch boundary/grid:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_city_batch_processing --city-ids 1,2,3
+```
+
+One city feature extraction:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 5000
+```
+
+Batch feature extraction:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_city_features_batch --existing-grids-only --city-ids 1 --max-cells 5000
+```
+
+Final merge only:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_final_dataset_assembly
+```
+
+End-to-end pipeline orchestrator:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_full_pipeline --skip-city-processing --existing-grids-only --city-ids 1 --max-cells 5000
+```
+
+## Data Layout
+
+- `data_raw/` immutable source data (DEM, NLCD, hydro, NDVI, ECOSTRESS folders)
+- `data_processed/study_areas/` city buffered study areas
+- `data_processed/city_grids/` city master grids
+- `data_processed/intermediate/` aligned rasters + unfiltered/filtered city feature tables
+- `data_processed/city_features/` per-city feature outputs + batch summary
+- `data_processed/final/` merged dataset outputs
+- `docs/` workflow and data dictionary
+- `tests/` automated tests

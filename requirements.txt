@@ -10,3 +10,4 @@ matplotlib
 requests
 scipy
 pyogrio
+pyarrow

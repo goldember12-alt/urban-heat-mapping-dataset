@@ -14,11 +14,9 @@ def utm_epsg_from_lon_lat(lon: float, lat: float) -> int:
     return 32700 + zone
 
 
-
 def get_utm_crs_for_lon_lat(lon: float, lat: float) -> CRS:
     """Return a pyproj CRS object for the local UTM zone of a lon/lat point."""
     return CRS.from_epsg(utm_epsg_from_lon_lat(lon, lat))
-
 
 
 def reproject_to_local_utm(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -33,6 +31,12 @@ def reproject_to_local_utm(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     if not CRS.from_user_input(gdf.crs).is_geographic:
         raise ValueError("Input GeoDataFrame must have a geographic CRS before UTM reprojection.")
 
-    centroid = gdf.to_crs(epsg=WGS84_EPSG).unary_union.centroid
+    wgs84 = gdf.to_crs(epsg=WGS84_EPSG)
+    if hasattr(wgs84.geometry, "union_all"):
+        union_geom = wgs84.geometry.union_all()
+    else:  # pragma: no cover - compatibility for older geopandas/shapely stacks
+        union_geom = wgs84.unary_union
+
+    centroid = union_geom.centroid
     utm_crs = get_utm_crs_for_lon_lat(centroid.x, centroid.y)
     return gdf.to_crs(utm_crs)
