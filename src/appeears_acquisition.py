@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import geopandas as gpd
 import pandas as pd
 
 from src.appeears_aoi import city_slug, export_appeears_aois, load_aoi_feature_collection
@@ -45,6 +46,13 @@ class ProductSpec:
 
 @dataclass(frozen=True)
 class AcquisitionRunResult:
+    summary: pd.DataFrame
+    summary_json_path: Path
+    summary_csv_path: Path
+
+
+@dataclass(frozen=True)
+class AcquisitionPreflightResult:
     summary: pd.DataFrame
     summary_json_path: Path
     summary_csv_path: Path
@@ -116,6 +124,62 @@ def _summary_paths(product_type: str, status_dir: Path = APPEEARS_STATUS) -> tup
     summary_json = status_dir / f"appeears_{product_type}_acquisition_summary.json"
     summary_csv = status_dir / f"appeears_{product_type}_acquisition_summary.csv"
     return summary_json, summary_csv
+
+
+def _preflight_paths(product_type: str, status_dir: Path = APPEEARS_STATUS) -> tuple[Path, Path]:
+    summary_json = status_dir / f"appeears_{product_type}_preflight_summary.json"
+    summary_csv = status_dir / f"appeears_{product_type}_preflight_summary.csv"
+    return summary_json, summary_csv
+
+
+def _city_file_stem(city: pd.Series) -> str:
+    return f"{int(city['city_id']):02d}_{city_slug(str(city['city_name']))}_{str(city['state']).lower()}"
+
+
+def expected_study_area_path(city: pd.Series, study_areas_dir: Path = STUDY_AREAS) -> Path:
+    return study_areas_dir / f"{_city_file_stem(city)}_study_area.gpkg"
+
+
+def expected_aoi_path(city: pd.Series, aoi_dir: Path = APPEEARS_AOI) -> Path:
+    return aoi_dir / f"{_city_file_stem(city)}_aoi.geojson"
+
+
+def validate_aoi_crs(aoi_path: Path) -> tuple[bool, str]:
+    """Return whether an AOI file resolves to EPSG:4326 and an optional blocking reason."""
+    if not aoi_path.exists():
+        return False, "aoi_missing"
+
+    try:
+        aoi = gpd.read_file(aoi_path)
+    except Exception as exc:
+        return False, f"aoi_read_error:{exc}"
+
+    if aoi.empty:
+        return False, "aoi_empty"
+
+    if aoi.crs is None:
+        return False, "aoi_crs_missing"
+
+    epsg = aoi.crs.to_epsg()
+    if epsg != 4326:
+        return False, f"aoi_crs_invalid:{aoi.crs}"
+
+    return True, ""
+
+
+def _write_summary_outputs(
+    records: list[dict[str, Any]],
+    payload: dict[str, Any],
+    summary_json_path: Path,
+    summary_csv_path: Path,
+) -> pd.DataFrame:
+    summary = pd.DataFrame(records)
+    summary_json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with summary_json_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+    summary.to_csv(summary_csv_path, index=False)
+    return summary
 
 
 def _load_existing_records(summary_json_path: Path) -> dict[int, dict[str, Any]]:
@@ -234,6 +298,103 @@ def _download_completed_bundle(
     return len(files), n_downloaded, n_existing
 
 
+def audit_appeears_acquisition_readiness(
+    product_type: str,
+    city_ids: list[int] | None = None,
+    study_areas_dir: Path = STUDY_AREAS,
+    aoi_dir: Path = APPEEARS_AOI,
+    status_dir: Path = APPEEARS_STATUS,
+    raw_ndvi_dir: Path = RAW_NDVI,
+    raw_ecostress_dir: Path = RAW_ECOSTRESS,
+    write_outputs: bool = True,
+) -> AcquisitionPreflightResult:
+    """Audit deterministic AppEEARS prerequisites for the requested cities."""
+    normalized_product_type = product_type.strip().lower()
+    build_product_spec(product_type=normalized_product_type)
+
+    status_output_path = _summary_paths(product_type=normalized_product_type, status_dir=status_dir)[0]
+    preflight_json_path, preflight_csv_path = _preflight_paths(
+        product_type=normalized_product_type,
+        status_dir=status_dir,
+    )
+
+    cities = load_cities()
+    if city_ids:
+        cities = cities[cities["city_id"].isin(city_ids)].copy()
+
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
+    records: list[dict[str, Any]] = []
+
+    for _, city in cities.iterrows():
+        study_area_path = expected_study_area_path(city=city, study_areas_dir=study_areas_dir)
+        aoi_path = expected_aoi_path(city=city, aoi_dir=aoi_dir)
+        study_area_exists = study_area_path.exists()
+        aoi_exists = aoi_path.exists()
+        aoi_crs_valid = False
+        blocking_reason = ""
+
+        if not study_area_exists:
+            blocking_reason = "study_area_missing"
+        elif not aoi_exists:
+            blocking_reason = "aoi_missing"
+        else:
+            aoi_crs_valid, blocking_reason = validate_aoi_crs(aoi_path)
+
+        records.append(
+            {
+                "city_id": int(city["city_id"]),
+                "city_slug": city_slug(str(city["city_name"])),
+                "expected_study_area_path": str(study_area_path),
+                "study_area_exists": study_area_exists,
+                "expected_aoi_path": str(aoi_path),
+                "aoi_exists": aoi_exists,
+                "aoi_crs_valid": aoi_crs_valid,
+                "expected_ndvi_raw_dir": str(
+                    resolve_city_download_dir(
+                        product_type="ndvi",
+                        city_name=str(city["city_name"]),
+                        raw_ndvi_dir=raw_ndvi_dir,
+                        raw_ecostress_dir=raw_ecostress_dir,
+                    )
+                ),
+                "expected_ecostress_raw_dir": str(
+                    resolve_city_download_dir(
+                        product_type="ecostress",
+                        city_name=str(city["city_name"]),
+                        raw_ndvi_dir=raw_ndvi_dir,
+                        raw_ecostress_dir=raw_ecostress_dir,
+                    )
+                ),
+                "expected_status_output_path": str(status_output_path),
+                "acquisition_ready": blocking_reason == "",
+                "blocking_reason": blocking_reason,
+                "updated_at_utc": generated_at_utc,
+            }
+        )
+
+    payload = {
+        "product_type": normalized_product_type,
+        "generated_at_utc": generated_at_utc,
+        "records": records,
+    }
+
+    if write_outputs:
+        summary = _write_summary_outputs(
+            records=records,
+            payload=payload,
+            summary_json_path=preflight_json_path,
+            summary_csv_path=preflight_csv_path,
+        )
+    else:
+        summary = pd.DataFrame(records)
+
+    return AcquisitionPreflightResult(
+        summary=summary,
+        summary_json_path=preflight_json_path,
+        summary_csv_path=preflight_csv_path,
+    )
+
+
 def run_appeears_acquisition(
     product_type: str,
     start_date: str,
@@ -245,12 +406,30 @@ def run_appeears_acquisition(
     retry_incomplete: bool = False,
     product: str | None = None,
     layer: str | None = None,
+    preflight_only: bool = False,
     study_areas_dir: Path = STUDY_AREAS,
     aoi_dir: Path = APPEEARS_AOI,
     status_dir: Path = APPEEARS_STATUS,
 ) -> AcquisitionRunResult:
     """Run AppEEARS acquisition for NDVI or ECOSTRESS with resumable status tracking."""
     normalized_product_type = product_type.strip().lower()
+    if preflight_only and (submit_only or poll_only or download_only or retry_incomplete):
+        raise ValueError("--preflight-only cannot be combined with acquisition mode flags")
+
+    if preflight_only:
+        preflight = audit_appeears_acquisition_readiness(
+            product_type=normalized_product_type,
+            city_ids=city_ids,
+            study_areas_dir=study_areas_dir,
+            aoi_dir=aoi_dir,
+            status_dir=status_dir,
+        )
+        return AcquisitionRunResult(
+            summary=preflight.summary,
+            summary_json_path=preflight.summary_json_path,
+            summary_csv_path=preflight.summary_csv_path,
+        )
+
     run_submit, run_poll, run_download = _run_mode(
         submit_only=submit_only,
         poll_only=poll_only,
@@ -264,6 +443,19 @@ def run_appeears_acquisition(
     cities = load_cities()
     if city_ids:
         cities = cities[cities["city_id"].isin(city_ids)].copy()
+
+    preflight = audit_appeears_acquisition_readiness(
+        product_type=normalized_product_type,
+        city_ids=city_ids,
+        study_areas_dir=study_areas_dir,
+        aoi_dir=aoi_dir,
+        status_dir=status_dir,
+        write_outputs=False,
+    )
+    preflight_by_city = {
+        int(row["city_id"]): row
+        for row in preflight.summary.to_dict(orient="records")
+    }
 
     target_cities = filter_cities_for_retry(cities, existing_records=existing_records, retry_incomplete=retry_incomplete)
     target_city_ids = {int(x) for x in target_cities["city_id"].tolist()}
@@ -303,6 +495,15 @@ def run_appeears_acquisition(
             end_date=end_date,
             previous=previous,
         )
+        preflight_row = preflight_by_city.get(city_id, {})
+        record["study_area_path"] = str(preflight_row.get("expected_study_area_path", ""))
+        record["aoi_path"] = str(preflight_row.get("expected_aoi_path", ""))
+        record["download_dir"] = str(
+            resolve_city_download_dir(
+                product_type=normalized_product_type,
+                city_name=str(city["city_name"]),
+            )
+        )
 
         aoi_row = aoi_by_city.get(city_id)
         if aoi_row is None:
@@ -311,8 +512,8 @@ def run_appeears_acquisition(
             records_by_city[city_id] = record
             continue
 
-        record["study_area_path"] = str(aoi_row.get("study_area_path", ""))
-        record["aoi_path"] = str(aoi_row.get("aoi_path", ""))
+        record["study_area_path"] = str(aoi_row.get("study_area_path", record["study_area_path"]))
+        record["aoi_path"] = str(aoi_row.get("aoi_path", record["aoi_path"]))
 
         aoi_status = str(aoi_row.get("status", ""))
         if aoi_status == STATUS_BLOCKED:
@@ -462,9 +663,6 @@ def run_appeears_acquisition(
         records_by_city[city_id] = record
 
     final_records = sorted(records_by_city.values(), key=lambda x: int(x["city_id"]))
-    final_summary = pd.DataFrame(final_records)
-
-    status_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "product_type": normalized_product_type,
         "start_date": start_date,
@@ -473,9 +671,12 @@ def run_appeears_acquisition(
         "records": final_records,
     }
 
-    with summary_json_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2)
-    final_summary.to_csv(summary_csv_path, index=False)
+    final_summary = _write_summary_outputs(
+        records=final_records,
+        payload=payload,
+        summary_json_path=summary_json_path,
+        summary_csv_path=summary_csv_path,
+    )
 
     logger.info("Wrote AppEEARS acquisition summary JSON: %s", summary_json_path)
     logger.info("Wrote AppEEARS acquisition summary CSV: %s", summary_csv_path)
@@ -485,4 +686,3 @@ def run_appeears_acquisition(
         summary_json_path=summary_json_path,
         summary_csv_path=summary_csv_path,
     )
-

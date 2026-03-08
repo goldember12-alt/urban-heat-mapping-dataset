@@ -15,8 +15,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Acquisition product group to run",
     )
     parser.add_argument("--city-ids", type=str, default="", help="Optional comma-separated subset of city IDs")
-    parser.add_argument("--start-date", required=True, type=str, help="Start date in YYYY-MM-DD")
-    parser.add_argument("--end-date", required=True, type=str, help="End date in YYYY-MM-DD")
+    parser.add_argument("--start-date", type=str, default="", help="Start date in YYYY-MM-DD")
+    parser.add_argument("--end-date", type=str, default="", help="End date in YYYY-MM-DD")
     parser.add_argument("--product", type=str, default="", help="Optional AppEEARS product override")
     parser.add_argument("--layer", type=str, default="", help="Optional AppEEARS layer override")
 
@@ -25,6 +25,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     mode.add_argument("--poll-only", action="store_true", help="Poll existing tasks only")
     mode.add_argument("--download-only", action="store_true", help="Download completed tasks only")
 
+    parser.add_argument("--preflight-only", action="store_true", help="Audit deterministic AppEEARS prerequisites only")
     parser.add_argument(
         "--retry-incomplete",
         action="store_true",
@@ -43,23 +44,30 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _build_arg_parser().parse_args()
 
+    if not args.preflight_only and (not args.start_date.strip() or not args.end_date.strip()):
+        raise ValueError("--start-date and --end-date are required unless --preflight-only is used")
+
     result = run_appeears_acquisition(
         product_type=args.product_type,
         city_ids=_parse_city_ids(args.city_ids),
-        start_date=args.start_date,
-        end_date=args.end_date,
+        start_date=args.start_date.strip(),
+        end_date=args.end_date.strip(),
         submit_only=args.submit_only,
         poll_only=args.poll_only,
         download_only=args.download_only,
         retry_incomplete=args.retry_incomplete,
         product=args.product.strip() or None,
         layer=args.layer.strip() or None,
+        preflight_only=args.preflight_only,
     )
 
     print(result.summary_json_path)
     print(result.summary_csv_path)
     if not result.summary.empty:
-        print(result.summary[["status"]].value_counts().to_string())
+        if "status" in result.summary.columns:
+            print(result.summary[["status"]].value_counts().to_string())
+        elif "acquisition_ready" in result.summary.columns:
+            print(result.summary[["acquisition_ready"]].value_counts().to_string())
 
 
 if __name__ == "__main__":

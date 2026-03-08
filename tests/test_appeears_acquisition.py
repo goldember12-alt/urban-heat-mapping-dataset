@@ -1,9 +1,31 @@
+import json
 from pathlib import Path
 
+import geopandas as gpd
 import pandas as pd
+from shapely.geometry import Polygon
 
-from src.appeears_acquisition import build_product_spec, filter_cities_for_retry, resolve_city_download_dir
+from src.appeears_acquisition import (
+    audit_appeears_acquisition_readiness,
+    build_product_spec,
+    expected_aoi_path,
+    expected_study_area_path,
+    filter_cities_for_retry,
+    resolve_city_download_dir,
+    run_appeears_acquisition,
+)
 from src.appeears_client import build_area_task_payload
+from src.load_cities import load_cities
+
+
+def _write_valid_aoi(aoi_path: Path) -> None:
+    aoi = gpd.GeoDataFrame(
+        {"city_id": [1], "city_name": ["Phoenix"], "state": ["AZ"]},
+        geometry=[Polygon([(-112.1, 33.4), (-112.0, 33.4), (-112.0, 33.5), (-112.1, 33.5)])],
+        crs="EPSG:4326",
+    )
+    aoi_path.parent.mkdir(parents=True, exist_ok=True)
+    aoi.to_file(aoi_path, driver="GeoJSON")
 
 
 def test_resolve_city_download_dir_routes_ndvi_and_ecostress(tmp_path: Path):
@@ -106,3 +128,138 @@ def test_default_ecostress_payload_uses_live_selectable_product_and_layer():
     assert spec.layer == "LST"
     assert payload["params"]["layers"][0]["product"] == "ECO_L2T_LSTE.002"
     assert payload["params"]["layers"][0]["layer"] == "LST"
+
+
+def test_audit_appeears_acquisition_readiness_uses_all_cities_when_city_ids_omitted(tmp_path: Path):
+    cities = load_cities()
+    result = audit_appeears_acquisition_readiness(
+        product_type="ndvi",
+        study_areas_dir=tmp_path / "study_areas",
+        aoi_dir=tmp_path / "appeears_aoi",
+        status_dir=tmp_path / "appeears_status",
+        raw_ndvi_dir=tmp_path / "raw" / "ndvi",
+        raw_ecostress_dir=tmp_path / "raw" / "ecostress",
+    )
+
+    assert len(result.summary) == len(cities) == 30
+    assert result.summary["city_id"].tolist() == cities["city_id"].tolist()
+    assert set(result.summary["blocking_reason"]) == {"study_area_missing"}
+    assert not result.summary["acquisition_ready"].any()
+    assert result.summary_json_path.exists()
+    assert result.summary_csv_path.exists()
+
+
+def test_audit_appeears_acquisition_readiness_marks_missing_prerequisites(tmp_path: Path):
+    result = audit_appeears_acquisition_readiness(
+        product_type="ndvi",
+        city_ids=[1],
+        study_areas_dir=tmp_path / "study_areas",
+        aoi_dir=tmp_path / "appeears_aoi",
+        status_dir=tmp_path / "appeears_status",
+        raw_ndvi_dir=tmp_path / "raw" / "ndvi",
+        raw_ecostress_dir=tmp_path / "raw" / "ecostress",
+    )
+
+    row = result.summary.iloc[0]
+    assert row["city_id"] == 1
+    assert bool(row["study_area_exists"]) is False
+    assert bool(row["aoi_exists"]) is False
+    assert bool(row["aoi_crs_valid"]) is False
+    assert bool(row["acquisition_ready"]) is False
+    assert row["blocking_reason"] == "study_area_missing"
+
+
+def test_audit_appeears_acquisition_readiness_validates_aoi_crs(tmp_path: Path, monkeypatch):
+    city = load_cities().iloc[0]
+    study_path = expected_study_area_path(city, tmp_path / "study_areas")
+    aoi_path = expected_aoi_path(city, tmp_path / "appeears_aoi")
+    study_path.parent.mkdir(parents=True, exist_ok=True)
+    aoi_path.parent.mkdir(parents=True, exist_ok=True)
+    study_path.touch()
+    aoi_path.touch()
+
+    invalid_aoi = gpd.GeoDataFrame(
+        {"city_id": [1]},
+        geometry=[Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])],
+        crs="EPSG:3857",
+    )
+    original_read_file = gpd.read_file
+
+    def fake_read_file(path: Path):
+        if Path(path) == aoi_path:
+            return invalid_aoi
+        return original_read_file(path)
+
+    monkeypatch.setattr("src.appeears_acquisition.gpd.read_file", fake_read_file)
+
+    result = audit_appeears_acquisition_readiness(
+        product_type="ecostress",
+        city_ids=[1],
+        study_areas_dir=tmp_path / "study_areas",
+        aoi_dir=tmp_path / "appeears_aoi",
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert bool(row["study_area_exists"]) is True
+    assert bool(row["aoi_exists"]) is True
+    assert bool(row["aoi_crs_valid"]) is False
+    assert bool(row["acquisition_ready"]) is False
+    assert str(row["blocking_reason"]).startswith("aoi_crs_invalid:")
+
+
+def test_audit_outputs_include_expected_paths_and_ready_status(tmp_path: Path):
+    city = load_cities().iloc[0]
+    study_path = expected_study_area_path(city, tmp_path / "study_areas")
+    aoi_path = expected_aoi_path(city, tmp_path / "appeears_aoi")
+    study_path.parent.mkdir(parents=True, exist_ok=True)
+    study_path.touch()
+    _write_valid_aoi(aoi_path)
+
+    result = audit_appeears_acquisition_readiness(
+        product_type="ndvi",
+        city_ids=[1],
+        study_areas_dir=tmp_path / "study_areas",
+        aoi_dir=tmp_path / "appeears_aoi",
+        status_dir=tmp_path / "appeears_status",
+        raw_ndvi_dir=tmp_path / "raw" / "ndvi",
+        raw_ecostress_dir=tmp_path / "raw" / "ecostress",
+    )
+
+    row = result.summary.iloc[0]
+    assert row["city_slug"] == "phoenix"
+    assert bool(row["study_area_exists"]) is True
+    assert bool(row["aoi_exists"]) is True
+    assert bool(row["aoi_crs_valid"]) is True
+    assert bool(row["acquisition_ready"]) is True
+    assert row["blocking_reason"] == ""
+    assert row["expected_status_output_path"] == str(tmp_path / "appeears_status" / "appeears_ndvi_acquisition_summary.json")
+    assert row["expected_ndvi_raw_dir"] == str(tmp_path / "raw" / "ndvi" / "phoenix")
+    assert row["expected_ecostress_raw_dir"] == str(tmp_path / "raw" / "ecostress" / "phoenix")
+
+    with result.summary_json_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    assert payload["product_type"] == "ndvi"
+    assert payload["records"][0]["acquisition_ready"] is True
+    assert payload["records"][0]["expected_aoi_path"] == str(aoi_path)
+
+    csv = pd.read_csv(result.summary_csv_path)
+    assert csv.loc[0, "expected_study_area_path"] == str(study_path)
+    assert bool(csv.loc[0, "acquisition_ready"]) is True
+
+
+def test_run_appeears_acquisition_preflight_only_returns_audit_summary(tmp_path: Path):
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="",
+        end_date="",
+        city_ids=[1],
+        preflight_only=True,
+        study_areas_dir=tmp_path / "study_areas",
+        aoi_dir=tmp_path / "appeears_aoi",
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    assert "acquisition_ready" in result.summary.columns
+    assert result.summary_json_path.name == "appeears_ndvi_preflight_summary.json"
+    assert result.summary_csv_path.name == "appeears_ndvi_preflight_summary.csv"

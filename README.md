@@ -11,14 +11,15 @@ Target analytic unit: one row per 30 m grid cell per city.
 1. City boundary and 2 km buffered study area construction from Census urban-area lookup.
 2. Master 30 m city grid generation.
 3. Batch city boundary/grid runner.
-4. AppEEARS AOI export from city study areas (`data_processed/appeears_aoi/*.geojson`, EPSG:4326).
-5. AppEEARS acquisition runner (submit, poll, download, resumable state) for NDVI and ECOSTRESS.
-6. Generic raster alignment framework to city grid template.
-7. DEM extraction (aligned).
-8. NLCD land-cover and impervious extraction (aligned).
-9. Hydrography distance-to-water raster generation and extraction.
-10. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
-11. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
+4. AppEEARS prerequisite preflight audit for all expected cities.
+5. AppEEARS AOI export from city study areas (`data_processed/appeears_aoi/*.geojson`, EPSG:4326).
+6. AppEEARS acquisition runner (submit, poll, download, resumable state) for NDVI and ECOSTRESS.
+7. Generic raster alignment framework to city grid template.
+8. DEM extraction (aligned).
+9. NLCD land-cover and impervious extraction (aligned).
+10. Hydrography distance-to-water raster generation and extraction.
+11. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
+12. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
 
 ## Required Final Columns
 
@@ -70,7 +71,13 @@ Batch boundary/grid:
 .venv\Scripts\python.exe -m src.run_city_batch_processing --city-ids 1,2,3
 ```
 
-AppEEARS acquisition (new):
+AppEEARS preflight only:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --preflight-only
+```
+
+AppEEARS acquisition:
 
 ```powershell
 .venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
@@ -84,8 +91,9 @@ AppEEARS acquisition (new):
 .venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --start-date 2023-05-01 --end-date 2023-08-31 --retry-incomplete
 ```
 
-Supported run modes:
+Supported acquisition modes:
 
+- `--preflight-only`
 - `--submit-only`
 - `--poll-only`
 - `--download-only`
@@ -122,7 +130,7 @@ End-to-end pipeline orchestrator:
 - `data_raw/ecostress/<city_slug>/` downloaded AppEEARS ECOSTRESS files
 - `data_processed/study_areas/` city buffered study areas
 - `data_processed/appeears_aoi/` AppEEARS AOI GeoJSON exports
-- `data_processed/appeears_status/` acquisition summary JSON/CSV per product type
+- `data_processed/appeears_status/` preflight JSON/CSV plus acquisition summary JSON/CSV per product type
 - `data_processed/city_grids/` city master grids
 - `data_processed/intermediate/` aligned rasters + unfiltered/filtered city feature tables
 - `data_processed/city_features/` per-city feature outputs + batch summary

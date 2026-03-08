@@ -16,7 +16,23 @@ CLI:
 .venv\Scripts\python.exe -m src.run_city_batch_processing --city-ids 1,2,3
 ```
 
-## Stage 2: AppEEARS AOI Export
+## Stage 2: AppEEARS Preflight Audit
+
+1. Load the expected city list from `cities.csv`.
+2. Compute deterministic expected paths for study areas, AOIs, raw NDVI folders, raw ECOSTRESS folders, and product-specific acquisition status output.
+3. Check whether each expected study area exists.
+4. Check whether each expected AOI exists and resolves to EPSG:4326.
+5. Write machine-readable preflight outputs:
+   - `data_processed/appeears_status/appeears_ndvi_preflight_summary.json|csv`
+   - `data_processed/appeears_status/appeears_ecostress_preflight_summary.json|csv`
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --preflight-only
+```
+
+## Stage 3: AppEEARS AOI Export
 
 1. Discover city study-area GeoPackages in `data_processed/study_areas/`.
 2. Convert each study area polygon to EPSG:4326.
@@ -24,7 +40,7 @@ CLI:
 
 AOI export is executed automatically by the acquisition runner.
 
-## Stage 3: AppEEARS Acquisition (NDVI + ECOSTRESS)
+## Stage 4: AppEEARS Acquisition (NDVI + ECOSTRESS)
 
 1. Authenticate with AppEEARS from environment variables only.
 2. Submit area tasks per city and product/date range.
@@ -48,12 +64,13 @@ CLI:
 
 Modes:
 
+- `--preflight-only`
 - `--submit-only`
 - `--poll-only`
 - `--download-only`
 - `--retry-incomplete`
 
-## Stage 4: Generic Raster Alignment Framework
+## Stage 5: Generic Raster Alignment Framework
 
 For each city grid:
 
@@ -64,17 +81,17 @@ For each city grid:
 
 Core module: `src/raster_features.py`
 
-## Stage 5: DEM Feature Extraction
+## Stage 6: DEM Feature Extraction
 
 - Align DEM raster to city template.
 - Extract `elevation_m` for each grid cell centroid index.
 
-## Stage 6: NLCD Extraction
+## Stage 7: NLCD Extraction
 
 - Align NLCD land-cover raster and extract `land_cover_class` (nearest-neighbor).
 - Align NLCD impervious raster and extract `impervious_pct`.
 
-## Stage 7: Hydrography Distance-To-Water
+## Stage 8: Hydrography Distance-To-Water
 
 - Rasterize hydro geometries to city template.
 - Compute Euclidean distance transform (meters).
@@ -82,7 +99,7 @@ Core module: `src/raster_features.py`
 
 Core module: `src/water_features.py`
 
-## Stage 8: Per-City Feature Assembly
+## Stage 9: Per-City Feature Assembly
 
 - Assemble city feature table from available sources.
 - Save intermediate unfiltered + filtered tables:
@@ -98,7 +115,7 @@ CLI:
 .venv\Scripts\python.exe -m src.run_city_features_batch --existing-grids-only --city-ids 1 --max-cells 5000
 ```
 
-## Stage 9: Final Dataset Merge
+## Stage 10: Final Dataset Merge
 
 - Concatenate per-city parquet tables.
 - Apply row rules:
