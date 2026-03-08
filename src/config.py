@@ -21,6 +21,7 @@ CITY_GRIDS = DATA_PROCESSED / "city_grids"
 INTERMEDIATE = DATA_PROCESSED / "intermediate"
 APPEEARS_AOI = DATA_PROCESSED / "appeears_aoi"
 APPEEARS_STATUS = DATA_PROCESSED / "appeears_status"
+SUPPORT_LAYERS = DATA_PROCESSED / "support_layers"
 
 # Common raw-data subfolders (optional; used when source files are available)
 RAW_DEM = DATA_RAW / "dem"
@@ -43,5 +44,3 @@ NDVI_DEFAULT_LAYER = "_500m_16_days_NDVI"
 
 ECOSTRESS_PRODUCT_CANDIDATES = ("ECO_L2T_LSTE.002", "ECO_L2_LSTE.002")
 ECOSTRESS_DEFAULT_LAYER = "LST"
-
-

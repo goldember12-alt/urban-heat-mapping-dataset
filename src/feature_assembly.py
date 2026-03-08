@@ -21,8 +21,10 @@ from src.config import (
     RAW_HYDRO,
     RAW_NDVI,
     RAW_NLCD,
+    SUPPORT_LAYERS,
 )
 from src.load_cities import load_cities
+from src.support_layers import discover_prepared_support_sources
 from src.raster_features import (
     RasterNormalizationSpec,
     align_and_extract_raster_values,
@@ -151,12 +153,14 @@ def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
     city_name = str(city["city_name"])
     city_id = int(city["city_id"])
 
+    prepared_sources = discover_prepared_support_sources(city=city, support_layers_dir=SUPPORT_LAYERS)
+
     dem_city = _discover_city_product_rasters(
         product_root=RAW_DEM,
         city_name=city_name,
         include_name_tokens=(),
     )
-    dem = first_existing(dem_city) if dem_city else first_existing(discover_rasters(RAW_DEM))
+    dem = prepared_sources.dem_raster or first_existing(dem_city) or first_existing(discover_rasters(RAW_DEM))
 
     nlcd_city = _discover_city_product_rasters(
         product_root=RAW_NLCD,
@@ -166,14 +170,14 @@ def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
     if not nlcd_city:
         nlcd_rasters = discover_rasters(RAW_NLCD)
         nlcd_city = choose_city_or_global_files(nlcd_rasters, city_name=city_name, city_id=city_id)
-    nlcd_land = first_existing([p for p in nlcd_city if "impervious" not in p.name.lower() and "imp" not in p.name.lower()])
-    nlcd_impervious = first_existing([p for p in nlcd_city if "impervious" in p.name.lower() or "imp" in p.name.lower()])
+    nlcd_land = prepared_sources.nlcd_land_cover_raster or first_existing([p for p in nlcd_city if "impervious" not in p.name.lower() and "imp" not in p.name.lower()])
+    nlcd_impervious = prepared_sources.nlcd_impervious_raster or first_existing([p for p in nlcd_city if "impervious" in p.name.lower() or "imp" in p.name.lower()])
 
     hydro_candidates = _discover_city_vectors(RAW_HYDRO, city_name=city_name)
     if not hydro_candidates and RAW_HYDRO.exists():
         for pattern in ("*.gpkg", "*.shp", "*.geojson", "*.json"):
             hydro_candidates.extend(sorted(path for path in RAW_HYDRO.glob(pattern) if path.is_file()))
-    hydro = first_existing(hydro_candidates)
+    hydro = prepared_sources.hydro_vector or first_existing(hydro_candidates)
     ndvi_city = _discover_city_product_rasters(
         product_root=RAW_NDVI,
         city_name=city_name,
@@ -589,6 +593,9 @@ def assemble_final_dataset(
     logger.info("Saved final parquet: %s", parquet_path)
     logger.info("Saved final csv: %s", csv_path)
     return FinalDatasetResult(final_df=final_df, parquet_path=parquet_path, csv_path=csv_path)
+
+
+
 
 
 

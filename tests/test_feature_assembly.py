@@ -151,6 +151,7 @@ def test_discover_default_feature_sources_uses_city_appeears_layer_files(tmp_pat
     monkeypatch.setattr(feature_assembly, "RAW_DEM", tmp_path / "raw" / "dem")
     monkeypatch.setattr(feature_assembly, "RAW_NLCD", tmp_path / "raw" / "nlcd")
     monkeypatch.setattr(feature_assembly, "RAW_HYDRO", tmp_path / "raw" / "hydro")
+    monkeypatch.setattr(feature_assembly, "SUPPORT_LAYERS", tmp_path / "support_layers")
 
     city = pd.Series({"city_id": 1, "city_name": "Phoenix", "state": "AZ"})
     sources = feature_assembly.discover_default_feature_sources(city)
@@ -175,6 +176,7 @@ def test_discover_default_feature_sources_falls_back_to_top_level_when_city_fold
     monkeypatch.setattr(feature_assembly, "RAW_DEM", tmp_path / "raw" / "dem")
     monkeypatch.setattr(feature_assembly, "RAW_NLCD", tmp_path / "raw" / "nlcd")
     monkeypatch.setattr(feature_assembly, "RAW_HYDRO", tmp_path / "raw" / "hydro")
+    monkeypatch.setattr(feature_assembly, "SUPPORT_LAYERS", tmp_path / "support_layers")
 
     city = pd.Series({"city_id": 1, "city_name": "Phoenix", "state": "AZ"})
     sources = feature_assembly.discover_default_feature_sources(city)
@@ -212,6 +214,7 @@ def test_discover_default_feature_sources_uses_city_recursive_dem_nlcd_hydro(tmp
     monkeypatch.setattr(feature_assembly, "RAW_DEM", raw_dem)
     monkeypatch.setattr(feature_assembly, "RAW_NLCD", raw_nlcd)
     monkeypatch.setattr(feature_assembly, "RAW_HYDRO", raw_hydro)
+    monkeypatch.setattr(feature_assembly, "SUPPORT_LAYERS", tmp_path / "support_layers")
     monkeypatch.setattr(feature_assembly, "RAW_NDVI", raw_ndvi)
     monkeypatch.setattr(feature_assembly, "RAW_ECOSTRESS", raw_ecostress)
 

@@ -73,6 +73,83 @@ Per-city status fields:
 - `data_raw/ndvi/<city_slug>/`: immutable raw NDVI downloads
 - `data_raw/ecostress/<city_slug>/`: immutable raw ECOSTRESS downloads
 
+## Support-Layer Outputs
+
+### Support-layer raw input contract
+
+Canonical per-city raw support paths expected by the standardized support-layer audit and prep stage:
+
+- `data_raw/dem/<city_slug>/<city_slug>_dem_3dep_30m.tif`
+- `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_land_cover_30m.tif`
+- `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_impervious_30m.tif`
+- `data_raw/hydro/<city_slug>/<city_slug>_nhdplus_water.gpkg`
+
+### Support-layer preflight summaries (`data_processed/support_layers/support_layers_preflight_summary.json|csv`)
+
+Per-city readiness fields:
+
+- `city_id`: integer city identifier
+- `city_slug`: lowercase slug used for deterministic support-layer paths
+- `expected_study_area_path`: expected study-area GeoPackage path
+- `expected_grid_path`: expected city-grid GeoPackage path
+- `expected_dem_raw_path`: canonical expected DEM raw path for the city
+- `expected_nlcd_land_cover_raw_path`: canonical expected NLCD land-cover raw path for the city
+- `expected_nlcd_impervious_raw_path`: canonical expected NLCD impervious raw path for the city
+- `expected_hydro_raw_path`: canonical expected hydro raw path for the city
+- `dem_source_path`: actual recursively discovered DEM raw source path in the city folder, if any
+- `nlcd_land_cover_source_path`: actual recursively discovered NLCD land-cover source path in the city folder, if any
+- `nlcd_impervious_source_path`: actual recursively discovered NLCD impervious source path in the city folder, if any
+- `hydro_source_path`: actual recursively discovered hydro source path in the city folder, if any
+- `expected_dem_prepared_path`: deterministic prepared DEM output path
+- `expected_nlcd_land_cover_prepared_path`: deterministic prepared NLCD land-cover output path
+- `expected_nlcd_impervious_prepared_path`: deterministic prepared NLCD impervious output path
+- `expected_hydro_prepared_path`: deterministic prepared hydro output path
+- `study_area_exists`: whether the study-area GeoPackage exists
+- `grid_exists`: whether the city grid exists
+- `dem_source_available`: whether a city raw DEM source was discovered
+- `nlcd_land_cover_source_available`: whether a city raw NLCD land-cover source was discovered
+- `nlcd_impervious_source_available`: whether a city raw NLCD impervious source was discovered
+- `hydro_source_available`: whether a city raw hydro source was discovered
+- `required_inputs_exist`: `True` when all four raw support sources were discovered
+- `dem_prepared_exists`: whether the deterministic prepared DEM output already exists
+- `nlcd_land_cover_prepared_exists`: whether the deterministic prepared NLCD land-cover output already exists
+- `nlcd_impervious_prepared_exists`: whether the deterministic prepared NLCD impervious output already exists
+- `hydro_prepared_exists`: whether the deterministic prepared hydro output already exists
+- `support_prep_ready`: `True` when study area exists and all four raw support sources are available
+- `feature_extraction_ready`: `True` when grid exists and all four support layers are available via prepared outputs or raw fallback
+- `prep_blocking_reasons`: semicolon-delimited blockers for support-layer prep
+- `feature_blocking_reasons`: semicolon-delimited blockers for feature extraction readiness
+- `blocking_reasons`: union of prep and feature blockers
+- `updated_at_utc`: preflight generation timestamp
+
+### Support-layer prep summaries (`data_processed/support_layers/support_layers_prep_summary.json|csv`)
+
+Per-city prep fields:
+
+- `city_id`: integer city identifier
+- `city_name`: city name
+- `city_slug`: lowercase slug used for deterministic support-layer paths
+- `study_area_path`: study-area GeoPackage used for clipping
+- `grid_path`: expected city-grid GeoPackage for downstream feature extraction
+- `dem_source_path`: DEM raw source used for prep
+- `nlcd_land_cover_source_path`: NLCD land-cover raw source used for prep
+- `nlcd_impervious_source_path`: NLCD impervious raw source used for prep
+- `hydro_source_path`: hydro raw source used for prep
+- `dem_prepared_path`: prepared DEM output path
+- `nlcd_land_cover_prepared_path`: prepared NLCD land-cover output path
+- `nlcd_impervious_prepared_path`: prepared NLCD impervious output path
+- `hydro_prepared_path`: prepared hydro output path
+- `status`: prep status (`blocked`, `completed`, `failed`, `skipped_existing`)
+- `error`: blank on success, otherwise the blocking reason or exception string
+- `updated_at_utc`: prep summary timestamp
+
+### Prepared support-layer outputs (`data_processed/support_layers/<city_stem>/`)
+
+- `dem_prepared.tif`: study-area-clipped DEM raster
+- `nlcd_land_cover_prepared.tif`: study-area-clipped NLCD land-cover raster
+- `nlcd_impervious_prepared.tif`: study-area-clipped NLCD impervious raster
+- `hydro_water_prepared.gpkg`: study-area-clipped hydro vector layer
+
 ## Intermediate Outputs
 
 ### Aligned rasters (`data_processed/intermediate/aligned_rasters/<city_stem>/`)

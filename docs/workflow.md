@@ -12,8 +12,16 @@
 
 CLI:
 
+One city:
+
 ```powershell
-.venv\Scripts\python.exe -m src.run_city_batch_processing --city-ids 1,2,3
+.venv\Scripts\python.exe -m src.run_city_processing --city-id 1 --resolution 30
+```
+
+All 30 cities:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_city_batch_processing --resolution 30
 ```
 
 ## Stage 2: AppEEARS Preflight Audit
@@ -70,7 +78,58 @@ Modes:
 - `--download-only`
 - `--retry-incomplete`
 
-## Stage 5: Generic Raster Alignment Framework
+## Stage 5: Support-Layer Preflight Audit
+
+1. Load the expected city list from `cities.csv`.
+2. Compute deterministic expected study-area, grid, raw support-input, and prepared support-output paths for each city.
+3. Audit city-specific raw support folders:
+   - `data_raw/dem/<city_slug>/<city_slug>_dem_3dep_30m.tif`
+   - `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_land_cover_30m.tif`
+   - `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_impervious_30m.tif`
+   - `data_raw/hydro/<city_slug>/<city_slug>_nhdplus_water.gpkg`
+4. Report whether each city is ready for support-layer prep and whether it is already ready for feature extraction.
+5. Write machine-readable preflight outputs:
+   - `data_processed/support_layers/support_layers_preflight_summary.json|csv`
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_support_layers --preflight-only
+```
+
+Raw-input population status:
+
+- Automated today: prerequisite auditing and downstream prep once files exist.
+- Manual today: obtaining and placing DEM, NLCD land-cover, NLCD impervious, and hydro source files into the deterministic per-city raw paths audited above.
+- Reproducible procedure: populate the audited raw paths, rerun `src.run_support_layers --preflight-only`, then run `src.run_support_layers` for the same city set.
+
+## Stage 6: Support-Layer Prep
+
+1. Read deterministic city-specific raw support files.
+2. Clip DEM, NLCD land cover, NLCD impervious, and hydro inputs to the city study area.
+3. Save deterministic prepared outputs under `data_processed/support_layers/<city_stem>/`:
+   - `dem_prepared.tif`
+   - `nlcd_land_cover_prepared.tif`
+   - `nlcd_impervious_prepared.tif`
+   - `hydro_water_prepared.gpkg`
+4. Write machine-readable prep outputs:
+   - `data_processed/support_layers/support_layers_prep_summary.json|csv`
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_support_layers --city-ids 1
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_support_layers
+```
+
+Optional mode:
+
+- `--overwrite`
+
+## Stage 7: Generic Raster Alignment Framework
 
 For each city grid:
 
@@ -81,25 +140,31 @@ For each city grid:
 
 Core module: `src/raster_features.py`
 
-## Stage 6: DEM Feature Extraction
+## Stage 8: DEM Feature Extraction
 
+- Prefer prepared DEM support output when present.
+- Otherwise fall back to the existing city raw DEM discovery path.
 - Align DEM raster to city template.
 - Extract `elevation_m` for each grid cell centroid index.
 
-## Stage 7: NLCD Extraction
+## Stage 9: NLCD Extraction
 
+- Prefer prepared NLCD support outputs when present.
+- Otherwise fall back to the existing city raw NLCD discovery path.
 - Align NLCD land-cover raster and extract `land_cover_class` (nearest-neighbor).
 - Align NLCD impervious raster and extract `impervious_pct`.
 
-## Stage 8: Hydrography Distance-To-Water
+## Stage 10: Hydrography Distance-To-Water
 
+- Prefer prepared hydro support output when present.
+- Otherwise fall back to the existing city raw hydro discovery path.
 - Rasterize hydro geometries to city template.
 - Compute Euclidean distance transform (meters).
 - Extract `dist_to_water_m` per grid cell.
 
 Core module: `src/water_features.py`
 
-## Stage 9: Per-City Feature Assembly
+## Stage 11: Per-City Feature Assembly
 
 - Assemble city feature table from available sources.
 - Save intermediate unfiltered + filtered tables:
@@ -115,7 +180,7 @@ CLI:
 .venv\Scripts\python.exe -m src.run_city_features_batch --existing-grids-only --city-ids 1 --max-cells 5000
 ```
 
-## Stage 10: Final Dataset Merge
+## Stage 12: Final Dataset Merge
 
 - Concatenate per-city parquet tables.
 - Apply row rules:
@@ -139,3 +204,5 @@ CLI:
 ```
 
 Use `--max-cells` for partial/debug runs on very large city grids.
+
+
