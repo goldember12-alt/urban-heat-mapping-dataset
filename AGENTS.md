@@ -41,8 +41,8 @@ Create a final cell-level dataset at 30 m resolution with one row per grid cell 
 - Build master 30 m grid in local UTM CRS
 - Align all rasters to the master grid
 - Compute distance-to-water raster from hydrography
-- NDVI = median May–Aug composite from Landsat surface reflectance
-- LST = median valid daytime May–Aug ECOSTRESS/AppEEARS observations
+- NDVI = median May-Aug composite from Landsat surface reflectance
+- LST = median valid daytime May-Aug ECOSTRESS/AppEEARS observations
 - Drop open-water cells
 - Drop cells with fewer than 3 valid ECOSTRESS passes
 - Define `hotspot_10pct` within each city
@@ -60,6 +60,24 @@ Create a final cell-level dataset at 30 m resolution with one row per grid cell 
 - Do not hardcode credentials
 - Read secrets from environment variables
 
+## Git operations
+
+- Before any push, run:
+  - `git remote -v`
+  - `git branch --show-current`
+  - `git status`
+- Default branch is `main`.
+- Keep `origin` configured as:
+  - `https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`
+- If `origin` is missing, add it:
+  - `git remote add origin https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`
+- Push with:
+  - `git push -u origin main`
+- If push fails, capture and report the exact error text.
+- In this Codex environment, a first push may fail due sandbox/network restrictions (for example: unable to connect to GitHub on port 443). Retry outside sandbox restrictions and record the result.
+- Do not guess auth/permission causes; verify by rerunning and reporting the exact message.
+- Do not force-push `main` unless explicitly requested.
+
 ## Documentation rules
 
 - Update `README` when architecture changes
@@ -72,8 +90,7 @@ Create a final cell-level dataset at 30 m resolution with one row per grid cell 
 - Treat `docs/chat_handoff.md` as the canonical rolling project-state document for handoff to future chats/sessions.
 - Prefer updating existing docs over creating redundant new status files.
 - Do not create additional tracking documents if `docs/chat_handoff.md` can be updated instead.
-- After any meaningful change to code, pipeline behavior, tests, outputs, or docs, and before ending the task, update `docs/chat_handoff.md`.
-- At the end of every substantive task, update `docs/chat_handoff.md` before finishing.
+- After any meaningful change to code, pipeline behavior, tests, outputs, docs, or git workflow status, and before ending the task, update `docs/chat_handoff.md`.
 - If a prompt asks for code changes, tests, or docs changes, assume `docs/chat_handoff.md` must also be updated unless the prompt explicitly says not to.
 - Keep `docs/chat_handoff.md` concise, factual, and current.
 - Do not invent verification status; only mark something verified if it was actually checked.

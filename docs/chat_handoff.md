@@ -91,3 +91,19 @@ These stages are not implemented yet:
 ## Immediate Next Step
 
 Scale `process_city(...)` from one-city CLI runs to a batch runner over all 30 cities, then begin raster alignment/extraction stages using the saved per-city study areas and master grids.
+
+## Manual Verification Status
+
+As of March 8, 2026:
+
+- Git remote check verified `origin` is configured to `https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`.
+- Current branch verified as `main`.
+- Working tree verified clean before push.
+- Initial `git push -u origin main` attempt failed in sandbox with network error:
+  - `Failed to connect to github.com port 443: Could not connect to server`
+- Push was retried outside sandbox restrictions and succeeded:
+  - `main -> main` completed and upstream tracking set for `origin/main`.
+
+## Open Issues
+
+- No current git authentication or repository permission issue remains after successful push.
