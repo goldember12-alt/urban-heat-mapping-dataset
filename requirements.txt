@@ -1,0 +1,12 @@
+pandas
+geopandas
+shapely
+pyproj
+rasterio
+rioxarray
+xarray
+numpy
+matplotlib
+requests
+scipy
+pyogrio

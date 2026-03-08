@@ -1,0 +1,31 @@
+city_id,city_name,state,climate_group,lat,lon
+1,Phoenix,AZ,hot_arid,33.4484,-112.0740
+2,Tucson,AZ,hot_arid,32.2226,-110.9747
+3,Las Vegas,NV,hot_arid,36.1699,-115.1398
+4,Albuquerque,NM,hot_arid,35.0844,-106.6504
+5,El Paso,TX,hot_arid,31.7619,-106.4850
+6,Denver,CO,hot_arid,39.7392,-104.9903
+7,Salt Lake City,UT,hot_arid,40.7608,-111.8910
+8,Fresno,CA,hot_arid,36.7378,-119.7871
+9,Bakersfield,CA,hot_arid,35.3733,-119.0187
+10,Reno,NV,hot_arid,39.5296,-119.8138
+11,Houston,TX,hot_humid,29.7604,-95.3698
+12,Columbia,SC,hot_humid,34.0007,-81.0348
+13,Richmond,VA,hot_humid,37.5407,-77.4360
+14,New Orleans,LA,hot_humid,29.9511,-90.0715
+15,Tampa,FL,hot_humid,27.9506,-82.4572
+16,Miami,FL,hot_humid,25.7617,-80.1918
+17,Jacksonville,FL,hot_humid,30.3322,-81.6557
+18,Atlanta,GA,hot_humid,33.7490,-84.3880
+19,Charlotte,NC,hot_humid,35.2271,-80.8431
+20,Nashville,TN,hot_humid,36.1627,-86.7816
+21,Seattle,WA,mild_cool,47.6062,-122.3321
+22,Portland,OR,mild_cool,45.5152,-122.6784
+23,San Francisco,CA,mild_cool,37.7749,-122.4194
+24,San Jose,CA,mild_cool,37.3382,-121.8863
+25,Los Angeles,CA,mild_cool,34.0522,-118.2437
+26,San Diego,CA,mild_cool,32.7157,-117.1611
+27,Chicago,IL,mild_cool,41.8781,-87.6298
+28,Minneapolis,MN,mild_cool,44.9778,-93.2650
+29,Detroit,MI,mild_cool,42.3314,-83.0458
+30,Boston,MA,mild_cool,42.3601,-71.0589
