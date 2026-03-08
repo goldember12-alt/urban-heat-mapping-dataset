@@ -132,22 +132,47 @@ def _discover_city_product_rasters(
 
     return [path for path in candidates if any(token in path.name.lower() for token in tokens)]
 
+def _discover_city_vectors(
+    vector_root: Path,
+    city_name: str,
+) -> list[Path]:
+    """Discover city-specific hydro vectors recursively from the city slug subfolder."""
+    city_dir = vector_root / _city_slug(city_name)
+    if not city_dir.exists():
+        return []
+
+    candidates: list[Path] = []
+    for pattern in ("*.gpkg", "*.shp", "*.geojson", "*.json"):
+        candidates.extend(sorted(path for path in city_dir.rglob(pattern) if path.is_file()))
+    return candidates
+
 def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
     """Discover optional feature source files from default raw-data folders."""
     city_name = str(city["city_name"])
     city_id = int(city["city_id"])
 
-    dem = first_existing(discover_rasters(RAW_DEM))
+    dem_city = _discover_city_product_rasters(
+        product_root=RAW_DEM,
+        city_name=city_name,
+        include_name_tokens=(),
+    )
+    dem = first_existing(dem_city) if dem_city else first_existing(discover_rasters(RAW_DEM))
 
-    nlcd_rasters = discover_rasters(RAW_NLCD)
-    nlcd_city = choose_city_or_global_files(nlcd_rasters, city_name=city_name, city_id=city_id)
+    nlcd_city = _discover_city_product_rasters(
+        product_root=RAW_NLCD,
+        city_name=city_name,
+        include_name_tokens=(),
+    )
+    if not nlcd_city:
+        nlcd_rasters = discover_rasters(RAW_NLCD)
+        nlcd_city = choose_city_or_global_files(nlcd_rasters, city_name=city_name, city_id=city_id)
     nlcd_land = first_existing([p for p in nlcd_city if "impervious" not in p.name.lower() and "imp" not in p.name.lower()])
     nlcd_impervious = first_existing([p for p in nlcd_city if "impervious" in p.name.lower() or "imp" in p.name.lower()])
 
-    hydro_candidates: list[Path] = []
-    if RAW_HYDRO.exists():
-        for pattern in ["*.gpkg", "*.shp", "*.geojson", "*.json"]:
-            hydro_candidates.extend(sorted(RAW_HYDRO.glob(pattern)))
+    hydro_candidates = _discover_city_vectors(RAW_HYDRO, city_name=city_name)
+    if not hydro_candidates and RAW_HYDRO.exists():
+        for pattern in ("*.gpkg", "*.shp", "*.geojson", "*.json"):
+            hydro_candidates.extend(sorted(path for path in RAW_HYDRO.glob(pattern) if path.is_file()))
     hydro = first_existing(hydro_candidates)
     ndvi_city = _discover_city_product_rasters(
         product_root=RAW_NDVI,
@@ -564,5 +589,7 @@ def assemble_final_dataset(
     logger.info("Saved final parquet: %s", parquet_path)
     logger.info("Saved final csv: %s", csv_path)
     return FinalDatasetResult(final_df=final_df, parquet_path=parquet_path, csv_path=csv_path)
+
+
 
 

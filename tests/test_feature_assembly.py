@@ -181,3 +181,44 @@ def test_discover_default_feature_sources_falls_back_to_top_level_when_city_fold
 
     assert sources.ndvi_rasters == [ndvi_top]
     assert sources.lst_rasters == [lst_top]
+
+
+def test_discover_default_feature_sources_uses_city_recursive_dem_nlcd_hydro(tmp_path: Path, monkeypatch):
+    raw_dem = tmp_path / "raw" / "dem"
+    raw_nlcd = tmp_path / "raw" / "nlcd"
+    raw_hydro = tmp_path / "raw" / "hydro"
+    raw_ndvi = tmp_path / "raw" / "ndvi"
+    raw_ecostress = tmp_path / "raw" / "ecostress"
+
+    city_dem_dir = raw_dem / "phoenix" / "subset"
+    city_nlcd_dir = raw_nlcd / "phoenix" / "subset"
+    city_hydro_dir = raw_hydro / "phoenix" / "subset"
+    city_dem_dir.mkdir(parents=True, exist_ok=True)
+    city_nlcd_dir.mkdir(parents=True, exist_ok=True)
+    city_hydro_dir.mkdir(parents=True, exist_ok=True)
+    raw_ndvi.mkdir(parents=True, exist_ok=True)
+    raw_ecostress.mkdir(parents=True, exist_ok=True)
+
+    dem_city = city_dem_dir / "phoenix_dem.tif"
+    land_city = city_nlcd_dir / "phoenix_land_cover.tif"
+    imp_city = city_nlcd_dir / "phoenix_impervious.tif"
+    hydro_city = city_hydro_dir / "phoenix_hydro.gpkg"
+
+    dem_city.write_text("x")
+    land_city.write_text("x")
+    imp_city.write_text("x")
+    hydro_city.write_text("x")
+
+    monkeypatch.setattr(feature_assembly, "RAW_DEM", raw_dem)
+    monkeypatch.setattr(feature_assembly, "RAW_NLCD", raw_nlcd)
+    monkeypatch.setattr(feature_assembly, "RAW_HYDRO", raw_hydro)
+    monkeypatch.setattr(feature_assembly, "RAW_NDVI", raw_ndvi)
+    monkeypatch.setattr(feature_assembly, "RAW_ECOSTRESS", raw_ecostress)
+
+    city = pd.Series({"city_id": 1, "city_name": "Phoenix", "state": "AZ"})
+    sources = feature_assembly.discover_default_feature_sources(city)
+
+    assert sources.dem_raster == dem_city
+    assert sources.nlcd_land_cover_raster == land_city
+    assert sources.nlcd_impervious_raster == imp_city
+    assert sources.hydro_vector == hydro_city
