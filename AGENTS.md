@@ -140,3 +140,24 @@ Each update to `docs/chat_handoff.md` should include, when relevant:
 ## Task completion rule
 
 - A task is not complete until relevant code, tests, docs, and `docs/chat_handoff.md` updates are finished.
+
+## Remote sensing acquisition rules
+
+- AppEEARS acquisition is an official pipeline stage for NDVI and ECOSTRESS inputs.
+- For each city, export an AppEEARS-ready AOI polygon from the buffered study area:
+  - output format: GeoJSON
+  - CRS: EPSG:4326
+  - one AOI file per city
+- Save AOI exports under `data_processed/appeears_aoi/`.
+- Automate AppEEARS submission, polling, and download with Python CLI entrypoints.
+- Read Earthdata/AppEEARS credentials or tokens from environment variables only.
+- Save downloaded raw files under:
+  - `data_raw/ndvi/<city_slug>/`
+  - `data_raw/ecostress/<city_slug>/`
+- Keep raw downloads immutable.
+- Acquisition must be resumable:
+  - support submit-only
+  - poll-only
+  - download-only
+  - retry for incomplete cities without restarting all cities
+- Log per-city request status and record high-level acquisition status in `docs/chat_handoff.md`.

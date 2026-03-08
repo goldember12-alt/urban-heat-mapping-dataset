@@ -17,26 +17,30 @@ Implemented end-to-end pipeline components now include:
 - Final merged dataset assembly (`.parquet` + `.csv`) with enforced row rules and city-level `hotspot_10pct`.
 - Full pipeline CLI orchestrator (`src/full_pipeline.py`, `src/run_full_pipeline.py`).
 - Optional partial/debug mode for very large grids via `--max-cells`.
-- New tests for raster alignment, hydro distance logic, and final assembly behavior.
+- AppEEARS acquisition stage:
+  - AOI discovery/export from `data_processed/study_areas/*.gpkg` to `data_processed/appeears_aoi/*.geojson` in EPSG:4326 (`src/appeears_aoi.py`).
+  - AppEEARS API client with env-only auth (`src/appeears_client.py`).
+  - Resumable submit/poll/download orchestration with machine-readable per-city status summaries (`src/appeears_acquisition.py`).
+  - Acquisition CLI entrypoint (`src/run_appeears_acquisition.py`).
 
 ## Testing Status
 
 As of 2026-03-08:
 
-- `37 passed` via:
+- `44 passed` via:
   - `.venv\Scripts\python.exe -m pytest -q`
 
-Added tests:
+New tests added for acquisition stage:
 
-- `tests/test_raster_features.py`
-- `tests/test_water_features.py`
-- `tests/test_feature_assembly.py`
+- `tests/test_appeears_aoi.py`
+- `tests/test_appeears_client.py`
+- `tests/test_appeears_acquisition.py`
 
 ## Manual Verification Status
 
 As of 2026-03-08:
 
-Implemented and manually executed:
+Implemented and manually executed previously:
 
 - Installed parquet engine dependency:
   - `.venv\Scripts\pip.exe install pyarrow`
@@ -54,23 +58,27 @@ Implemented and manually executed:
   - `data_processed/final/final_dataset.parquet`
   - `data_processed/final/final_dataset.csv`
 
-Not manually verified in this session:
+New acquisition stage manual verification in this session:
 
-- Full 30-city stage-1 boundary/grid run at 30 m.
-- NDVI and ECOSTRESS extraction with real source rasters.
+- Test-verified only (no live AppEEARS API run performed in this sandboxed session).
+- Not manually verified against real AppEEARS task submission/download yet.
 
 ## Immediate Next Step
 
-Populate `data_raw/dem/`, `data_raw/nlcd/`, `data_raw/hydro/`, `data_raw/ndvi/`, and `data_raw/ecostress/`, then run full pipeline without `--max-cells` to produce full-city/full-cohort outputs.
+Set AppEEARS credentials in environment variables and run one live city acquisition per product to verify real API submission/poll/download and raw file placement.
 
 ## Current Output Structure
 
 - `data_processed/study_areas/`
 - `data_processed/city_grids/`
+- `data_processed/appeears_aoi/`
+- `data_processed/appeears_status/`
 - `data_processed/intermediate/aligned_rasters/`
 - `data_processed/intermediate/city_features/`
 - `data_processed/city_features/`
 - `data_processed/final/`
+- `data_raw/ndvi/<city_slug>/`
+- `data_raw/ecostress/<city_slug>/`
 
 Current verified final output files exist:
 
@@ -79,11 +87,78 @@ Current verified final output files exist:
 
 ## Not Started Yet / Open Issues
 
-- Real NDVI and ECOSTRESS source rasters are not present in this workspace; those feature columns remain `NaN` in current outputs.
-- Only one city (Phoenix subset) has been run end-to-end in this session.
-- Full all-city execution at 30 m remains pending input data availability and runtime capacity.
+- Live AppEEARS API interaction (auth + submit + poll + download) has not been manually run in this session.
+- Real NDVI and ECOSTRESS acquisition completeness for all 30 cities remains pending.
+- Full 30-city end-to-end run at 30 m remains pending data availability and runtime.
 
 ## Checkpoint Log
+
+### 2026-03-08 - Milestone: AppEEARS Date Format Fix
+
+- Change made:
+  - Kept CLI date input contract as `YYYY-MM-DD`.
+  - Updated AppEEARS payload date formatting to submit `MM-DD-YYYY` in `build_area_task_payload`.
+  - Added tests confirming conversion behavior and rejection of `MM-DD-YYYY` CLI input.
+- Files touched:
+  - `src/appeears_client.py`
+  - `tests/test_appeears_client.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31 --submit-only`
+- Test status:
+  - `44 passed` (`pytest -q`).
+- Manual verification status:
+  - Date-format behavior verified by tests; live AppEEARS submission response not manually verified in this session.
+- Next recommended step:
+  - Re-run Phoenix NDVI `--submit-only` request and confirm AppEEARS accepts payload date format.
+### 2026-03-08 - Milestone: AppEEARS Submission Error Reporting Hardened
+
+- Change made:
+  - Improved AppEEARS `POST /task` failure reporting in the client to include HTTP status code, parsed AppEEARS error message/body, and submission context (`city_id`, `product`).
+  - Added explicit error logging for failed task submission without exposing secrets.
+  - Added client test coverage for failed task submission error content.
+- Files touched:
+  - `src/appeears_client.py`
+  - `tests/test_appeears_client.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31 --submit-only`
+- Test status:
+  - `43 passed` (`pytest -q`).
+- Manual verification status:
+  - Error reporting behavior verified by tests; live AppEEARS API failure response not manually exercised in this session.
+- Next recommended step:
+  - Re-run one-city NDVI submit with `--submit-only` and confirm surfaced CLI error includes status/body/city/product if AppEEARS rejects the request.
+### 2026-03-08 - Milestone: AppEEARS Acquisition Stage (Implemented)
+
+- Change made:
+  - Added AOI export stage from study areas and AppEEARS acquisition automation with resumable status handling.
+  - Added support for NDVI and ECOSTRESS product-type runs with defaults/fallback candidates.
+  - Added submit-only, poll-only, download-only, and retry-incomplete run modes.
+  - Added machine-readable per-city acquisition summary outputs (JSON + CSV).
+- Files touched:
+  - `src/config.py`
+  - `src/appeears_aoi.py`
+  - `src/appeears_client.py`
+  - `src/appeears_acquisition.py`
+  - `src/run_appeears_acquisition.py`
+  - `tests/test_appeears_aoi.py`
+  - `tests/test_appeears_client.py`
+  - `tests/test_appeears_acquisition.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31`
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ecostress --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31`
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --start-date 2023-05-01 --end-date 2023-08-31 --retry-incomplete`
+- Test status:
+  - `43 passed` (`pytest -q`).
+- Manual verification status:
+  - Implemented + test-verified; live AppEEARS API behavior not manually verified in this session.
+- Next recommended step:
+  - Run one-city live AppEEARS submit/poll/download for NDVI and ECOSTRESS with valid environment credentials, then verify summary statuses and raw download folders.
 
 ### 2026-03-08 - Milestone: Alignment + Core Feature Stages
 
@@ -123,7 +198,7 @@ Current verified final output files exist:
 - How to run:
   - `.venv\Scripts\python.exe -m src.run_full_pipeline --skip-city-processing --existing-grids-only --city-ids 1 --max-cells 5000`
 - Test status:
-  - `37 passed` (`pytest -q`).
+  - `37 passed` (`pytest -q`) at that checkpoint.
 - Manual verification status:
   - Partial dataset artifacts produced and file existence verified.
 - Next recommended step:
@@ -143,3 +218,5 @@ Current verified final output files exist:
   - Command completed successfully with `status=ok` summary output.
 - Next recommended step:
   - Execute stage-1 batch run for all cities at target settings when full compute/network run is intended.
+
+

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 # Project root
@@ -18,6 +19,8 @@ FINAL = DATA_PROCESSED / "final"
 STUDY_AREAS = DATA_PROCESSED / "study_areas"
 CITY_GRIDS = DATA_PROCESSED / "city_grids"
 INTERMEDIATE = DATA_PROCESSED / "intermediate"
+APPEEARS_AOI = DATA_PROCESSED / "appeears_aoi"
+APPEEARS_STATUS = DATA_PROCESSED / "appeears_status"
 
 # Common raw-data subfolders (optional; used when source files are available)
 RAW_DEM = DATA_RAW / "dem"
@@ -28,3 +31,15 @@ RAW_ECOSTRESS = DATA_RAW / "ecostress"
 
 # Input files
 CITIES_CSV = PROJECT_ROOT / "cities.csv"
+
+# AppEEARS defaults and environment-variable names
+APPEEARS_BASE_URL = os.getenv("APPEEARS_BASE_URL", "https://appeears.earthdatacloud.nasa.gov/api")
+APPEEARS_TOKEN_ENV = "APPEEARS_API_TOKEN"
+EARTHDATA_USERNAME_ENV = "EARTHDATA_USERNAME"
+EARTHDATA_PASSWORD_ENV = "EARTHDATA_PASSWORD"
+
+NDVI_DEFAULT_PRODUCT = "MOD13A1.061"
+NDVI_DEFAULT_LAYER = "500m_16_days_NDVI"
+
+ECOSTRESS_PRODUCT_CANDIDATES = ("ECO_L2G_LSTE.002", "ECO_L2G_LSTE.001")
+ECOSTRESS_DEFAULT_LAYER = "LST"

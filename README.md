@@ -8,22 +8,17 @@ Target analytic unit: one row per 30 m grid cell per city.
 
 ## Implemented Pipeline Stages
 
-Implemented:
-
 1. City boundary and 2 km buffered study area construction from Census urban-area lookup.
 2. Master 30 m city grid generation.
 3. Batch city boundary/grid runner.
-4. Generic raster alignment framework to city grid template.
-5. DEM extraction (aligned).
-6. NLCD land-cover and impervious extraction (aligned).
-7. Hydrography distance-to-water raster generation and extraction.
-8. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
-9. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
-
-Wired but data-blocked in this workspace:
-
-- NDVI median May-Aug stage (requires source rasters in `data_raw/ndvi/`).
-- ECOSTRESS/AppEEARS LST median + valid-pass stage (requires source rasters in `data_raw/ecostress/`).
+4. AppEEARS AOI export from city study areas (`data_processed/appeears_aoi/*.geojson`, EPSG:4326).
+5. AppEEARS acquisition runner (submit, poll, download, resumable state) for NDVI and ECOSTRESS.
+6. Generic raster alignment framework to city grid template.
+7. DEM extraction (aligned).
+8. NLCD land-cover and impervious extraction (aligned).
+9. Hydrography distance-to-water raster generation and extraction.
+10. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
+11. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
 
 ## Required Final Columns
 
@@ -42,11 +37,18 @@ Wired but data-blocked in this workspace:
 - `n_valid_ecostress_passes`
 - `hotspot_10pct`
 
-## Data Rules Implemented
+## AppEEARS Environment Variables
 
-- Drop open-water cells when NLCD land-cover class is available.
-- If LST is available, drop cells with `n_valid_ecostress_passes < 3`.
-- Compute `hotspot_10pct` within each city from city-level LST distribution (90th percentile threshold).
+The acquisition CLI reads credentials from environment variables only:
+
+- `APPEEARS_API_TOKEN` (preferred bearer token), or
+- `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`
+
+Optional:
+
+- `APPEEARS_BASE_URL` is not required for normal runs (default is baked into config).
+
+Secrets are not printed in logs.
 
 ## CLI Entrypoints
 
@@ -67,6 +69,27 @@ Batch boundary/grid:
 ```powershell
 .venv\Scripts\python.exe -m src.run_city_batch_processing --city-ids 1,2,3
 ```
+
+AppEEARS acquisition (new):
+
+```powershell
+.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ecostress --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --start-date 2023-05-01 --end-date 2023-08-31 --retry-incomplete
+```
+
+Supported run modes:
+
+- `--submit-only`
+- `--poll-only`
+- `--download-only`
+- `--retry-incomplete`
 
 One city feature extraction:
 
@@ -94,8 +117,12 @@ End-to-end pipeline orchestrator:
 
 ## Data Layout
 
-- `data_raw/` immutable source data (DEM, NLCD, hydro, NDVI, ECOSTRESS folders)
+- `data_raw/` immutable source data
+- `data_raw/ndvi/<city_slug>/` downloaded AppEEARS NDVI files
+- `data_raw/ecostress/<city_slug>/` downloaded AppEEARS ECOSTRESS files
 - `data_processed/study_areas/` city buffered study areas
+- `data_processed/appeears_aoi/` AppEEARS AOI GeoJSON exports
+- `data_processed/appeears_status/` acquisition summary JSON/CSV per product type
 - `data_processed/city_grids/` city master grids
 - `data_processed/intermediate/` aligned rasters + unfiltered/filtered city feature tables
 - `data_processed/city_features/` per-city feature outputs + batch summary

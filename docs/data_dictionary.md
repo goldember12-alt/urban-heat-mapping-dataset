@@ -16,6 +16,45 @@
 - `cell_id`: integer grid-cell identifier within city
 - `geometry`: 30 m grid-cell polygon
 
+## AppEEARS Acquisition Outputs
+
+### AppEEARS AOI exports (`data_processed/appeears_aoi/*.geojson`)
+
+- `city_id`: integer city identifier
+- `city_name`: city name
+- `state`: state abbreviation
+- `geometry`: one city AOI polygon (or multipart polygon) in EPSG:4326
+
+### AppEEARS acquisition summaries (`data_processed/appeears_status/appeears_<product_type>_acquisition_summary.json|csv`)
+
+Per-city status fields:
+
+- `city_id`: integer city identifier
+- `city_name`: city name
+- `state`: state abbreviation
+- `city_slug`: lowercase slug used for folder routing
+- `product_type`: `ndvi` or `ecostress`
+- `product`: AppEEARS product identifier actually used for submission
+- `layer`: AppEEARS layer identifier used in payload
+- `start_date`: requested date-range start (`YYYY-MM-DD`)
+- `end_date`: requested date-range end (`YYYY-MM-DD`)
+- `study_area_path`: discovered study-area GeoPackage path
+- `aoi_path`: exported AOI GeoJSON path
+- `download_dir`: target raw download directory
+- `task_id`: AppEEARS task identifier (if submitted)
+- `remote_task_status`: latest polled remote task status string
+- `status`: local pipeline status (`blocked`, `pending`, `submitted`, `completed`, `failed`)
+- `n_bundle_files`: count of files listed in completed bundle
+- `n_files_downloaded`: number of new files downloaded in this run
+- `n_files_existing`: number of already-present files kept unchanged
+- `error`: last error message (blank when successful)
+- `updated_at_utc`: last update timestamp for that city record
+
+### Raw acquisition folders
+
+- `data_raw/ndvi/<city_slug>/`: immutable raw NDVI downloads
+- `data_raw/ecostress/<city_slug>/`: immutable raw ECOSTRESS downloads
+
 ## Intermediate Outputs
 
 ### Aligned rasters (`data_processed/intermediate/aligned_rasters/<city_stem>/`)
