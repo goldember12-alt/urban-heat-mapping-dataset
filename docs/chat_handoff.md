@@ -23,19 +23,23 @@ Implemented end-to-end pipeline components now include:
   - Resumable submit/poll/download orchestration with machine-readable per-city status summaries (`src/appeears_acquisition.py`).
   - Acquisition CLI entrypoint (`src/run_appeears_acquisition.py`).
 - AppEEARS-to-feature ingestion update:
-  - Feature source discovery now scans `data_raw/ndvi/<city_slug>/` and `data_raw/ecostress/<city_slug>/` recursively and selects science layers only (`_NDVI_` for NDVI, `_LST_` for ECOSTRESS) with legacy top-level fallback (`src/feature_assembly.py`).
+  - Feature source discovery scans `data_raw/ndvi/<city_slug>/` and `data_raw/ecostress/<city_slug>/` recursively and selects science layers only (`_NDVI_` for NDVI, `_LST_` for ECOSTRESS) with legacy top-level fallback (`src/feature_assembly.py`).
+- NDVI/LST normalization update:
+  - Sampling pipeline now supports per-layer normalization rules (scale factor, offset, valid-range masking).
+  - Phoenix run uses NDVI normalization (`scale_factor=0.0001`, valid range `[-0.2, 1.0]`) and LST normalization (`scale_factor=1`, units Kelvin).
 
 ## Testing Status
 
 As of 2026-03-08:
 
-- `48 passed` via:
+- `49 passed` via:
   - `.venv\Scripts\python.exe -m pytest -q`
 
-Focused ingestion/file-selection tests now include:
+Focused tests relevant to AppEEARS ingestion and normalization:
 
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_uses_city_appeears_layer_files`
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_falls_back_to_top_level_when_city_folder_missing`
+- `tests/test_raster_features.py::test_sample_median_from_raster_stack_applies_normalization_and_valid_range`
 
 ## Manual Verification Status
 
@@ -51,23 +55,28 @@ Implemented and manually executed previously:
 - Ran partial end-to-end pipeline (existing grid only, capped cells):
   - `.venv\Scripts\python.exe -m src.run_full_pipeline --skip-city-processing --existing-grids-only --city-ids 1 --max-cells 5000`
 
-New manual verification in this session (real Phoenix AppEEARS raw downloads wired into feature extraction):
+New manual verification in this session (normalization + uncapped Phoenix run):
 
-- Confirmed discovered feature inputs for Phoenix (`city_id=1`) from raw AppEEARS directories:
-  - `ndvi_count=9` files from `data_raw/ndvi/phoenix/...*_NDVI_*.tif`
-  - `lst_count=61` files from `data_raw/ecostress/phoenix/...*_LST_*.tif`
-- Ran one-city extraction with existing CLI and real AppEEARS files:
-  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 1000`
-  - CLI result: `rows=998`; `blocked_stages=dem;hydro_distance;nlcd_impervious;nlcd_land_cover`
-- Verified Phoenix per-city output columns are populated in `data_processed/city_features/01_phoenix_az_features.parquet`:
-  - `ndvi_median_may_aug`: 998 non-null
-  - `lst_median_may_aug`: 998 non-null
-  - `n_valid_ecostress_passes`: 998 non-null
-  - `n_valid_ecostress_passes` range: 34 to 37
+- Verified NDVI and LST scaling metadata from real Phoenix source files:
+  - NDVI TIFF (`MOD13A1...NDVI...tif`): `dtype=int16`, `nodata=-3000`, dataset tags include `scale_factor=0.0001`, `add_offset=0.0`.
+  - LST TIFF (`ECO_L2T_LSTE...LST...tif`): `dtype=float32`, `nodata=NaN`, dataset tags include `scale_factor=1`, `add_offset=0`, `units=Kelvin`.
+- Verified authoritative AppEEARS product metadata (`/api/product/<product>`):
+  - `MOD13A1.061` `_500m_16_days_NDVI`: `ScaleFactor=0.0001`, `ValidMin=-0.2`, `ValidMax=1.0`, `FillValue=-3000`.
+  - `ECO_L2T_LSTE.002` `LST`: `ScaleFactor=1`, `Units=Kelvin`, `FillValue=NaN`.
+- Ran uncapped one-city extraction with existing CLI and real AppEEARS files:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
+  - CLI result: `rows=4742866`; `blocked_stages=dem;hydro_distance;nlcd_impervious;nlcd_land_cover`; dropped `763` rows with `<3` ECOSTRESS passes.
+- Verified Phoenix per-city normalized output in `data_processed/city_features/01_phoenix_az_features.parquet`:
+  - NDVI min/median/max: `0.0254 / 0.1960 / 0.7368`
+  - LST min/median/max (Kelvin): `302.49 / 315.25 / 330.35`
+  - Non-null counts:
+    - `ndvi_median_may_aug`: `4,742,842`
+    - `lst_median_may_aug`: `4,742,866`
+    - `n_valid_ecostress_passes`: `4,742,866`
 
 ## Immediate Next Step
 
-Validate and apply scale-factor/units normalization for AppEEARS NDVI and ECOSTRESS LST values before broader multi-city runs, then rerun Phoenix without `--max-cells`.
+Before multi-city execution, add or verify ECOSTRESS cloud/QC masking policy (if required by analysis design), then run one additional city with real AppEEARS inputs to confirm behavior generalizes beyond Phoenix.
 
 ## Current Output Structure
 
@@ -89,13 +98,35 @@ Current verified final output files exist:
 
 ## Not Started Yet / Open Issues
 
-- NDVI values in Phoenix output currently appear unscaled raw integer-like magnitudes (example range observed: ~1823 to ~2385), so NDVI scaling/normalization still needs explicit handling verification.
-- DEM/NLCD/hydro feature stages remain blocked for this run due missing corresponding raw inputs in local folders.
+- DEM/NLCD/hydro feature stages remain blocked in this environment due missing corresponding raw inputs in local folders.
+- ECOSTRESS LST currently uses product-provided LST layer without additional cloud/QC masking in feature assembly; if stricter quality filtering is required, that policy is still open.
 - Real NDVI and ECOSTRESS acquisition completeness for all 30 cities remains pending.
 - Full 30-city end-to-end run at 30 m remains pending data availability and runtime.
 
 ## Checkpoint Log
 
+### 2026-03-08 - Milestone: NDVI/LST Normalization Verified and Uncapped Phoenix Run Completed
+
+- Date / checkpoint:
+  - 2026-03-08 normalization verification + uncapped Phoenix extraction.
+- Change made:
+  - Added normalization support in raster stack sampling (scale factor, offset, valid-range masking).
+  - Applied NDVI normalization rules (`0.0001`, valid `[-0.2, 1.0]`) and LST normalization rules (`1.0`, Kelvin) in city feature assembly.
+  - Added focused normalization test coverage.
+- Files touched:
+  - `src/raster_features.py`
+  - `src/feature_assembly.py`
+  - `tests/test_raster_features.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
+- Test status:
+  - `49 passed` (`pytest -q`).
+- Manual verification status:
+  - Scale/unit/fill rules verified from source TIFF metadata and AppEEARS product metadata endpoints.
+  - Uncapped Phoenix extraction completed and output sanity checked (NDVI/LST ranges and ECOSTRESS pass counts).
+- Next recommended step:
+  - Decide and implement ECOSTRESS cloud/QC masking policy before multi-city production runs.
 ### 2026-03-08 - Milestone: Phoenix Real AppEEARS Downloads Wired Into Feature Extraction
 
 - Change made:
@@ -286,6 +317,7 @@ Current verified final output files exist:
   - Command completed successfully with `status=ok` summary output.
 - Next recommended step:
   - Execute stage-1 batch run for all cities at target settings when full compute/network run is intended.
+
 
 
 

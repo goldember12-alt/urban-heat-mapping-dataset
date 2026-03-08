@@ -24,6 +24,7 @@ from src.config import (
 )
 from src.load_cities import load_cities
 from src.raster_features import (
+    RasterNormalizationSpec,
     align_and_extract_raster_values,
     choose_city_or_global_files,
     discover_rasters,
@@ -53,6 +54,18 @@ FINAL_COLUMNS = [
 ]
 
 OPEN_WATER_CLASS = 11
+
+NDVI_NORMALIZATION = RasterNormalizationSpec(
+    scale_factor=0.0001,
+    add_offset=0.0,
+    valid_min=-0.2,
+    valid_max=1.0,
+)
+
+LST_NORMALIZATION = RasterNormalizationSpec(
+    scale_factor=1.0,
+    add_offset=0.0,
+)
 
 
 @dataclass(frozen=True)
@@ -342,6 +355,7 @@ def assemble_city_features(
             raster_paths=ndvi_paths,
             resolution=resolution,
             resampling=Resampling.bilinear,
+            normalization=NDVI_NORMALIZATION,
         )
         city_features["ndvi_median_may_aug"] = ndvi_median
     else:
@@ -356,6 +370,7 @@ def assemble_city_features(
             raster_paths=lst_paths,
             resolution=resolution,
             resampling=Resampling.bilinear,
+            normalization=LST_NORMALIZATION,
         )
         city_features["lst_median_may_aug"] = lst_median
         city_features["n_valid_ecostress_passes"] = pd.Series(n_valid, dtype="Int64")
@@ -549,4 +564,5 @@ def assemble_final_dataset(
     logger.info("Saved final parquet: %s", parquet_path)
     logger.info("Saved final csv: %s", csv_path)
     return FinalDatasetResult(final_df=final_df, parquet_path=parquet_path, csv_path=csv_path)
+
 

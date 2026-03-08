@@ -28,6 +28,14 @@ class GridAlignmentSpec:
     minx: float
     maxy: float
 
+@dataclass(frozen=True)
+class RasterNormalizationSpec:
+    """Normalization rules applied to sampled raster values before aggregation."""
+
+    scale_factor: float = 1.0
+    add_offset: float = 0.0
+    valid_min: float | None = None
+    valid_max: float | None = None
 
 def discover_rasters(directory: Path, patterns: Iterable[str] | None = None) -> list[Path]:
     """Return sorted raster paths in a directory matching one or more glob patterns."""
@@ -251,6 +259,7 @@ def sample_median_from_raster_stack(
     raster_paths: list[Path],
     resolution: float | None = None,
     resampling: Resampling = Resampling.nearest,
+    normalization: RasterNormalizationSpec | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Align/sample raster stack to grid cells and return median and valid-count arrays."""
     if len(raster_paths) == 0:
@@ -262,6 +271,13 @@ def sample_median_from_raster_stack(
     for path in raster_paths:
         aligned = align_raster_to_grid(path, spec=spec, resampling=resampling)
         values = extract_grid_values_from_aligned_array(grid_gdf=grid_gdf, aligned_array=aligned, spec=spec)
+        if normalization is not None:
+            if normalization.scale_factor != 1.0 or normalization.add_offset != 0.0:
+                values = (values * float(normalization.scale_factor)) + float(normalization.add_offset)
+            if normalization.valid_min is not None:
+                values = np.where(values < float(normalization.valid_min), np.nan, values)
+            if normalization.valid_max is not None:
+                values = np.where(values > float(normalization.valid_max), np.nan, values)
         sampled.append(values)
 
     stack = np.vstack(sampled)
@@ -282,3 +298,5 @@ def first_existing(paths: Iterable[Path | None]) -> Path | None:
         if raster_exists(path):
             return path
     return None
+
+
