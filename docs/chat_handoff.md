@@ -24,6 +24,9 @@ Implemented end-to-end pipeline components now include:
   - Acquisition CLI entrypoint (`src/run_appeears_acquisition.py`).
 - AppEEARS-to-feature ingestion update:
   - Feature source discovery scans `data_raw/ndvi/<city_slug>/` and `data_raw/ecostress/<city_slug>/` recursively and selects science layers only (`_NDVI_` for NDVI, `_LST_` for ECOSTRESS) with legacy top-level fallback (`src/feature_assembly.py`).
+- Phoenix support-layer discovery crash recovery update:
+  - Feature source discovery now checks city-specific recursive folders for DEM, NLCD, and hydro sources (`data_raw/dem/<city_slug>/`, `data_raw/nlcd/<city_slug>/`, `data_raw/hydro/<city_slug>/`) before top-level fallback (`src/feature_assembly.py`).
+  - Focused regression test added for recursive city-folder DEM/NLCD/hydro discovery (`tests/test_feature_assembly.py`).
 - NDVI/LST normalization update:
   - Sampling pipeline now supports per-layer normalization rules (scale factor, offset, valid-range masking).
   - Phoenix run uses NDVI normalization (`scale_factor=0.0001`, valid range `[-0.2, 1.0]`) and LST normalization (`scale_factor=1`, units Kelvin).
@@ -35,10 +38,14 @@ As of 2026-03-08:
 - `49 passed` via:
   - `.venv\Scripts\python.exe -m pytest -q`
 
+- `5 passed` via:
+  - `.venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py -q`
+
 Focused tests relevant to AppEEARS ingestion and normalization:
 
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_uses_city_appeears_layer_files`
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_falls_back_to_top_level_when_city_folder_missing`
+- `tests/test_feature_assembly.py::test_discover_default_feature_sources_uses_city_recursive_dem_nlcd_hydro`
 - `tests/test_raster_features.py::test_sample_median_from_raster_stack_applies_normalization_and_valid_range`
 
 ## Manual Verification Status
@@ -74,9 +81,23 @@ New manual verification in this session (normalization + uncapped Phoenix run):
     - `lst_median_may_aug`: `4,742,866`
     - `n_valid_ecostress_passes`: `4,742,866`
 
+
+New manual verification in this recovery session (Phoenix support-layer unblock):
+
+- Verified local raw support-layer presence for Phoenix:
+  - `data_raw/dem/phoenix/phoenix_dem_3dep_30m.tif`
+  - `data_raw/nlcd/phoenix/phoenix_nlcd_2021_impervious_30m.tif`
+  - `data_raw/nlcd/phoenix/phoenix_nlcd_2021_land_cover_30m.tif`
+  - `data_raw/hydro/phoenix/phoenix_nhdplus_water.gpkg`
+- Re-ran uncapped Phoenix extraction:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
+  - Run failed before final summary with NumPy memory error in `sample_median_from_raster_stack` during LST median (`Unable to allocate 2.16 GiB`).
+- Re-ran capped Phoenix extraction for stage verification:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 1000`
+  - CLI result: `rows=993`; `blocked_stages=` (empty), confirming `dem`, `hydro_distance`, `nlcd_impervious`, and `nlcd_land_cover` are no longer blocked.
 ## Immediate Next Step
 
-Before multi-city execution, add or verify ECOSTRESS cloud/QC masking policy (if required by analysis design), then run one additional city with real AppEEARS inputs to confirm behavior generalizes beyond Phoenix.
+Address uncapped Phoenix memory pressure in LST median stack processing (chunking/streaming or other minimal memory fix), then rerun uncapped city extraction and confirm full-run stage summary remains unblocked.
 
 ## Current Output Structure
 
@@ -98,12 +119,32 @@ Current verified final output files exist:
 
 ## Not Started Yet / Open Issues
 
-- DEM/NLCD/hydro feature stages remain blocked in this environment due missing corresponding raw inputs in local folders.
+- Phoenix support-layer block is resolved in capped live run (`blocked_stages` empty), but uncapped Phoenix extraction currently fails with NumPy memory allocation during LST median calculation.
 - ECOSTRESS LST currently uses product-provided LST layer without additional cloud/QC masking in feature assembly; if stricter quality filtering is required, that policy is still open.
 - Real NDVI and ECOSTRESS acquisition completeness for all 30 cities remains pending.
 - Full 30-city end-to-end run at 30 m remains pending data availability and runtime.
 
 ## Checkpoint Log
+
+### 2026-03-08 - Checkpoint: Crash-Recovery Commit Validated for Phoenix Support-Layer Discovery
+
+- Date / checkpoint:
+  - 2026-03-08 commit `97b3007` recovery verification.
+- Change made:
+  - Recovered commit includes city-recursive DEM/NLCD/hydro source discovery plus focused test coverage.
+  - No additional code changes were required to resolve the previously blocked support-layer stages.
+- Files touched:
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py -q`
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 1000`
+- Test status:
+  - `5 passed` in `tests/test_feature_assembly.py`.
+- Manual verification status:
+  - Phoenix capped extraction completed with `blocked_stages=` (empty), confirming support-layer unblock for `dem`, `hydro_distance`, `nlcd_impervious`, and `nlcd_land_cover`.
+  - Uncapped extraction still fails due memory allocation in LST median computation.
+- Next recommended step:
+  - Implement minimal memory-safe median strategy for uncapped LST stack processing and verify with uncapped Phoenix rerun.
 
 ### 2026-03-08 - Milestone: NDVI/LST Normalization Verified and Uncapped Phoenix Run Completed
 
