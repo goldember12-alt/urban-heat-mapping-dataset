@@ -27,7 +27,7 @@ Implemented end-to-end pipeline components now include:
 
 As of 2026-03-08:
 
-- `44 passed` via:
+- `46 passed` via:
   - `.venv\Scripts\python.exe -m pytest -q`
 
 New tests added for acquisition stage:
@@ -93,6 +93,52 @@ Current verified final output files exist:
 
 ## Checkpoint Log
 
+### 2026-03-08 - Milestone: ECOSTRESS Product/Layer Defaults Corrected via Live AppEEARS Metadata
+
+- Live issue observed:
+  - Real AppEEARS submit rejected prior defaults with:
+  - `Product ECO_L2G_LSTE.002 is not available`
+  - `Product ECO_L2G_LSTE.001 is not available`
+- Metadata query result (live AppEEARS API):
+  - Product catalog endpoint (`/api/product`) shows available ECOSTRESS LST products include:
+  - `ECO_L2T_LSTE.002` (Available=true)
+  - `ECO_L2_LSTE.002` (Available=true)
+  - Product-layer endpoint (`/api/product/<product_id>`) shows selectable `LST` layer is available for both products.
+- Change made:
+  - Updated ECOSTRESS fallback/default product candidates in config from unavailable `ECO_L2G_*` ids to:
+  - `("ECO_L2T_LSTE.002", "ECO_L2_LSTE.002")`
+  - Kept ECOSTRESS default layer as `LST` (validated selectable in live metadata).
+  - Added/updated tests to ensure default ECOSTRESS payload uses verified selectable product/layer.
+- Files touched:
+  - `src/config.py`
+  - `tests/test_appeears_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to rerun Phoenix ECOSTRESS submit-only:
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ecostress --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31 --submit-only`
+- Test status:
+  - `46 passed` (`pytest -q`).
+- Manual verification status:
+  - ECOSTRESS product/layer availability verified via live metadata endpoints; rerun submission pending in this session.
+- Next recommended step:
+  - Execute the Phoenix ECOSTRESS submit-only command above and confirm task submission succeeds.
+### 2026-03-08 - Milestone: NDVI Layer Selection Corrected for AppEEARS
+
+- Change made:
+  - Queried live AppEEARS product metadata for `MOD13A1.061` and confirmed selectable NDVI layer name is `_500m_16_days_NDVI`.
+  - Updated NDVI default layer config to `_500m_16_days_NDVI`.
+  - Added test coverage to verify default NDVI spec/payload uses the corrected layer.
+- Files touched:
+  - `src/config.py`
+  - `tests/test_appeears_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m src.run_appeears_acquisition --product-type ndvi --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31 --submit-only`
+- Test status:
+  - `45 passed` (`pytest -q`).
+- Manual verification status:
+  - Layer availability verified by live metadata query; live submit response not manually verified in this session.
+- Next recommended step:
+  - Re-run Phoenix NDVI submit-only and confirm task submission succeeds with updated default layer.
 ### 2026-03-08 - Milestone: AppEEARS Date Format Fix
 
 - Change made:
@@ -218,5 +264,7 @@ Current verified final output files exist:
   - Command completed successfully with `status=ok` summary output.
 - Next recommended step:
   - Execute stage-1 batch run for all cities at target settings when full compute/network run is intended.
+
+
 
 
