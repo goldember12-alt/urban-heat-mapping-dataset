@@ -4,6 +4,8 @@ import geopandas as gpd
 import numpy as np
 import rasterio
 from rasterio.transform import from_origin
+
+import src.raster_features as raster_features
 from shapely.geometry import Polygon
 
 from src.grid import create_grid_from_polygon
@@ -93,5 +95,23 @@ def test_sample_median_from_raster_stack_applies_normalization_and_valid_range(t
     # Cell order is top-left, top-right, bottom-left, bottom-right.
     assert np.allclose(median, np.array([0.9, 0.0, 0.6, np.nan]), equal_nan=True)
     assert np.array_equal(n_valid, np.array([2, 1, 2, 0]))
+
+
+def test_sample_median_from_raster_stack_uses_chunked_reduction(tmp_path: Path, monkeypatch):
+    grid = _build_test_grid()
+    r1 = _write_raster(tmp_path / "r1.tif", np.array([[1, 4], [7, 10]], dtype=np.float32))
+    r2 = _write_raster(tmp_path / "r2.tif", np.array([[2, 5], [8, 11]], dtype=np.float32))
+    r3 = _write_raster(tmp_path / "r3.tif", np.array([[3, -9999], [9, 12]], dtype=np.float32), nodata=-9999)
+
+    monkeypatch.setattr(raster_features, "MEDIAN_STACK_CHUNK_SIZE", 2)
+
+    median, n_valid = sample_median_from_raster_stack(
+        grid_gdf=grid,
+        raster_paths=[r1, r2, r3],
+        resolution=30,
+    )
+
+    assert np.allclose(median, np.array([2.0, 4.5, 8.0, 11.0]), equal_nan=True)
+    assert np.array_equal(n_valid, np.array([3, 2, 3, 3]))
 
 

@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+import tempfile
 from typing import Iterable
+import warnings
 
 import geopandas as gpd
 import numpy as np
@@ -14,6 +16,7 @@ from rasterio.transform import Affine, from_origin
 from rasterio.warp import reproject
 
 logger = logging.getLogger(__name__)
+MEDIAN_STACK_CHUNK_SIZE = 100_000
 
 
 @dataclass(frozen=True)
@@ -254,6 +257,44 @@ def sample_raster_to_grid_centroids(grid_gdf: gpd.GeoDataFrame, raster_path: Pat
     return sample_raster_at_points(points, raster_path)
 
 
+def _apply_normalization(
+    values: np.ndarray,
+    normalization: RasterNormalizationSpec | None,
+) -> np.ndarray:
+    """Apply optional scale/offset and valid-range masking to sampled values."""
+    if normalization is None:
+        return values
+
+    if normalization.scale_factor != 1.0 or normalization.add_offset != 0.0:
+        values = (values * float(normalization.scale_factor)) + float(normalization.add_offset)
+    if normalization.valid_min is not None:
+        values = np.where(values < float(normalization.valid_min), np.nan, values)
+    if normalization.valid_max is not None:
+        values = np.where(values > float(normalization.valid_max), np.nan, values)
+    return values
+
+
+def _reduce_stack_median_in_chunks(
+    stack: np.memmap,
+    chunk_size: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute per-cell nanmedian and valid-counts without loading the full stack into memory."""
+    n_cells = int(stack.shape[1])
+    median = np.full(n_cells, np.nan, dtype=np.float64)
+    n_valid = np.zeros(n_cells, dtype=np.int64)
+
+    for start in range(0, n_cells, chunk_size):
+        end = min(start + chunk_size, n_cells)
+        chunk = np.asarray(stack[:, start:end], dtype=np.float64)
+        with np.errstate(invalid="ignore"):
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="All-NaN slice encountered", category=RuntimeWarning)
+                median[start:end] = np.nanmedian(chunk, axis=0)
+        n_valid[start:end] = np.sum(~np.isnan(chunk), axis=0).astype(np.int64)
+
+    return median, n_valid
+
+
 def sample_median_from_raster_stack(
     grid_gdf: gpd.GeoDataFrame,
     raster_paths: list[Path],
@@ -262,29 +303,37 @@ def sample_median_from_raster_stack(
     normalization: RasterNormalizationSpec | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Align/sample raster stack to grid cells and return median and valid-count arrays."""
+    n = len(grid_gdf)
     if len(raster_paths) == 0:
-        n = len(grid_gdf)
         return np.full(n, np.nan, dtype=np.float64), np.zeros(n, dtype=np.int64)
+    if n == 0:
+        return np.array([], dtype=np.float64), np.array([], dtype=np.int64)
 
     spec = build_grid_alignment_spec(grid_gdf=grid_gdf, resolution=resolution)
-    sampled = []
-    for path in raster_paths:
-        aligned = align_raster_to_grid(path, spec=spec, resampling=resampling)
-        values = extract_grid_values_from_aligned_array(grid_gdf=grid_gdf, aligned_array=aligned, spec=spec)
-        if normalization is not None:
-            if normalization.scale_factor != 1.0 or normalization.add_offset != 0.0:
-                values = (values * float(normalization.scale_factor)) + float(normalization.add_offset)
-            if normalization.valid_min is not None:
-                values = np.where(values < float(normalization.valid_min), np.nan, values)
-            if normalization.valid_max is not None:
-                values = np.where(values > float(normalization.valid_max), np.nan, values)
-        sampled.append(values)
+    rows, cols = grid_row_col_indices(grid_gdf=grid_gdf, spec=spec)
 
-    stack = np.vstack(sampled)
+    with tempfile.TemporaryDirectory(prefix="median_stack_") as temp_dir:
+        stack_path = Path(temp_dir) / "stack.dat"
+        stack = np.memmap(
+            stack_path,
+            mode="w+",
+            dtype=np.float64,
+            shape=(len(raster_paths), n),
+        )
+        try:
+            for index, path in enumerate(raster_paths):
+                aligned = align_raster_to_grid(path, spec=spec, resampling=resampling)
+                values = aligned[rows, cols].astype(np.float64, copy=False)
+                stack[index, :] = _apply_normalization(values, normalization)
 
-    with np.errstate(invalid="ignore"):
-        median = np.nanmedian(stack, axis=0)
-    n_valid = np.sum(~np.isnan(stack), axis=0).astype(np.int64)
+            stack.flush()
+            median, n_valid = _reduce_stack_median_in_chunks(
+                stack=stack,
+                chunk_size=MEDIAN_STACK_CHUNK_SIZE,
+            )
+        finally:
+            del stack
+
     return median, n_valid
 
 

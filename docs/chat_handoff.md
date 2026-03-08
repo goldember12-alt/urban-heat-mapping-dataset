@@ -30,24 +30,27 @@ Implemented end-to-end pipeline components now include:
 - NDVI/LST normalization update:
   - Sampling pipeline now supports per-layer normalization rules (scale factor, offset, valid-range masking).
   - Phoenix run uses NDVI normalization (`scale_factor=0.0001`, valid range `[-0.2, 1.0]`) and LST normalization (`scale_factor=1`, units Kelvin).
+- Memory-safe raster-stack median update:
+  - `sample_median_from_raster_stack` now writes one sampled raster vector at a time to a temporary on-disk memmap and reduces medians in bounded cell chunks (`src/raster_features.py`).
+  - Uncapped Phoenix LST processing no longer allocates a single full in-memory stack for all cells.
 
 ## Testing Status
 
 As of 2026-03-08:
 
-- `49 passed` via:
+- `51 passed` via:
   - `.venv\Scripts\python.exe -m pytest -q`
 
 - `5 passed` via:
-  - `.venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py -q`
+  - `.venv\Scripts\python.exe -m pytest tests/test_raster_features.py -q`
 
-Focused tests relevant to AppEEARS ingestion and normalization:
+Focused tests relevant to AppEEARS ingestion, normalization, and memory-safe raster-stack reduction:
 
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_uses_city_appeears_layer_files`
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_falls_back_to_top_level_when_city_folder_missing`
 - `tests/test_feature_assembly.py::test_discover_default_feature_sources_uses_city_recursive_dem_nlcd_hydro`
 - `tests/test_raster_features.py::test_sample_median_from_raster_stack_applies_normalization_and_valid_range`
-
+- `tests/test_raster_features.py::test_sample_median_from_raster_stack_uses_chunked_reduction`
 ## Manual Verification Status
 
 As of 2026-03-08:
@@ -89,16 +92,30 @@ New manual verification in this recovery session (Phoenix support-layer unblock)
   - `data_raw/nlcd/phoenix/phoenix_nlcd_2021_impervious_30m.tif`
   - `data_raw/nlcd/phoenix/phoenix_nlcd_2021_land_cover_30m.tif`
   - `data_raw/hydro/phoenix/phoenix_nhdplus_water.gpkg`
-- Re-ran uncapped Phoenix extraction:
+- Re-ran uncapped Phoenix extraction before the fix:
   - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
   - Run failed before final summary with NumPy memory error in `sample_median_from_raster_stack` during LST median (`Unable to allocate 2.16 GiB`).
 - Re-ran capped Phoenix extraction for stage verification:
   - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 1000`
   - CLI result: `rows=993`; `blocked_stages=` (empty), confirming `dem`, `hydro_distance`, `nlcd_impervious`, and `nlcd_land_cover` are no longer blocked.
+
+New manual verification in this session (memory-safe uncapped Phoenix rerun):
+
+- Ran full test suite after raster-stack sampler refactor:
+  - `.venv\Scripts\python.exe -m pytest -q`
+  - Result: `51 passed`.
+- Re-ran uncapped Phoenix extraction after the memory fix:
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
+  - CLI result: `rows=4735561`; `blocked_stages=` (empty).
+  - Log summary: dropped `7306` open-water cells and `762` cells with `<3` ECOSTRESS passes; output GeoPackage and parquet were saved successfully.
+- Manual verification status for the fix:
+  - Implemented and manually verified that the prior NumPy allocation crash in `sample_median_from_raster_stack` no longer occurs in the uncapped live Phoenix run.
+  - The `<3` ECOSTRESS-pass filter executed in the uncapped run, which confirms `n_valid_ecostress_passes` remained populated enough for rule filtering.
+  - Full-output post-save non-null counts were not independently re-queried in this session.
+
 ## Immediate Next Step
 
-Address uncapped Phoenix memory pressure in LST median stack processing (chunking/streaming or other minimal memory fix), then rerun uncapped city extraction and confirm full-run stage summary remains unblocked.
-
+Manually inspect the updated uncapped Phoenix output for LST/NDVI distribution sanity after the memory-safe refactor, then proceed to the next uncapped city or a broader batch run.
 ## Current Output Structure
 
 - `data_processed/study_areas/`
@@ -119,13 +136,37 @@ Current verified final output files exist:
 
 ## Not Started Yet / Open Issues
 
-- Phoenix support-layer block is resolved in capped live run (`blocked_stages` empty), but uncapped Phoenix extraction currently fails with NumPy memory allocation during LST median calculation.
 - ECOSTRESS LST currently uses product-provided LST layer without additional cloud/QC masking in feature assembly; if stricter quality filtering is required, that policy is still open.
+- The updated uncapped Phoenix output was verified by successful end-to-end rerun, but full-output post-save non-null counts/distribution stats were not independently re-queried in this session.
 - Real NDVI and ECOSTRESS acquisition completeness for all 30 cities remains pending.
 - Full 30-city end-to-end run at 30 m remains pending data availability and runtime.
-
 ## Checkpoint Log
 
+### 2026-03-08 - Checkpoint: Memory-Safe LST Stack Median Verified on Uncapped Phoenix
+
+- Date / checkpoint:
+  - 2026-03-08 uncapped Phoenix memory-fix verification.
+- Change made:
+  - Replaced the full in-memory raster-stack `np.vstack` path in `sample_median_from_raster_stack` with a temporary on-disk memmap plus bounded chunked median reduction.
+  - Kept existing normalization, valid-range masking, median definition, and ECOSTRESS valid-pass counting behavior.
+  - Added focused regression coverage for the chunked reduction path.
+- Files touched:
+  - `src/raster_features.py`
+  - `tests/test_raster_features.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.venv\Scripts\python.exe -m pytest -q`
+  - `.venv\Scripts\python.exe -m src.run_city_features --city-id 1`
+- Test status:
+  - `51 passed` (`pytest -q`).
+  - `5 passed` (`pytest tests/test_raster_features.py -q`).
+- Manual verification status:
+  - Uncapped Phoenix extraction completed without the prior NumPy allocation failure.
+  - CLI result: `rows=4735561`; `blocked_stages=` (empty).
+  - Log output confirmed `7306` open-water cells dropped and `762` cells dropped for `<3` ECOSTRESS passes; output files were saved.
+  - Full-output post-save non-null counts were not independently re-queried in this session.
+- Next recommended step:
+  - Spot-check the updated Phoenix parquet distributions, then proceed to another uncapped city or broader batch validation.
 ### 2026-03-08 - Checkpoint: Crash-Recovery Commit Validated for Phoenix Support-Layer Discovery
 
 - Date / checkpoint:
