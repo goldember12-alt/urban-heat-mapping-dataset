@@ -73,6 +73,21 @@ Per-city status fields:
 - `data_raw/ndvi/<city_slug>/`: immutable raw NDVI downloads
 - `data_raw/ecostress/<city_slug>/`: immutable raw ECOSTRESS downloads
 
+### Acquisition orchestration summary (`data_processed/orchestration/acquisition_orchestration_summary.json|csv`)
+
+Per-stage orchestration fields:
+
+- `stage`: orchestration stage name (`raw_support_acquisition`, `support_layer_prep`, `appeears_ndvi`, `appeears_ecostress`)
+- `selection_mode`: requested orchestration scope (`all`, `city_subset`, or `all_missing`)
+- `requested_city_ids`: comma-delimited requested city subset, blank when all configured cities were targeted
+- `effective_city_ids`: comma-delimited city IDs present in the stage summary
+- `n_effective_cities`: number of distinct cities represented in the stage summary
+- `n_records`: number of raw rows in the underlying stage summary
+- `status_counts_json`: JSON object of stage status counts
+- `summary_json_path`: underlying stage JSON summary path
+- `summary_csv_path`: underlying stage CSV summary path
+- `notes`: lightweight stage-specific execution note
+
 ## Support-Layer Outputs
 
 ### Support-layer raw input contract

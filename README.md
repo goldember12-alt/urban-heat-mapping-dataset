@@ -17,12 +17,14 @@ Target analytic unit: one row per 30 m grid cell per city.
 7. Support-layer preflight audit for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 8. Raw support-layer acquisition runner for official USGS 3DEP, MRLC Annual NLCD, and USGS NHDPlus HR sources.
 9. Support-layer prep runner that clips deterministic per-city support files into `data_processed/support_layers/<city_stem>/`.
-10. Generic raster alignment framework to city grid template.
-11. DEM extraction (aligned).
-12. NLCD land-cover and impervious extraction (aligned).
-13. Hydrography distance-to-water raster generation and extraction.
-14. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
-15. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
+10. Thin acquisition orchestrator that sequences raw support acquisition, support prep, NDVI AppEEARS, ECOSTRESS AppEEARS, and writes a restart-safe status summary.
+11. Full-stack city orchestrator that extends the acquisition flow through feature assembly with per-city stage statuses and restart-safe skip/fail reasons.
+12. Generic raster alignment framework to city grid template.
+13. DEM extraction (aligned).
+14. NLCD land-cover and impervious extraction (aligned).
+15. Hydrography distance-to-water raster generation and extraction.
+16. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
+17. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
 
 ## Required Final Columns
 
@@ -54,6 +56,20 @@ Optional:
 
 Secrets are not printed in logs.
 
+Recommended local operator pattern:
+
+- Store local secrets in a gitignored `.env.local` file.
+- Load it into the current PowerShell session before running AppEEARS-dependent commands:
+
+```powershell
+Get-Content .env.local | Where-Object { $_ -match '^\s*[^#].+=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    Set-Item -Path "Env:$name" -Value $value
+}
+```
+
+- If credentials are absent, AppEEARS-dependent stages now fail fast with `blocked_missing_credentials` and list the exact missing environment variables, while raw/support stages continue when possible.
+
 ## Support-Layer Standardization
 
 The repo now treats support layers as a deterministic per-city raw-input contract, matching the existing Phoenix layout and feature-discovery assumptions:
@@ -73,6 +89,7 @@ The standardized prep stage keeps those raw files immutable and writes determini
 - `data_processed/support_layers/<city_stem>/hydro_water_prepared.gpkg`
 
 `src.feature_assembly` now prefers prepared support outputs when they exist and otherwise falls back to the existing raw-folder discovery behavior.
+AppEEARS raster discovery is product-aware: native filenames such as `MOD13A1...NDVI...tif` and `ECO_L2T_LSTE...LST...tif` are treated as value rasters, while obvious QA/cloud/error sidecars are excluded.
 
 ## Empty City To Support-Layer-Ready City
 
@@ -193,6 +210,41 @@ Supported AppEEARS acquisition modes:
 - `--download-only`
 - `--retry-incomplete`
 
+Thin acquisition orchestrator:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_acquisition_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_acquisition_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+Optional orchestrator mode flags:
+
+- `--all-missing`
+- `--force-raw`
+- `--overwrite-support`
+
+Verification note from the moved Windows workspace on 2026-03-18: the Phoenix orchestration command completed and rewrote the orchestration/AppEEARS summary files with the new OneDrive-backed paths, but the Phoenix raw NDVI and ECOSTRESS `.tif` timestamps remained at 2026-03-08. Treat that as restart/resume validation of the moved workspace, not as proof of a fresh AppEEARS submit/download on 2026-03-18.
+
+Full-stack city orchestration:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_full_stack_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+Full-stack status output:
+
+- `data_processed/orchestration/full_stack_city_orchestration_summary.json`
+- `data_processed/orchestration/full_stack_city_orchestration_summary.csv`
+
+Per-city stage columns include raw support, support prep, NDVI, ECOSTRESS, and feature assembly statuses plus `error` and `message` fields. The feature stage only runs when upstream support and AppEEARS stages are complete or safely reusable.
+
 One city feature extraction:
 
 ```powershell
@@ -229,6 +281,8 @@ End-to-end pipeline orchestrator:
 - `data_processed/study_areas/` city buffered study areas
 - `data_processed/appeears_aoi/` AppEEARS AOI GeoJSON exports
 - `data_processed/appeears_status/` preflight JSON/CSV plus acquisition summary JSON/CSV per product type
+- `data_processed/orchestration/` thin acquisition orchestration summary JSON/CSV
+- `data_processed/orchestration/` full-stack city orchestration summary JSON/CSV
 - `data_processed/support_layers/` support-layer preflight summary, raw acquisition summary, prep summary, and per-city prepared support artifacts
 - `data_processed/city_grids/` city master grids
 - `data_processed/intermediate/` aligned rasters + unfiltered/filtered city feature tables

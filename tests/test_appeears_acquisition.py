@@ -6,6 +6,7 @@ import pandas as pd
 from shapely.geometry import Polygon
 
 from src.appeears_acquisition import (
+    AcquisitionPreflightResult,
     audit_appeears_acquisition_readiness,
     build_product_spec,
     expected_aoi_path,
@@ -263,3 +264,65 @@ def test_run_appeears_acquisition_preflight_only_returns_audit_summary(tmp_path:
     assert "acquisition_ready" in result.summary.columns
     assert result.summary_json_path.name == "appeears_ndvi_preflight_summary.json"
     assert result.summary_csv_path.name == "appeears_ndvi_preflight_summary.csv"
+
+
+def test_run_appeears_acquisition_marks_missing_credentials_with_explicit_env_vars(tmp_path: Path, monkeypatch):
+    cities = pd.DataFrame(
+        {
+            "city_id": [1],
+            "city_name": ["Phoenix"],
+            "state": ["AZ"],
+            "climate_group": ["hot_arid"],
+            "lat": [33.45],
+            "lon": [-112.07],
+        }
+    )
+    preflight_summary = pd.DataFrame(
+        {
+            "city_id": [1],
+            "expected_study_area_path": [str(tmp_path / "study_areas" / "phoenix.gpkg")],
+            "expected_aoi_path": [str(tmp_path / "appeears_aoi" / "phoenix.geojson")],
+        }
+    )
+    aoi_summary = pd.DataFrame(
+        {
+            "city_id": [1],
+            "status": ["completed"],
+            "study_area_path": [str(tmp_path / "study_areas" / "phoenix.gpkg")],
+            "aoi_path": [str(tmp_path / "appeears_aoi" / "phoenix.geojson")],
+        }
+    )
+
+    monkeypatch.setattr("src.appeears_acquisition.load_cities", lambda: cities)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.audit_appeears_acquisition_readiness",
+        lambda **kwargs: AcquisitionPreflightResult(
+            summary=preflight_summary,
+            summary_json_path=tmp_path / "appeears_status" / "preflight.json",
+            summary_csv_path=tmp_path / "appeears_status" / "preflight.csv",
+        ),
+    )
+    monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
+
+    def fail_if_client_requested():
+        raise AssertionError("AppEEARS client should not be created when credentials are missing")
+
+    monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", fail_if_client_requested)
+    monkeypatch.delenv("APPEEARS_API_TOKEN", raising=False)
+    monkeypatch.delenv("EARTHDATA_USERNAME", raising=False)
+    monkeypatch.delenv("EARTHDATA_PASSWORD", raising=False)
+
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[1],
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert row["status"] == "blocked_missing_credentials"
+    assert row["error"] == "missing_credentials"
+    assert "APPEEARS_API_TOKEN" in row["message"]
+    assert "EARTHDATA_USERNAME" in row["message"]
+    assert "EARTHDATA_PASSWORD" in row["message"]

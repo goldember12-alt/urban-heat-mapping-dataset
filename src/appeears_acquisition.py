@@ -11,7 +11,12 @@ import geopandas as gpd
 import pandas as pd
 
 from src.appeears_aoi import city_slug, export_appeears_aois, load_aoi_feature_collection
-from src.appeears_client import AppEEARSClient, AppEEARSRequestError, build_area_task_payload
+from src.appeears_client import (
+    AppEEARSClient,
+    AppEEARSRequestError,
+    appeears_credential_preflight,
+    build_area_task_payload,
+)
 from src.config import (
     APPEEARS_AOI,
     APPEEARS_STATUS,
@@ -24,14 +29,15 @@ from src.config import (
     STUDY_AREAS,
 )
 from src.load_cities import load_cities
+from src.stage_status import (
+    STATUS_BLOCKED_MISSING_CREDENTIALS,
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+    STATUS_NOT_STARTED,
+    STATUS_SKIPPED_EXISTING,
+)
 
 logger = logging.getLogger(__name__)
-
-STATUS_BLOCKED = "blocked"
-STATUS_PENDING = "pending"
-STATUS_SUBMITTED = "submitted"
-STATUS_COMPLETED = "completed"
-STATUS_FAILED = "failed"
 
 _PRODUCT_TYPE_NDVI = "ndvi"
 _PRODUCT_TYPE_ECOSTRESS = "ecostress"
@@ -100,7 +106,7 @@ def resolve_city_download_dir(
 
 def is_incomplete_status(status: str | None) -> bool:
     normalized = (status or "").strip().lower()
-    return normalized in {"", STATUS_BLOCKED, STATUS_PENDING, STATUS_SUBMITTED, STATUS_FAILED}
+    return normalized in {"", STATUS_NOT_STARTED, STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_FAILED}
 
 
 def filter_cities_for_retry(
@@ -257,13 +263,23 @@ def _base_record(
         "download_dir": str(previous.get("download_dir", "")),
         "task_id": str(previous.get("task_id", "")),
         "remote_task_status": str(previous.get("remote_task_status", "")),
-        "status": str(previous.get("status", STATUS_PENDING)).lower(),
+        "status": str(previous.get("status", STATUS_NOT_STARTED)).lower(),
         "n_bundle_files": int(previous.get("n_bundle_files", 0) or 0),
         "n_files_downloaded": int(previous.get("n_files_downloaded", 0) or 0),
         "n_files_existing": int(previous.get("n_files_existing", 0) or 0),
         "error": str(previous.get("error", "")),
+        "message": str(previous.get("message", "")),
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def load_appeears_status_records(
+    product_type: str,
+    status_dir: Path = APPEEARS_STATUS,
+) -> dict[int, dict[str, Any]]:
+    """Load persisted AppEEARS status rows keyed by city_id."""
+    summary_json_path, _ = _summary_paths(product_type=product_type.strip().lower(), status_dir=status_dir)
+    return _load_existing_records(summary_json_path)
 
 
 def _download_completed_bundle(
@@ -319,7 +335,7 @@ def audit_appeears_acquisition_readiness(
     )
 
     cities = load_cities()
-    if city_ids:
+    if city_ids is not None:
         cities = cities[cities["city_id"].isin(city_ids)].copy()
 
     generated_at_utc = datetime.now(timezone.utc).isoformat()
@@ -441,7 +457,7 @@ def run_appeears_acquisition(
     existing_records = _load_existing_records(summary_json_path)
 
     cities = load_cities()
-    if city_ids:
+    if city_ids is not None:
         cities = cities[cities["city_id"].isin(city_ids)].copy()
 
     preflight = audit_appeears_acquisition_readiness(
@@ -467,12 +483,49 @@ def run_appeears_acquisition(
 
     client: AppEEARSClient | None = None
     client_error: str | None = None
+    credential_error: str | None = None
+
+    auth_required_city_ids: set[int] = set()
+    for _, city in cities.iterrows():
+        city_id = int(city["city_id"])
+        if city_id not in target_city_ids:
+            continue
+
+        previous = existing_records.get(city_id, {})
+        previous_status = str(previous.get("status", "")).strip().lower()
+        task_id = str(previous.get("task_id", ""))
+        aoi_row = aoi_by_city.get(city_id)
+        aoi_status = str(aoi_row.get("status", "")) if aoi_row is not None else ""
+        if aoi_status in {"blocked", STATUS_FAILED}:
+            continue
+
+        if previous_status == STATUS_COMPLETED and not retry_incomplete:
+            continue
+
+        if not run_submit and not task_id:
+            continue
+
+        should_submit = run_submit and (
+            not task_id
+            or (retry_incomplete and previous_status in {STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_NOT_STARTED, STATUS_FAILED})
+        )
+        if should_submit or (run_poll and bool(task_id)) or (run_download and bool(task_id)):
+            auth_required_city_ids.add(city_id)
+
+    if auth_required_city_ids:
+        credential_preflight = appeears_credential_preflight()
+        if not credential_preflight.is_configured:
+            credential_error = credential_preflight.message
 
     def ensure_client() -> AppEEARSClient | None:
-        nonlocal client, client_error
+        nonlocal client, client_error, credential_error
         if client is not None:
             return client
         if client_error is not None:
+            return None
+        if credential_error is not None:
+            client_error = credential_error
+            logger.error("AppEEARS authentication setup failed: %s", credential_error)
             return None
         try:
             client = AppEEARSClient.from_environment()
@@ -507,8 +560,9 @@ def run_appeears_acquisition(
 
         aoi_row = aoi_by_city.get(city_id)
         if aoi_row is None:
-            record["status"] = STATUS_BLOCKED
+            record["status"] = STATUS_FAILED
             record["error"] = "aoi_stage_missing"
+            record["message"] = "AppEEARS AOI export did not return a row for this city"
             records_by_city[city_id] = record
             continue
 
@@ -516,45 +570,55 @@ def run_appeears_acquisition(
         record["aoi_path"] = str(aoi_row.get("aoi_path", record["aoi_path"]))
 
         aoi_status = str(aoi_row.get("status", ""))
-        if aoi_status == STATUS_BLOCKED:
-            record["status"] = STATUS_BLOCKED
+        if aoi_status == "blocked":
+            record["status"] = STATUS_FAILED
             record["error"] = str(aoi_row.get("error", "")) or "study_area_missing"
+            record["message"] = "AppEEARS AOI export is blocked by missing study-area prerequisites"
             records_by_city[city_id] = record
             continue
         if aoi_status == STATUS_FAILED:
             record["status"] = STATUS_FAILED
             record["error"] = str(aoi_row.get("error", "")) or "aoi_export_failed"
+            record["message"] = "AppEEARS AOI export failed"
             records_by_city[city_id] = record
             continue
 
         # retry-incomplete mode should avoid reprocessing already-completed cities
         if city_id not in target_city_ids:
+            record["status"] = STATUS_SKIPPED_EXISTING
+            record["error"] = ""
+            record["message"] = "existing completed acquisition retained"
             records_by_city[city_id] = record
             continue
 
         # default behavior: leave completed cities untouched unless explicitly retried
         if previous_status == STATUS_COMPLETED and not retry_incomplete:
+            record["status"] = STATUS_SKIPPED_EXISTING
+            record["error"] = ""
+            record["message"] = "existing completed acquisition retained"
             records_by_city[city_id] = record
             continue
 
         task_id = str(record.get("task_id", ""))
 
         if not run_submit and not task_id:
-            record["status"] = STATUS_PENDING
+            record["status"] = STATUS_FAILED
             record["error"] = "task_id_missing"
+            record["message"] = "no saved task_id is available for poll/download-only mode"
             records_by_city[city_id] = record
             continue
 
         client_instance = ensure_client()
         if client_instance is None:
-            record["status"] = STATUS_BLOCKED
-            record["error"] = client_error or "auth_missing"
+            record["status"] = STATUS_BLOCKED_MISSING_CREDENTIALS
+            record["error"] = "missing_credentials"
+            record["message"] = client_error or "AppEEARS credentials are not configured"
             records_by_city[city_id] = record
             continue
 
         should_submit = run_submit and (
             not task_id
-            or (retry_incomplete and previous_status in {STATUS_BLOCKED, STATUS_PENDING, STATUS_FAILED})
+            or (retry_incomplete and previous_status in {STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_NOT_STARTED, STATUS_FAILED})
         )
 
         if should_submit:
@@ -583,8 +647,9 @@ def run_appeears_acquisition(
                     record["product"] = candidate_product
                     record["layer"] = spec.layer
                     record["task_id"] = task_id
-                    record["status"] = STATUS_SUBMITTED
+                    record["status"] = STATUS_NOT_STARTED
                     record["error"] = ""
+                    record["message"] = "task submitted; rerun to poll/download completion"
                     submit_error = None
                     break
                 except AppEEARSRequestError as exc:
@@ -599,6 +664,7 @@ def run_appeears_acquisition(
             if submit_error is not None:
                 record["status"] = STATUS_FAILED
                 record["error"] = submit_error
+                record["message"] = submit_error
                 records_by_city[city_id] = record
                 continue
 
@@ -611,11 +677,13 @@ def run_appeears_acquisition(
                 if _is_remote_failed(remote_status):
                     record["status"] = STATUS_FAILED
                     record["error"] = f"task_failed:{remote_status}"
+                    record["message"] = f"remote task failed with status={remote_status}"
                     records_by_city[city_id] = record
                     continue
 
-                record["status"] = STATUS_SUBMITTED
+                record["status"] = STATUS_NOT_STARTED
                 record["error"] = ""
+                record["message"] = f"remote task status={remote_status}; rerun until done"
 
                 if not _is_remote_complete(remote_status):
                     records_by_city[city_id] = record
@@ -623,14 +691,16 @@ def run_appeears_acquisition(
             except AppEEARSRequestError as exc:
                 record["status"] = STATUS_FAILED
                 record["error"] = f"poll_error:{exc}"
+                record["message"] = str(exc)
                 records_by_city[city_id] = record
                 continue
 
         if run_download and task_id:
             remote_status = str(record.get("remote_task_status", "")).lower()
             if not _is_remote_complete(remote_status):
-                record["status"] = STATUS_SUBMITTED
+                record["status"] = STATUS_NOT_STARTED
                 record["error"] = ""
+                record["message"] = f"remote task status={remote_status}; download deferred"
                 records_by_city[city_id] = record
                 continue
 
@@ -650,15 +720,26 @@ def run_appeears_acquisition(
                 record["n_bundle_files"] = n_bundle_files
                 record["n_files_downloaded"] = n_downloaded
                 record["n_files_existing"] = n_existing
-                if n_downloaded + n_existing > 0:
+                if n_downloaded > 0:
                     record["status"] = STATUS_COMPLETED
                     record["error"] = ""
+                    record["message"] = f"downloaded {n_downloaded} bundle files"
+                elif n_existing > 0:
+                    record["status"] = STATUS_SKIPPED_EXISTING
+                    record["error"] = ""
+                    record["message"] = f"reused {n_existing} existing bundle files"
+                elif n_downloaded + n_existing > 0:
+                    record["status"] = STATUS_COMPLETED
+                    record["error"] = ""
+                    record["message"] = "bundle files were already available"
                 else:
                     record["status"] = STATUS_FAILED
                     record["error"] = "no_bundle_files_downloaded"
+                    record["message"] = "AppEEARS reported completion but no bundle files were available"
             except Exception as exc:
                 record["status"] = STATUS_FAILED
                 record["error"] = f"download_error:{exc}"
+                record["message"] = str(exc)
 
         records_by_city[city_id] = record
 

@@ -632,7 +632,7 @@ def run_raw_data_acquisition(
     only_missing = all_missing or city_ids is None
 
     cities = load_cities()
-    if city_ids:
+    if city_ids is not None:
         cities = cities[cities["city_id"].isin(city_ids)].copy()
 
     preflight = audit_support_layer_readiness(

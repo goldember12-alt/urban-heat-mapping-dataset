@@ -78,6 +78,81 @@ Modes:
 - `--download-only`
 - `--retry-incomplete`
 
+## Stage 4B: Thin Acquisition Orchestration
+
+1. Run raw support acquisition with restart-safe skipping of existing outputs.
+2. Run support-layer prep, targeting either the requested city set or only cities still missing prepared support outputs.
+3. Run AppEEARS NDVI acquisition with resumable retry behavior.
+4. Run AppEEARS ECOSTRESS acquisition with resumable retry behavior.
+5. Write a thin orchestration status summary:
+   - `data_processed/orchestration/acquisition_orchestration_summary.json|csv`
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_acquisition_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_acquisition_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+Optional mode flags:
+
+- `--all-missing`
+- `--force-raw`
+- `--overwrite-support`
+
+Latest manual verification in the moved Windows workspace on 2026-03-18:
+
+- `--city-ids 1` completed and wrote `data_processed/orchestration/acquisition_orchestration_summary.json|csv`.
+- Raw support acquisition and support-layer prep reported `skipped_existing` for Phoenix.
+- The NDVI and ECOSTRESS acquisition summaries were rewritten with the new workspace root, but Phoenix raw AppEEARS `.tif` timestamps stayed at 2026-03-08, so this checkpoint validates resume behavior after the move rather than a fresh live download.
+
+Credential handling:
+
+- AppEEARS-dependent work now performs an explicit environment preflight before client creation when the stage truly needs auth.
+- Missing credentials produce `blocked_missing_credentials` with a message listing the exact missing env vars.
+- Non-auth stages are not blocked by that preflight.
+
+Recommended local operator pattern:
+
+```powershell
+Get-Content .env.local | Where-Object { $_ -match '^\s*[^#].+=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    Set-Item -Path "Env:$name" -Value $value
+}
+```
+
+## Stage 4C: Full-Stack City Orchestration
+
+1. Select one city, many cities, or the computed `all_missing` subset.
+2. Run raw support acquisition with restart-safe skip behavior.
+3. Run support-layer prep with restart-safe skip behavior.
+4. Run AppEEARS NDVI with resumable state and explicit missing-credential blocking.
+5. Run AppEEARS ECOSTRESS with resumable state and explicit missing-credential blocking.
+6. Run feature assembly only when upstream support and AppEEARS stages are complete or safely reusable.
+7. Write one per-city status row with stage-level `status`, `error`, and `message` fields to:
+   - `data_processed/orchestration/full_stack_city_orchestration_summary.json|csv`
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_full_stack_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31
+```
+
+Optional mode flags:
+
+- `--all-missing`
+- `--force-raw`
+- `--overwrite-support`
+- `--overwrite-features`
+- `--max-cells`
+
 ## Stage 5: Support-Layer Preflight Audit
 
 1. Load the expected city list from `cities.csv`.
@@ -202,6 +277,8 @@ Core module: `src/water_features.py`
 ## Stage 12: Per-City Feature Assembly
 
 - Assemble city feature table from available sources.
+- AppEEARS raster discovery accepts native value-layer names like `MOD13A1...NDVI...tif` and `ECO_L2T_LSTE...LST...tif`, while skipping QA/cloud/error sidecars.
+- The full-stack city orchestrator only enters this stage after raw support, support prep, NDVI, and ECOSTRESS are complete or reusable for that city.
 - Save intermediate unfiltered + filtered tables:
   - `data_processed/intermediate/city_features/*_features_unfiltered.parquet`
   - `data_processed/intermediate/city_features/*_features_filtered.parquet`

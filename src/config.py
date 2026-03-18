@@ -22,6 +22,7 @@ INTERMEDIATE = DATA_PROCESSED / "intermediate"
 APPEEARS_AOI = DATA_PROCESSED / "appeears_aoi"
 APPEEARS_STATUS = DATA_PROCESSED / "appeears_status"
 SUPPORT_LAYERS = DATA_PROCESSED / "support_layers"
+ORCHESTRATION_STATUS = DATA_PROCESSED / "orchestration"
 
 # Common raw-data subfolders (optional; used when source files are available)
 RAW_CACHE = DATA_RAW / "cache"

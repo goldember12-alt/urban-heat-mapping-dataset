@@ -14,11 +14,14 @@ Implemented in code:
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
+- Thin acquisition orchestration runner that sequences raw support acquisition, support-layer prep, NDVI AppEEARS, ECOSTRESS AppEEARS, and writes a restart-safe status summary.
+- Full-stack city orchestration runner that extends raw/support/AppEEARS stages through feature assembly and writes one per-city stage summary row.
 - Deterministic AppEEARS preflight/audit path that computes expected per-city study area, AOI, raw download, and status-summary paths; validates AOI CRS; and writes machine-readable preflight outputs.
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 - Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
+- AppEEARS feature-source discovery now recognizes native value-layer filenames and excludes QA/cloud/error sidecars with explicit logging.
 - Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
 - Phoenix-only summary CLI now profiles the materialized Phoenix analysis dataset and writes a research-style markdown deliverable with supporting tables and figures.
 
@@ -32,10 +35,12 @@ Standardization status:
 
 ## Testing Status
 
-As of 2026-03-08:
+As of 2026-03-18:
 
-- `69 passed` via:
-  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest -q"`
+- Focused regression subset: `21 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py tests/test_acquisition_orchestration.py tests/test_feature_assembly.py -q"`
+- Latest previously recorded full-suite result:
+  - `69 passed` via `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest -q"`
 
 Test-verified in the latest checkpoint:
 
@@ -44,6 +49,10 @@ Test-verified in the latest checkpoint:
 - NHDPlus HR water export reads the expected water layers and ignores unrelated layers.
 - The raw acquisition runner skips already materialized deterministic outputs unless `--force` is passed.
 - Prior coverage for city processing, AppEEARS acquisition, support-layer preflight/prep, and feature assembly still passes.
+- Native AppEEARS filename discovery is covered for both underscore-delimited and native dotted layer names.
+- Thin orchestration sequencing and all-missing stage targeting are covered in `tests/test_acquisition_orchestration.py`.
+- Full-stack city orchestration stage mapping, feature-stage deferral, and `all-missing` targeting are covered in `tests/test_full_stack_orchestration.py`.
+- AppEEARS missing-credential handling is covered in `tests/test_appeears_acquisition.py`.
 - Phoenix summary dataset selection prefers the canonical per-city feature parquet over intermediate and merged alternatives.
 - Phoenix preprocessing-audit logic counts open-water and low-ECOSTRESS-pass drops deterministically.
 
@@ -55,6 +64,8 @@ Implemented:
 - `src.run_support_layers --preflight-only` serves as the deterministic prerequisite audit for support-layer readiness.
 - `src.run_raw_data_acquisition` performs deterministic raw DEM/NLCD/hydro acquisition and clipping into the standardized raw folders, with reusable caches and summary outputs.
 - `src.run_support_layers` performs deterministic support-layer prep once raw support inputs exist.
+- `src.run_acquisition_orchestration` sequences raw support acquisition, support-layer prep, NDVI AppEEARS, and ECOSTRESS AppEEARS into one restart-safe CLI.
+- `src.run_full_stack_orchestration` extends the same flow through feature assembly and writes one per-city stage-status summary row.
 - `src.summarize_phoenix_dataset` generates a Phoenix-only markdown summary plus deterministic supporting CSV tables and PNG figures under `outputs/`.
 
 Test-verified:
@@ -62,10 +73,18 @@ Test-verified:
 - Batch city-processing coverage is included in `tests/test_batch_city_processing.py`.
 - AppEEARS acquisition coverage is included in `tests/test_appeears_acquisition.py`.
 - Support-layer audit, raw acquisition helpers, prep, and prepared-output discovery are covered by `tests/test_support_layers.py` and `tests/test_raw_data_acquisition.py`.
-- The latest full-suite result is `69 passed`.
+- Thin acquisition orchestration coverage is included in `tests/test_acquisition_orchestration.py`.
+- Full-stack city orchestration coverage is included in `tests/test_full_stack_orchestration.py`.
+- The latest focused regression result is `21 passed`; the last recorded full-suite result remains `69 passed`.
 
 Manually verified:
 
+- Verified the moved virtual environment resolves against the new OneDrive-backed workspace:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'import sys, pathlib; print(sys.executable); print(pathlib.Path(sys.executable).exists())'"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'from src.config import PROJECT_ROOT, DATA_RAW, DATA_PROCESSED; print(PROJECT_ROOT); print(DATA_RAW); print(DATA_PROCESSED)'"`
+- Observed output:
+  - `.venv\Scripts\python.exe` executed successfully outside the sandbox.
+  - `PROJECT_ROOT`, `DATA_RAW`, and `DATA_PROCESSED` resolved to `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\...`
 - Ran the real all-city boundary/grid batch:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_city_batch_processing --resolution 30"`
 - Observed output:
@@ -104,6 +123,37 @@ Manually verified:
   - `outputs/phoenix_data_summary/tables/*.csv`
   - `outputs/phoenix_data_summary/figures/*.png`
   - `dataset_consistency_check.csv` confirms the canonical per-city feature parquet matches the Phoenix filtered intermediate row count (`4,735,561`).
+- Ran a real workspace Phoenix AppEEARS discovery probe:
+  - `@'...discover_default_feature_sources...'@ | .venv\Scripts\python.exe -`
+- Observed output:
+  - `ndvi_count=9`
+  - `lst_count=61`
+  - first discovered NDVI raster: `MOD13A1.061__500m_16_days_NDVI_doy2023113000000_aid0001.tif`
+  - first discovered LST raster: `ECO_L2T_LSTE.002_LST_doy2023123074836_aid0001_12N.tif`
+- Ran a real workspace Phoenix feature-extraction smoke test:
+  - `cmd /d /c ".venv\Scripts\python.exe -m src.run_city_features --city-id 1 --max-cells 100 --no-save"`
+- Observed output:
+  - `rows=94`
+  - `blocked_stages=` (empty)
+  - discovery logs reported `ndvi=9` and `lst=61`, confirming Phoenix is no longer blocked at NDVI/LST discovery.
+- Ran the moved-workspace Phoenix orchestration CLI:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_acquisition_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31"`
+- Observed output:
+  - `data_processed/orchestration/acquisition_orchestration_summary.json`
+  - `data_processed/orchestration/acquisition_orchestration_summary.csv`
+  - orchestration stage counts: `raw_support_acquisition=1`, `support_layer_prep=1`, `appeears_ndvi=1`, `appeears_ecostress=1`
+  - `data_processed/support_layers/raw_data_acquisition_summary.csv` rewrote Phoenix rows with `skipped_existing` for `dem`, `nlcd`, and `hydro`
+  - `data_processed/support_layers/support_layers_prep_summary.csv` rewrote Phoenix with `status=skipped_existing`
+  - `data_processed/appeears_status/appeears_ndvi_acquisition_summary.csv` rewrote Phoenix as `status=completed`, `remote_task_status=done`, `n_bundle_files=25`
+  - `data_processed/appeears_status/appeears_ecostress_acquisition_summary.csv` rewrote Phoenix as `status=completed`, `remote_task_status=done`, `n_bundle_files=284`
+  - Phoenix raw NDVI and ECOSTRESS `.tif` timestamps remained on `2026-03-08`, so this was resumptive validation after the move, not proof of a fresh AppEEARS re-download on `2026-03-18`
+- Ran the real workspace full-stack city orchestration CLI on Phoenix:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31 --max-cells 100"`
+- Observed output:
+  - `data_processed/orchestration/full_stack_city_orchestration_summary.json`
+  - `data_processed/orchestration/full_stack_city_orchestration_summary.csv`
+  - Phoenix summary row reported `raw_support_acquisition_status=skipped_existing`, `support_layer_prep_status=skipped_existing`, `appeears_ndvi_status=skipped_existing`, `appeears_ecostress_status=skipped_existing`, `feature_assembly_status=skipped_existing`, `overall_status=completed`
+  - The new full-stack runner successfully reused already-materialized Phoenix artifacts end to end without unnecessary reruns
 
 Currently materialized on disk:
 
@@ -132,6 +182,11 @@ Currently materialized on disk:
   - `appeears_ndvi_preflight_summary.json`
   - `appeears_ndvi_preflight_summary.csv`
   - Phoenix acquisition summaries for NDVI and ECOSTRESS
+- `data_processed/orchestration/`:
+  - `acquisition_orchestration_summary.json`
+  - `acquisition_orchestration_summary.csv`
+  - `full_stack_city_orchestration_summary.json`
+  - `full_stack_city_orchestration_summary.csv`
 
 Explicit blocker statement:
 
@@ -141,7 +196,7 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Run `src.run_raw_data_acquisition --all-missing`, monitor `data_processed/support_layers/raw_data_acquisition_summary.csv` for failed city/dataset rows, rerun missing subsets as needed, then rerun `src.run_support_layers --preflight-only` and all-city support-layer prep.
+Load credentials into the current shell, then run `src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31`. Once that looks good, scale to `src.run_full_stack_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31`.
 
 ## Current Output Structure
 
@@ -149,6 +204,7 @@ Run `src.run_raw_data_acquisition --all-missing`, monitor `data_processed/suppor
 - `data_processed/city_grids/`
 - `data_processed/appeears_aoi/`
 - `data_processed/appeears_status/`
+- `data_processed/orchestration/`
 - `data_processed/support_layers/`
 - `data_processed/intermediate/aligned_rasters/`
 - `data_processed/intermediate/city_features/`
@@ -171,10 +227,84 @@ Run `src.run_raw_data_acquisition --all-missing`, monitor `data_processed/suppor
 - Full support-layer prep has not yet been materialized beyond Phoenix.
 - AOIs are still only materialized for Phoenix.
 - Full all-city AppEEARS acquisition has not started beyond Phoenix-ready assets.
+- Fresh post-move AppEEARS submit/download validation has not been proven yet; the 2026-03-18 Phoenix orchestration run reused already-materialized raw rasters.
+- The new full-stack city orchestration starts at raw support acquisition, not city boundary/grid generation; city-processing remains a separate prerequisite for cities missing study areas or grids.
 - Additional uncapped city-by-city feature validation beyond Phoenix is still pending.
 - Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 
 ## Checkpoint Log
+
+### 2026-03-18 - Checkpoint: AppEEARS Discovery Fix And Thin Acquisition Orchestrator Added
+
+- Date / checkpoint:
+  - 2026-03-18 AppEEARS discovery handoff fix plus restart-safe orchestration CLI.
+- Change made:
+  - Replaced brittle AppEEARS value-raster discovery with native filename-aware matching for NDVI and ECOSTRESS LST while excluding QA/cloud/error sidecars.
+  - Added explicit discovery logging so feature extraction reports candidate counts, matched rasters, and fallback behavior.
+  - Added `src.run_acquisition_orchestration` to sequence raw support acquisition, support prep, NDVI AppEEARS, and ECOSTRESS AppEEARS into one thin status-reporting CLI.
+  - Added tests for native AppEEARS filename discovery and orchestration sequencing.
+- Files touched:
+  - `src/feature_assembly.py`
+  - `src/acquisition_orchestration.py`
+  - `src/run_acquisition_orchestration.py`
+  - `src/config.py`
+  - `src/appeears_acquisition.py`
+  - `src/raw_data_acquisition.py`
+  - `src/support_layers.py`
+  - `tests/test_feature_assembly.py`
+  - `tests/test_acquisition_orchestration.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_acquisition_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_acquisition_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31"`
+- Test status:
+  - Focused regression subset passed: `21 passed`.
+  - Full suite not rerun in this checkpoint.
+- Manual verification status:
+  - Real Phoenix discovery probe found `9` NDVI rasters and `61` LST rasters in the current workspace.
+  - Real Phoenix feature-extraction smoke test completed with `blocked_stages=` empty.
+  - The moved `.venv` executed successfully and `src.config.PROJECT_ROOT` resolved to the new OneDrive-backed workspace root.
+  - The Phoenix orchestration CLI was run in the moved workspace and rewrote orchestration, support-layer, and AppEEARS summary files with the new workspace root.
+  - Phoenix raw AppEEARS `.tif` timestamps remained on `2026-03-08`, so the 2026-03-18 orchestration run validated resume behavior after the move, not a fresh AppEEARS submit/download.
+- Next recommended step:
+  - Verify AppEEARS credentials in the active session, then run the orchestration CLI for cities `2`, `3`, and `4` before scaling to `--all-missing`.
+
+### 2026-03-18 - Checkpoint: Full-Stack City Orchestration Added
+
+- Date / checkpoint:
+  - 2026-03-18 full-stack per-city orchestration through feature assembly.
+- Change made:
+  - Added `src.run_full_stack_orchestration` to extend raw support acquisition, support prep, NDVI AppEEARS, and ECOSTRESS AppEEARS through feature assembly with one per-city summary row.
+  - Added a strict AppEEARS credential preflight that lists the exact missing env vars and returns `blocked_missing_credentials` only for auth-dependent stages.
+  - Added reusable city-feature output path helpers so the full-stack runner can skip existing feature outputs safely.
+  - Documented the recommended gitignored `.env.local` pattern for local operators.
+- Files touched:
+  - `src/stage_status.py`
+  - `src/full_stack_orchestration.py`
+  - `src/run_full_stack_orchestration.py`
+  - `src/appeears_client.py`
+  - `src/appeears_acquisition.py`
+  - `src/feature_assembly.py`
+  - `.gitignore`
+  - `tests/test_appeears_acquisition.py`
+  - `tests/test_full_stack_orchestration.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31"`
+- Test status:
+  - Focused orchestration/AppEEARS regression subset passed: `21 passed`.
+- Manual verification status:
+  - Real workspace run of `src.run_full_stack_orchestration --city-ids 1 ... --max-cells 100` completed and wrote the new full-stack orchestration summary files.
+  - Phoenix reused existing raw support, prepared support, AppEEARS, and feature outputs without unnecessary reruns.
+  - Missing-credential behavior is test-verified; it was not manually exercised in the real workspace because Phoenix already had reusable AppEEARS outputs.
+- Next recommended step:
+  - Load credentials from `.env.local` into the active shell, then run the new full-stack orchestrator for cities `2`, `3`, and `4`.
 
 ### 2026-03-08 - Checkpoint: Phoenix Data Summary Deliverable Added
 

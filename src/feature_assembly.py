@@ -38,6 +38,8 @@ from src.water_features import compute_dist_to_water_m
 
 logger = logging.getLogger(__name__)
 
+_TOKEN_BOUNDARY = re.compile(r"[^a-z0-9]+")
+
 FINAL_COLUMNS = [
     "city_id",
     "city_name",
@@ -92,6 +94,14 @@ class CityFeatureResult:
 
 
 @dataclass(frozen=True)
+class CityFeatureOutputPaths:
+    city_features_gpkg_path: Path
+    city_features_parquet_path: Path
+    intermediate_unfiltered_path: Path
+    intermediate_filtered_path: Path
+
+
+@dataclass(frozen=True)
 class BatchFeatureResult:
     summary: pd.DataFrame
     summary_path: Path
@@ -111,14 +121,35 @@ def _city_slug(city_name: str) -> str:
 def _city_stem(city: pd.Series) -> str:
     return f"{int(city['city_id']):02d}_{_city_slug(str(city['city_name']))}_{str(city['state']).lower()}"
 
+
+def _normalized_name_tokens(path: Path) -> set[str]:
+    stem = path.stem.lower()
+    tokens = {token for token in _TOKEN_BOUNDARY.split(stem) if token}
+    return tokens
+
+
+def _is_native_appeears_value_raster(path: Path, layer_name: str) -> bool:
+    tokens = _normalized_name_tokens(path)
+    layer_key = layer_name.strip().lower()
+
+    if layer_key == "ndvi":
+        return "ndvi" in tokens and not ({"quality", "qa", "qc"} & tokens)
+
+    if layer_key == "lst":
+        return "lst" in tokens and not ({"cloud", "quality", "qa", "qc", "error", "err"} & tokens)
+
+    raise ValueError(f"Unsupported AppEEARS layer_name: {layer_name}")
+
 def _discover_city_product_rasters(
     product_root: Path,
     city_name: str,
     include_name_tokens: tuple[str, ...],
+    native_layer_name: str | None = None,
 ) -> list[Path]:
     """Discover AppEEARS rasters for one city/product by scanning the city slug subfolder recursively."""
     city_dir = product_root / _city_slug(city_name)
     if not city_dir.exists():
+        logger.info("Feature discovery skipped missing city folder: %s", city_dir)
         return []
 
     candidates: list[Path] = []
@@ -126,13 +157,37 @@ def _discover_city_product_rasters(
         candidates.extend(sorted(path for path in city_dir.rglob(pattern) if path.is_file()))
 
     if not candidates:
+        logger.info("Feature discovery found no raster candidates under %s", city_dir)
         return []
 
     tokens = tuple(token.lower() for token in include_name_tokens if token)
-    if not tokens:
-        return candidates
+    matched = candidates
+    if tokens:
+        matched = [path for path in matched if any(token in path.name.lower() for token in tokens)]
 
-    return [path for path in candidates if any(token in path.name.lower() for token in tokens)]
+    if native_layer_name:
+        native_matches = [path for path in candidates if _is_native_appeears_value_raster(path, layer_name=native_layer_name)]
+        if native_matches:
+            matched = native_matches
+
+    logger.info(
+        "Feature discovery scanned %s raster candidates under %s and matched %s for layer=%s",
+        len(candidates),
+        city_dir,
+        len(matched),
+        native_layer_name or ",".join(tokens) or "all",
+    )
+    if matched:
+        logger.info("Feature discovery matches for %s: %s", city_name, "; ".join(path.name for path in matched[:5]))
+    else:
+        logger.warning(
+            "Feature discovery found no matching value rasters under %s for city=%s layer=%s",
+            city_dir,
+            city_name,
+            native_layer_name or ",".join(tokens) or "all",
+        )
+
+    return matched
 
 def _discover_city_vectors(
     vector_root: Path,
@@ -182,8 +237,10 @@ def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
         product_root=RAW_NDVI,
         city_name=city_name,
         include_name_tokens=("_ndvi_",),
+        native_layer_name="ndvi",
     )
     if not ndvi_city:
+        logger.info("Falling back to top-level NDVI discovery for city_id=%s city_name=%s", city_id, city_name)
         ndvi_candidates = discover_rasters(RAW_NDVI)
         ndvi_city = choose_city_or_global_files(ndvi_candidates, city_name=city_name, city_id=city_id)
 
@@ -191,12 +248,14 @@ def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
         product_root=RAW_ECOSTRESS,
         city_name=city_name,
         include_name_tokens=("_lst_",),
+        native_layer_name="lst",
     )
     if not lst_city:
+        logger.info("Falling back to top-level ECOSTRESS discovery for city_id=%s city_name=%s", city_id, city_name)
         lst_candidates = discover_rasters(RAW_ECOSTRESS)
         lst_city = choose_city_or_global_files(lst_candidates, city_name=city_name, city_id=city_id)
 
-    return FeatureSourceConfig(
+    sources = FeatureSourceConfig(
         dem_raster=dem,
         nlcd_land_cover_raster=nlcd_land,
         nlcd_impervious_raster=nlcd_impervious,
@@ -204,6 +263,18 @@ def discover_default_feature_sources(city: pd.Series) -> FeatureSourceConfig:
         ndvi_rasters=ndvi_city,
         lst_rasters=lst_city,
     )
+    logger.info(
+        "Feature source summary for city_id=%s city_name=%s: dem=%s nlcd_land=%s nlcd_impervious=%s hydro=%s ndvi=%s lst=%s",
+        city_id,
+        city_name,
+        bool(sources.dem_raster),
+        bool(sources.nlcd_land_cover_raster),
+        bool(sources.nlcd_impervious_raster),
+        bool(sources.hydro_vector),
+        len(sources.ndvi_rasters),
+        len(sources.lst_rasters),
+    )
+    return sources
 
 
 def _resolve_city_grid_path(city: pd.Series, resolution: float = 30, city_grids_dir: Path = CITY_GRIDS) -> Path:
@@ -227,6 +298,20 @@ def _read_city_grid(grid_path: Path, max_cells: int | None = None) -> gpd.GeoDat
 
 def _aligned_stage_dir(intermediate_dir: Path, city_stem: str) -> Path:
     return intermediate_dir / "aligned_rasters" / city_stem
+
+
+def expected_city_feature_output_paths(
+    city: pd.Series,
+    city_features_dir: Path = CITY_FEATURES,
+    intermediate_dir: Path = INTERMEDIATE,
+) -> CityFeatureOutputPaths:
+    stem = _city_stem(city)
+    return CityFeatureOutputPaths(
+        city_features_gpkg_path=city_features_dir / f"{stem}_features.gpkg",
+        city_features_parquet_path=city_features_dir / f"{stem}_features.parquet",
+        intermediate_unfiltered_path=intermediate_dir / "city_features" / f"{stem}_features_unfiltered.parquet",
+        intermediate_filtered_path=intermediate_dir / "city_features" / f"{stem}_features_filtered.parquet",
+    )
 
 
 def _base_city_features(grid_gdf: gpd.GeoDataFrame, city: pd.Series) -> gpd.GeoDataFrame:
@@ -426,10 +511,15 @@ def assemble_city_features(
         city_features_dir.mkdir(parents=True, exist_ok=True)
         (intermediate_dir / "city_features").mkdir(parents=True, exist_ok=True)
 
-        intermediate_unfiltered_path = intermediate_dir / "city_features" / f"{stem}_features_unfiltered.parquet"
-        intermediate_filtered_path = intermediate_dir / "city_features" / f"{stem}_features_filtered.parquet"
-        city_features_gpkg_path = city_features_dir / f"{stem}_features.gpkg"
-        city_features_parquet_path = city_features_dir / f"{stem}_features.parquet"
+        output_paths = expected_city_feature_output_paths(
+            city=city,
+            city_features_dir=city_features_dir,
+            intermediate_dir=intermediate_dir,
+        )
+        intermediate_unfiltered_path = output_paths.intermediate_unfiltered_path
+        intermediate_filtered_path = output_paths.intermediate_filtered_path
+        city_features_gpkg_path = output_paths.city_features_gpkg_path
+        city_features_parquet_path = output_paths.city_features_parquet_path
 
         city_features_unfiltered.drop(columns=["geometry"]).to_parquet(intermediate_unfiltered_path, index=False)
         city_features_filtered.drop(columns=["geometry"]).to_parquet(intermediate_filtered_path, index=False)

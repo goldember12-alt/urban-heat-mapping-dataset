@@ -26,6 +26,7 @@ figures/
 
 # Optional local config
 .env
+.env.local
 
 src/__pycache__/
 tests/__pycache__/

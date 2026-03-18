@@ -275,7 +275,7 @@ def audit_support_layer_readiness(
 ) -> SupportLayerPreflightResult:
     """Audit deterministic support-layer raw and prepared paths for the selected cities."""
     cities = load_cities()
-    if city_ids:
+    if city_ids is not None:
         cities = cities[cities["city_id"].isin(city_ids)].copy()
 
     generated_at_utc = datetime.now(timezone.utc).isoformat()
@@ -416,7 +416,7 @@ def prepare_support_layers(
 ) -> SupportLayerPrepResult:
     """Prepare deterministic per-city support-layer artifacts from standardized raw folders."""
     cities = load_cities()
-    if city_ids:
+    if city_ids is not None:
         cities = cities[cities["city_id"].isin(city_ids)].copy()
 
     preflight = audit_support_layer_readiness(

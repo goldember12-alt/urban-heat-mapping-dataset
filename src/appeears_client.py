@@ -28,6 +28,13 @@ class AppEEARSAuthConfig:
     password: str | None
 
 
+@dataclass(frozen=True)
+class AppEEARSCredentialPreflight:
+    is_configured: bool
+    missing_vars: tuple[str, ...]
+    message: str
+
+
 class AppEEARSRequestError(RuntimeError):
     """Raised for non-successful AppEEARS API requests."""
 
@@ -54,17 +61,56 @@ class AppEEARSTaskResponse:
 
 def read_auth_from_environment() -> AppEEARSAuthConfig:
     """Read AppEEARS authentication configuration from environment variables."""
+    preflight = appeears_credential_preflight()
+    if not preflight.is_configured:
+        raise ValueError(preflight.message)
+
     token = os.getenv(APPEEARS_TOKEN_ENV)
     if token:
         return AppEEARSAuthConfig(token=token, username=None, password=None)
 
     username = os.getenv(EARTHDATA_USERNAME_ENV)
     password = os.getenv(EARTHDATA_PASSWORD_ENV)
-    if username and password:
-        return AppEEARSAuthConfig(token=None, username=username, password=password)
+    return AppEEARSAuthConfig(token=None, username=username, password=password)
 
-    raise ValueError(
-        "Missing AppEEARS credentials. Set APPEEARS_API_TOKEN or EARTHDATA_USERNAME and EARTHDATA_PASSWORD."
+
+def appeears_credential_preflight() -> AppEEARSCredentialPreflight:
+    """Return whether AppEEARS credentials are configured and which env vars are missing."""
+    token = os.getenv(APPEEARS_TOKEN_ENV)
+    username = os.getenv(EARTHDATA_USERNAME_ENV)
+    password = os.getenv(EARTHDATA_PASSWORD_ENV)
+
+    if token:
+        return AppEEARSCredentialPreflight(
+            is_configured=True,
+            missing_vars=(),
+            message=f"Configured via {APPEEARS_TOKEN_ENV}.",
+        )
+
+    if username and password:
+        return AppEEARSCredentialPreflight(
+            is_configured=True,
+            missing_vars=(),
+            message=f"Configured via {EARTHDATA_USERNAME_ENV} and {EARTHDATA_PASSWORD_ENV}.",
+        )
+
+    missing_vars: list[str] = []
+    if not token:
+        missing_vars.append(APPEEARS_TOKEN_ENV)
+    if not username:
+        missing_vars.append(EARTHDATA_USERNAME_ENV)
+    if not password:
+        missing_vars.append(EARTHDATA_PASSWORD_ENV)
+
+    message = (
+        "Missing AppEEARS credentials. Provide "
+        f"{APPEEARS_TOKEN_ENV} or set both {EARTHDATA_USERNAME_ENV} and {EARTHDATA_PASSWORD_ENV}. "
+        f"Missing env vars: {', '.join(missing_vars)}."
+    )
+    return AppEEARSCredentialPreflight(
+        is_configured=False,
+        missing_vars=tuple(missing_vars),
+        message=message,
     )
 
 

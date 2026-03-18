@@ -160,6 +160,39 @@ def test_discover_default_feature_sources_uses_city_appeears_layer_files(tmp_pat
     assert sources.lst_rasters == [lst_layer]
 
 
+def test_discover_default_feature_sources_accepts_native_appeears_layer_names_without_legacy_tokens(
+    tmp_path: Path,
+    monkeypatch,
+):
+    raw_ndvi = tmp_path / "raw" / "ndvi"
+    raw_ecostress = tmp_path / "raw" / "ecostress"
+    city_ndvi_dir = raw_ndvi / "phoenix" / "MOD13A1.061_2023106_to_2023243"
+    city_lst_dir = raw_ecostress / "phoenix" / "ECO_L2T_LSTE.002_2023121_to_2023243"
+    city_ndvi_dir.mkdir(parents=True, exist_ok=True)
+    city_lst_dir.mkdir(parents=True, exist_ok=True)
+
+    ndvi_layer = city_ndvi_dir / "MOD13A1.061.500m.16.days.NDVI.doy2023113000000.aid0001.tif"
+    ndvi_quality = city_ndvi_dir / "MOD13A1.061.500m.16.days.VI.Quality.doy2023113000000.aid0001.tif"
+    lst_layer = city_lst_dir / "ECO_L2T_LSTE.002.LST.doy2023123074744.aid0001.12N.tif"
+    lst_error = city_lst_dir / "ECO_L2T_LSTE.002.LST_ERR.doy2023123074744.aid0001.12N.tif"
+
+    for path in [ndvi_layer, ndvi_quality, lst_layer, lst_error]:
+        path.write_text("x")
+
+    monkeypatch.setattr(feature_assembly, "RAW_NDVI", raw_ndvi)
+    monkeypatch.setattr(feature_assembly, "RAW_ECOSTRESS", raw_ecostress)
+    monkeypatch.setattr(feature_assembly, "RAW_DEM", tmp_path / "raw" / "dem")
+    monkeypatch.setattr(feature_assembly, "RAW_NLCD", tmp_path / "raw" / "nlcd")
+    monkeypatch.setattr(feature_assembly, "RAW_HYDRO", tmp_path / "raw" / "hydro")
+    monkeypatch.setattr(feature_assembly, "SUPPORT_LAYERS", tmp_path / "support_layers")
+
+    city = pd.Series({"city_id": 1, "city_name": "Phoenix", "state": "AZ"})
+    sources = feature_assembly.discover_default_feature_sources(city)
+
+    assert sources.ndvi_rasters == [ndvi_layer]
+    assert sources.lst_rasters == [lst_layer]
+
+
 def test_discover_default_feature_sources_falls_back_to_top_level_when_city_folder_missing(tmp_path: Path, monkeypatch):
     raw_ndvi = tmp_path / "raw" / "ndvi"
     raw_ecostress = tmp_path / "raw" / "ecostress"
