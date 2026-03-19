@@ -12,6 +12,7 @@ import pandas as pd
 from src.appeears_acquisition import load_appeears_status_records, run_appeears_acquisition
 from src.config import CITY_FEATURES, INTERMEDIATE, ORCHESTRATION_STATUS
 from src.feature_assembly import (
+    CELL_FILTER_STUDY_AREA,
     assemble_city_features,
     expected_city_feature_output_paths,
 )
@@ -140,6 +141,7 @@ def _feature_stage_result(
     stage_results: dict[str, dict[str, str]],
     *,
     resolution: float,
+    cell_filter_mode: str,
     max_cells: int | None,
     overwrite_features: bool,
     city_features_dir: Path,
@@ -171,6 +173,7 @@ def _feature_stage_result(
         result = assemble_city_features(
             city_id=int(city["city_id"]),
             resolution=resolution,
+            cell_filter_mode=cell_filter_mode,
             save_outputs=True,
             max_cells=max_cells,
             city_features_dir=city_features_dir,
@@ -272,6 +275,7 @@ def run_full_stack_orchestration(
     city_ids: list[int] | None = None,
     all_missing: bool = False,
     resolution: float = 30,
+    cell_filter_mode: str = CELL_FILTER_STUDY_AREA,
     force_raw: bool = False,
     overwrite_support: bool = False,
     overwrite_features: bool = False,
@@ -375,6 +379,7 @@ def run_full_stack_orchestration(
             city=city,
             stage_results=stage_results,
             resolution=resolution,
+            cell_filter_mode=cell_filter_mode,
             max_cells=max_cells,
             overwrite_features=overwrite_features,
             city_features_dir=city_features_dir,

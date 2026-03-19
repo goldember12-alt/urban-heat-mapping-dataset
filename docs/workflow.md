@@ -4,7 +4,7 @@
 
 1. Select city (`city_id` or `city_name`).
 2. Query Census TIGERweb urban area containing city center.
-3. Reproject to local UTM and buffer by 2 km.
+3. Reproject to local UTM, preserve the original urban-core geometry as study-area metadata, and buffer by 2 km unless `--buffer-m 0` is requested.
 4. Build 30 m master grid intersecting study area.
 5. Save:
    - `data_processed/study_areas/*_study_area.gpkg`
@@ -152,6 +152,7 @@ Optional mode flags:
 - `--overwrite-support`
 - `--overwrite-features`
 - `--max-cells`
+- `--cell-filter-mode {study_area,core_city}`
 
 ## Stage 5: Support-Layer Preflight Audit
 
@@ -211,6 +212,32 @@ CLI:
 
 ```powershell
 .venv\Scripts\python.exe -m src.run_raw_data_acquisition --city-ids 1 --force
+```
+
+## Stage 6B: Cache Audit + Cleanup Planning
+
+1. Inventory every file under `data_raw/cache/`.
+2. Classify cache artifacts into:
+   - must keep
+   - useful to keep temporarily
+   - safe to delete/regenerate
+3. Preserve cleanup metadata outside the cache tree as JSON before any deletion.
+4. In dry-run mode, compute targeted prune candidates for:
+   - `partials`
+   - `nlcd-extracted`
+   - `hydro-extracted`
+   - `extracted`
+   - `regenerable`
+5. Protect recently modified files during active runs unless the operator intentionally sets `--protect-recent-hours 0`.
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run.json
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate.json
 ```
 
 ## Stage 7: Support-Layer Prep
@@ -277,7 +304,10 @@ Core module: `src/water_features.py`
 ## Stage 12: Per-City Feature Assembly
 
 - Assemble city feature table from available sources.
-- AppEEARS raster discovery accepts native value-layer names like `MOD13A1...NDVI...tif` and `ECO_L2T_LSTE...LST...tif`, while skipping QA/cloud/error sidecars.
+- Study-area files now carry both the buffered acquisition geometry and the original core-urban geometry metadata.
+- AppEEARS raster discovery accepts native value-layer names like `MOD13A1...NDVI...tif` and `ECO_L2T_LSTE...LST...tif`, while skipping QA/cloud/error sidecars and generic legacy names like `ndvi_1.tif` / `lst_1.tif`.
+- Before stack sampling, NDVI/LST rasters are validated for readability and CRS; unreadable stale TIFFs are warned and skipped as long as enough valid rasters remain.
+- `--cell-filter-mode study_area` keeps the current behavior; `--cell-filter-mode core_city` keeps buffered upstream acquisition but drops buffer-ring cells before hotspot labeling and final per-city outputs.
 - The full-stack city orchestrator only enters this stage after raw support, support prep, NDVI, and ECOSTRESS are complete or reusable for that city.
 - Save intermediate unfiltered + filtered tables:
   - `data_processed/intermediate/city_features/*_features_unfiltered.parquet`
@@ -291,6 +321,15 @@ CLI:
 ```powershell
 .venv\Scripts\python.exe -m src.run_city_features_batch --existing-grids-only --city-ids 1 --max-cells 5000
 ```
+
+```powershell
+.venv\Scripts\python.exe -m src.run_city_features --city-id 1 --cell-filter-mode core_city
+```
+
+Latest manual verification on 2026-03-19:
+
+- Full-stack runs have completed successfully for Phoenix, Tucson, Las Vegas, and Albuquerque.
+- Tucson's earlier stale-file failure mode is now covered by regression tests that mix valid native AppEEARS rasters with invalid legacy TIFFs in the same city folder.
 
 ## Stage 13: Final Dataset Merge
 

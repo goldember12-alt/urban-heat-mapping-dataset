@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from src.feature_assembly import CELL_FILTER_CORE_CITY, CELL_FILTER_STUDY_AREA
 from src.full_stack_orchestration import run_full_stack_orchestration
 
 
@@ -19,6 +20,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-date", type=str, required=True, help="Start date in YYYY-MM-DD")
     parser.add_argument("--end-date", type=str, required=True, help="End date in YYYY-MM-DD")
     parser.add_argument("--resolution", type=float, default=30, help="Grid resolution in meters")
+    parser.add_argument(
+        "--cell-filter-mode",
+        type=str,
+        default=CELL_FILTER_STUDY_AREA,
+        choices=[CELL_FILTER_STUDY_AREA, CELL_FILTER_CORE_CITY],
+        help="Keep all study-area cells or only core-city cells in feature assembly outputs",
+    )
     parser.add_argument("--force-raw", action="store_true", help="Rebuild raw support outputs even if they already exist")
     parser.add_argument("--overwrite-support", action="store_true", help="Rebuild prepared support outputs even if they already exist")
     parser.add_argument("--overwrite-features", action="store_true", help="Rebuild city feature outputs even if they already exist")
@@ -47,6 +55,7 @@ def main() -> None:
         city_ids=_parse_city_ids(args.city_ids),
         all_missing=args.all_missing,
         resolution=args.resolution,
+        cell_filter_mode=args.cell_filter_mode,
         force_raw=args.force_raw,
         overwrite_support=args.overwrite_support,
         overwrite_features=args.overwrite_features,

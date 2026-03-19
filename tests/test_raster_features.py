@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 
 import geopandas as gpd
 import numpy as np
@@ -114,4 +115,23 @@ def test_sample_median_from_raster_stack_uses_chunked_reduction(tmp_path: Path, 
     assert np.allclose(median, np.array([2.0, 4.5, 8.0, 11.0]), equal_nan=True)
     assert np.array_equal(n_valid, np.array([3, 2, 3, 3]))
 
+
+def test_sample_median_from_raster_stack_skips_invalid_tiffs_when_valid_rasters_remain(tmp_path: Path, caplog):
+    grid = _build_test_grid()
+    r1 = _write_raster(tmp_path / "valid_1.tif", np.array([[1, 2], [3, 4]], dtype=np.float32))
+    r2 = _write_raster(tmp_path / "valid_2.tif", np.array([[5, 6], [7, 8]], dtype=np.float32))
+    invalid = tmp_path / "ndvi_1.tif"
+    invalid.write_bytes(b"x")
+
+    with caplog.at_level(logging.WARNING):
+        median, n_valid = sample_median_from_raster_stack(
+            grid_gdf=grid,
+            raster_paths=[invalid, r1, r2],
+            resolution=30,
+            stack_label="NDVI city_id=2 city_name=Tucson",
+        )
+
+    assert np.allclose(median, np.array([3.0, 4.0, 5.0, 6.0]), equal_nan=True)
+    assert np.array_equal(n_valid, np.array([2, 2, 2, 2]))
+    assert "Skipping invalid NDVI city_id=2 city_name=Tucson raster" in caplog.text
 

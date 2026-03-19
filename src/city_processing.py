@@ -16,6 +16,9 @@ from src.load_cities import load_cities
 
 logger = logging.getLogger(__name__)
 
+CORE_GEOMETRY_WKT_COLUMN = "core_geometry_wkt"
+CORE_GEOMETRY_CRS_COLUMN = "core_geometry_crs"
+
 
 @dataclass(frozen=True)
 class CityProcessingResult:
@@ -69,6 +72,25 @@ def fetch_city_urban_area(city: pd.Series, timeout: int = 60) -> gpd.GeoDataFram
     return urban_area
 
 
+def _study_area_from_urban_area(
+    city: pd.Series,
+    urban_area: gpd.GeoDataFrame,
+    buffer_m: float,
+) -> gpd.GeoDataFrame:
+    """Attach city metadata and persisted core geometry to the buffered study area."""
+    study_area = make_buffered_study_area(urban_area, buffer_m=buffer_m)
+    core_geometry = urban_area.to_crs(study_area.crs).geometry.union_all()
+
+    study_area["city_id"] = int(city["city_id"])
+    study_area["city_name"] = str(city["city_name"])
+    study_area["state"] = str(city["state"])
+    study_area["climate_group"] = str(city["climate_group"])
+    study_area["buffer_m"] = float(buffer_m)
+    study_area[CORE_GEOMETRY_WKT_COLUMN] = core_geometry.wkt
+    study_area[CORE_GEOMETRY_CRS_COLUMN] = study_area.crs.to_string()
+    return study_area
+
+
 def build_city_study_area(
     city: pd.Series,
     buffer_m: float = 2000,
@@ -76,14 +98,7 @@ def build_city_study_area(
 ) -> gpd.GeoDataFrame:
     """Build a buffered study area in local projected CRS for one city."""
     urban_area = fetch_city_urban_area(city=city, timeout=timeout)
-    study_area = make_buffered_study_area(urban_area, buffer_m=buffer_m)
-
-    study_area["city_id"] = int(city["city_id"])
-    study_area["city_name"] = str(city["city_name"])
-    study_area["state"] = str(city["state"])
-    study_area["climate_group"] = str(city["climate_group"])
-    study_area["buffer_m"] = float(buffer_m)
-    return study_area
+    return _study_area_from_urban_area(city=city, urban_area=urban_area, buffer_m=buffer_m)
 
 
 def build_city_grid(study_area_gdf: gpd.GeoDataFrame, resolution: float = 30) -> gpd.GeoDataFrame:
@@ -146,12 +161,7 @@ def process_city(
     logger.info("Processing city %s (%s)", city["city_name"], city["state"])
 
     urban_area = fetch_city_urban_area(city=city, timeout=timeout)
-    study_area = make_buffered_study_area(urban_area, buffer_m=buffer_m)
-    study_area["city_id"] = int(city["city_id"])
-    study_area["city_name"] = str(city["city_name"])
-    study_area["state"] = str(city["state"])
-    study_area["climate_group"] = str(city["climate_group"])
-    study_area["buffer_m"] = float(buffer_m)
+    study_area = _study_area_from_urban_area(city=city, urban_area=urban_area, buffer_m=buffer_m)
 
     grid = build_city_grid(study_area, resolution=resolution)
 

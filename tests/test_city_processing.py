@@ -7,6 +7,8 @@ from shapely.geometry import Polygon
 
 from src.boundaries import UrbanAreaQueryResult
 from src.city_processing import (
+    CORE_GEOMETRY_CRS_COLUMN,
+    CORE_GEOMETRY_WKT_COLUMN,
     build_city_grid,
     build_city_study_area,
     city_output_paths,
@@ -72,6 +74,8 @@ def test_build_city_study_area_is_projected(monkeypatch):
     study = build_city_study_area(city=city, buffer_m=2000)
     assert study.crs.is_projected
     assert float(study.iloc[0]["buffer_m"]) == 2000.0
+    assert study.iloc[0][CORE_GEOMETRY_WKT_COLUMN]
+    assert study.iloc[0][CORE_GEOMETRY_CRS_COLUMN] == study.crs.to_string()
 
 
 def test_build_city_grid_preserves_projected_crs():

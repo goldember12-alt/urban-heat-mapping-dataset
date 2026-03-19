@@ -8,7 +8,14 @@ from pathlib import Path
 import pandas as pd
 
 from src.batch_city_processing import BatchCityProcessingSummary, process_all_cities
-from src.feature_assembly import BatchFeatureResult, FinalDatasetResult, assemble_final_dataset, extract_features_for_all_cities
+from src.feature_assembly import (
+    CELL_FILTER_CORE_CITY,
+    CELL_FILTER_STUDY_AREA,
+    BatchFeatureResult,
+    FinalDatasetResult,
+    assemble_final_dataset,
+    extract_features_for_all_cities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +44,7 @@ def _blocked_stages_from_feature_summary(summary_df: pd.DataFrame | None) -> lis
 def run_full_pipeline(
     buffer_m: float = 2000,
     resolution: float = 30,
+    cell_filter_mode: str = CELL_FILTER_STUDY_AREA,
     timeout: int = 60,
     save_outputs: bool = True,
     continue_on_error: bool = True,
@@ -67,6 +75,7 @@ def run_full_pipeline(
         logger.info("Running stages 2-6: feature extraction")
         feature_extraction_summary = extract_features_for_all_cities(
             resolution=resolution,
+            cell_filter_mode=cell_filter_mode,
             save_outputs=save_outputs,
             continue_on_error=continue_on_error,
             city_ids=city_ids,
@@ -103,6 +112,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run full urban heat pipeline across available stages.")
     parser.add_argument("--buffer-m", type=float, default=2000, help="Study-area buffer distance in meters")
     parser.add_argument("--resolution", type=float, default=30, help="Grid resolution in meters")
+    parser.add_argument(
+        "--cell-filter-mode",
+        type=str,
+        default=CELL_FILTER_STUDY_AREA,
+        choices=[CELL_FILTER_STUDY_AREA, CELL_FILTER_CORE_CITY],
+        help="Keep all study-area cells or only core-city cells in per-city outputs",
+    )
     parser.add_argument("--timeout", type=int, default=60, help="Timeout per city boundary lookup in seconds")
     parser.add_argument("--city-ids", type=str, default="", help="Optional comma-separated subset of city IDs")
     parser.add_argument("--no-save", action="store_true", help="Run without writing outputs")
@@ -149,6 +165,7 @@ def main() -> None:
     result = run_full_pipeline(
         buffer_m=args.buffer_m,
         resolution=args.resolution,
+        cell_filter_mode=args.cell_filter_mode,
         timeout=args.timeout,
         save_outputs=not args.no_save,
         continue_on_error=not args.stop_on_error,

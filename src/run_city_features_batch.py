@@ -3,12 +3,19 @@ from __future__ import annotations
 import argparse
 import logging
 
-from src.feature_assembly import extract_features_for_all_cities
+from src.feature_assembly import CELL_FILTER_CORE_CITY, CELL_FILTER_STUDY_AREA, extract_features_for_all_cities
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Extract features for all cities with available grids.")
     parser.add_argument("--resolution", type=float, default=30, help="Grid resolution in meters")
+    parser.add_argument(
+        "--cell-filter-mode",
+        type=str,
+        default=CELL_FILTER_STUDY_AREA,
+        choices=[CELL_FILTER_STUDY_AREA, CELL_FILTER_CORE_CITY],
+        help="Keep all study-area cells or only core-city cells in the final per-city outputs",
+    )
     parser.add_argument("--no-save", action="store_true", help="Run extraction without writing outputs")
     parser.add_argument("--stop-on-error", action="store_true", help="Stop on first city failure")
     parser.add_argument("--city-ids", type=str, default="", help="Optional comma-separated subset of city IDs")
@@ -34,6 +41,7 @@ def main() -> None:
     max_cells = args.max_cells if args.max_cells > 0 else None
     result = extract_features_for_all_cities(
         resolution=args.resolution,
+        cell_filter_mode=args.cell_filter_mode,
         save_outputs=not args.no_save,
         continue_on_error=not args.stop_on_error,
         city_ids=city_ids,

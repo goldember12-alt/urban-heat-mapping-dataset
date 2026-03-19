@@ -56,6 +56,52 @@ def discover_rasters(directory: Path, patterns: Iterable[str] | None = None) -> 
     return results
 
 
+def _validate_raster_path(path: Path) -> str | None:
+    """Return an error string when a raster cannot be safely sampled."""
+    if not path.exists():
+        return "file_missing"
+    if not path.is_file():
+        return "not_a_file"
+
+    try:
+        with rasterio.open(path) as src:
+            if src.count < 1:
+                return "no_bands"
+            if src.width <= 0 or src.height <= 0:
+                return "empty_dimensions"
+            if src.crs is None:
+                return "crs_missing"
+    except Exception as exc:  # pragma: no cover - exercised via callers/tests using invalid files
+        return f"{type(exc).__name__}: {exc}"
+
+    return None
+
+
+def filter_valid_raster_paths(
+    raster_paths: Iterable[Path],
+    *,
+    stack_label: str = "raster stack",
+) -> list[Path]:
+    """Keep only readable raster files, warning on missing or invalid inputs."""
+    valid_paths: list[Path] = []
+    seen: set[Path] = set()
+
+    for raw_path in raster_paths:
+        path = Path(raw_path)
+        if path in seen:
+            continue
+        seen.add(path)
+
+        error = _validate_raster_path(path)
+        if error is not None:
+            logger.warning("Skipping invalid %s raster: %s (%s)", stack_label, path, error)
+            continue
+
+        valid_paths.append(path)
+
+    return valid_paths
+
+
 def choose_city_or_global_files(
     files: list[Path],
     city_name: str,
@@ -301,13 +347,16 @@ def sample_median_from_raster_stack(
     resolution: float | None = None,
     resampling: Resampling = Resampling.nearest,
     normalization: RasterNormalizationSpec | None = None,
+    stack_label: str = "raster stack",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Align/sample raster stack to grid cells and return median and valid-count arrays."""
     n = len(grid_gdf)
-    if len(raster_paths) == 0:
-        return np.full(n, np.nan, dtype=np.float64), np.zeros(n, dtype=np.int64)
     if n == 0:
         return np.array([], dtype=np.float64), np.array([], dtype=np.int64)
+
+    valid_paths = filter_valid_raster_paths(raster_paths, stack_label=stack_label)
+    if len(valid_paths) == 0:
+        return np.full(n, np.nan, dtype=np.float64), np.zeros(n, dtype=np.int64)
 
     spec = build_grid_alignment_spec(grid_gdf=grid_gdf, resolution=resolution)
     rows, cols = grid_row_col_indices(grid_gdf=grid_gdf, spec=spec)
@@ -318,17 +367,27 @@ def sample_median_from_raster_stack(
             stack_path,
             mode="w+",
             dtype=np.float64,
-            shape=(len(raster_paths), n),
+            shape=(len(valid_paths), n),
         )
         try:
-            for index, path in enumerate(raster_paths):
-                aligned = align_raster_to_grid(path, spec=spec, resampling=resampling)
+            used_count = 0
+            for path in valid_paths:
+                try:
+                    aligned = align_raster_to_grid(path, spec=spec, resampling=resampling)
+                except Exception as exc:  # pragma: no cover - defensive fallback
+                    logger.warning("Skipping unreadable %s raster during sampling: %s (%s)", stack_label, path, exc)
+                    continue
+
                 values = aligned[rows, cols].astype(np.float64, copy=False)
-                stack[index, :] = _apply_normalization(values, normalization)
+                stack[used_count, :] = _apply_normalization(values, normalization)
+                used_count += 1
+
+            if used_count == 0:
+                return np.full(n, np.nan, dtype=np.float64), np.zeros(n, dtype=np.int64)
 
             stack.flush()
             median, n_valid = _reduce_stack_median_in_chunks(
-                stack=stack,
+                stack=stack[:used_count, :],
                 chunk_size=MEDIAN_STACK_CHUNK_SIZE,
             )
         finally:

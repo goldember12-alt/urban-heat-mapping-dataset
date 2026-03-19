@@ -9,8 +9,14 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from rasterio.enums import Resampling
+from shapely import wkt
 
-from src.city_processing import city_output_paths, load_city_record
+from src.city_processing import (
+    CORE_GEOMETRY_CRS_COLUMN,
+    CORE_GEOMETRY_WKT_COLUMN,
+    city_output_paths,
+    load_city_record,
+)
 from src.config import (
     CITY_FEATURES,
     CITY_GRIDS,
@@ -21,6 +27,7 @@ from src.config import (
     RAW_HYDRO,
     RAW_NDVI,
     RAW_NLCD,
+    STUDY_AREAS,
     SUPPORT_LAYERS,
 )
 from src.load_cities import load_cities
@@ -30,6 +37,7 @@ from src.raster_features import (
     align_and_extract_raster_values,
     choose_city_or_global_files,
     discover_rasters,
+    filter_valid_raster_paths,
     first_existing,
     raster_exists,
     sample_median_from_raster_stack,
@@ -39,6 +47,9 @@ from src.water_features import compute_dist_to_water_m
 logger = logging.getLogger(__name__)
 
 _TOKEN_BOUNDARY = re.compile(r"[^a-z0-9]+")
+CELL_FILTER_STUDY_AREA = "study_area"
+CELL_FILTER_CORE_CITY = "core_city"
+CELL_CONTEXT_COLUMNS = ["is_core_city_cell", "is_buffer_ring_cell"]
 
 FINAL_COLUMNS = [
     "city_id",
@@ -131,12 +142,23 @@ def _normalized_name_tokens(path: Path) -> set[str]:
 def _is_native_appeears_value_raster(path: Path, layer_name: str) -> bool:
     tokens = _normalized_name_tokens(path)
     layer_key = layer_name.strip().lower()
+    has_native_markers = any(token.startswith("aid") or token.startswith("doy") for token in tokens)
 
     if layer_key == "ndvi":
-        return "ndvi" in tokens and not ({"quality", "qa", "qc"} & tokens)
+        product_markers = {"mod13a1"} & tokens
+        return (
+            "ndvi" in tokens
+            and not ({"quality", "qa", "qc"} & tokens)
+            and (has_native_markers or bool(product_markers))
+        )
 
     if layer_key == "lst":
-        return "lst" in tokens and not ({"cloud", "quality", "qa", "qc", "error", "err"} & tokens)
+        product_markers = {"eco", "l2t", "lste"} & tokens
+        return (
+            "lst" in tokens
+            and not ({"cloud", "quality", "qa", "qc", "error", "err"} & tokens)
+            and (has_native_markers or bool(product_markers))
+        )
 
     raise ValueError(f"Unsupported AppEEARS layer_name: {layer_name}")
 
@@ -282,6 +304,21 @@ def _resolve_city_grid_path(city: pd.Series, resolution: float = 30, city_grids_
     return grid_path
 
 
+def _resolve_city_study_area_path(
+    city: pd.Series,
+    resolution: float = 30,
+    study_areas_dir: Path = STUDY_AREAS,
+    city_grids_dir: Path = CITY_GRIDS,
+) -> Path:
+    study_area_path, _ = city_output_paths(
+        city=city,
+        resolution=resolution,
+        study_areas_dir=study_areas_dir,
+        city_grids_dir=city_grids_dir,
+    )
+    return study_area_path
+
+
 def _read_city_grid(grid_path: Path, max_cells: int | None = None) -> gpd.GeoDataFrame:
     """Read a city grid GeoPackage, optionally limiting feature count for partial runs."""
     if max_cells is None:
@@ -298,6 +335,25 @@ def _read_city_grid(grid_path: Path, max_cells: int | None = None) -> gpd.GeoDat
 
 def _aligned_stage_dir(intermediate_dir: Path, city_stem: str) -> Path:
     return intermediate_dir / "aligned_rasters" / city_stem
+
+
+def _validated_city_stack_rasters(
+    city: pd.Series,
+    layer_name: str,
+    raster_paths: list[Path],
+) -> list[Path]:
+    stack_label = f"{layer_name} city_id={int(city['city_id'])} city_name={city['city_name']}"
+    valid_paths = filter_valid_raster_paths(raster_paths, stack_label=stack_label)
+    if valid_paths and len(valid_paths) != len({Path(path) for path in raster_paths}):
+        logger.warning(
+            "Continuing with %s/%s validated %s rasters for city_id=%s city_name=%s",
+            len(valid_paths),
+            len({Path(path) for path in raster_paths}),
+            layer_name,
+            int(city["city_id"]),
+            str(city["city_name"]),
+        )
+    return valid_paths
 
 
 def expected_city_feature_output_paths(
@@ -325,6 +381,84 @@ def _base_city_features(grid_gdf: gpd.GeoDataFrame, city: pd.Series) -> gpd.GeoD
     base["centroid_lon"] = centroid_wgs84.x.astype(float)
     base["centroid_lat"] = centroid_wgs84.y.astype(float)
     return base
+
+
+def _read_study_area_context(study_area_path: Path) -> tuple[gpd.GeoDataFrame, object | None]:
+    study_area = gpd.read_file(study_area_path)
+    if study_area.empty:
+        raise ValueError(f"Study area is empty: {study_area_path}")
+
+    core_geometry_wkt = str(study_area.get(CORE_GEOMETRY_WKT_COLUMN, pd.Series([""])).iloc[0] or "").strip()
+    if not core_geometry_wkt:
+        return study_area, None
+
+    core_geometry = wkt.loads(core_geometry_wkt)
+    core_crs = str(study_area.get(CORE_GEOMETRY_CRS_COLUMN, pd.Series([""])).iloc[0] or "").strip()
+    if core_crs and study_area.crs is not None and core_crs != study_area.crs.to_string():
+        raise ValueError(
+            f"Study area core-geometry CRS mismatch for {study_area_path}: {core_crs} != {study_area.crs.to_string()}"
+        )
+    return study_area, core_geometry
+
+
+def _annotate_cell_context(
+    city_features: gpd.GeoDataFrame,
+    study_area_path: Path,
+) -> gpd.GeoDataFrame:
+    annotated = city_features.copy()
+    missing_flags = pd.Series(pd.array([pd.NA] * len(annotated), dtype="boolean"), index=annotated.index)
+    annotated["is_core_city_cell"] = missing_flags.copy()
+    annotated["is_buffer_ring_cell"] = missing_flags.copy()
+
+    if not study_area_path.exists():
+        logger.warning("Study area file not found for cell-context annotation: %s", study_area_path)
+        return annotated
+
+    study_area, core_geometry = _read_study_area_context(study_area_path)
+    buffer_m = float(study_area.get("buffer_m", pd.Series([0.0])).iloc[0] or 0.0)
+
+    if core_geometry is None:
+        if buffer_m <= 0:
+            annotated["is_core_city_cell"] = pd.Series(True, index=annotated.index, dtype="boolean")
+            annotated["is_buffer_ring_cell"] = pd.Series(False, index=annotated.index, dtype="boolean")
+        else:
+            logger.warning(
+                "Study area %s is missing %s metadata; rerun city processing to enable core-city filtering",
+                study_area_path,
+                CORE_GEOMETRY_WKT_COLUMN,
+            )
+        return annotated
+
+    if buffer_m <= 0:
+        core_mask = pd.Series(True, index=annotated.index, dtype="boolean")
+    else:
+        centroid_geometry = gpd.GeoSeries(annotated.geometry.centroid, crs=annotated.crs)
+        core_mask = pd.Series(centroid_geometry.intersects(core_geometry), index=annotated.index, dtype="boolean")
+    annotated["is_core_city_cell"] = core_mask
+    annotated["is_buffer_ring_cell"] = (~core_mask).astype("boolean")
+    return annotated
+
+
+def _apply_cell_filter(city_features: gpd.GeoDataFrame, cell_filter_mode: str) -> gpd.GeoDataFrame:
+    mode = cell_filter_mode.strip().lower()
+    if mode == CELL_FILTER_STUDY_AREA:
+        return city_features.copy()
+    if mode != CELL_FILTER_CORE_CITY:
+        raise ValueError(f"Unsupported cell_filter_mode: {cell_filter_mode}")
+
+    if "is_core_city_cell" not in city_features.columns:
+        raise ValueError("Core-city cell flags are unavailable for core-city filtering")
+
+    mask = city_features["is_core_city_cell"]
+    if mask.isna().all():
+        raise ValueError(
+            "Core-city filtering requires study-area files with persisted core geometry metadata. "
+            "Rerun city processing to refresh the study-area outputs first."
+        )
+
+    filtered = city_features[mask.fillna(False)].copy()
+    logger.info("Dropped %s buffer-ring cells via cell_filter_mode=%s", len(city_features) - len(filtered), mode)
+    return filtered
 
 
 def _apply_rule_filters(df: gpd.GeoDataFrame, lst_stage_available: bool) -> gpd.GeoDataFrame:
@@ -363,11 +497,18 @@ def _assign_hotspot(df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return out
 
 
-def _finalize_city_feature_columns(city_features: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def _finalize_city_feature_columns(
+    city_features: gpd.GeoDataFrame,
+    extra_columns: list[str] | None = None,
+) -> gpd.GeoDataFrame:
     for column in FINAL_COLUMNS:
         if column not in city_features.columns:
             city_features[column] = np.nan
-    city_features = city_features[[*FINAL_COLUMNS, "geometry"]]
+    keep_columns = [*FINAL_COLUMNS]
+    for column in extra_columns or []:
+        if column in city_features.columns:
+            keep_columns.append(column)
+    city_features = city_features[[*keep_columns, "geometry"]]
     return city_features
 
 
@@ -376,9 +517,11 @@ def assemble_city_features(
     city_id: int | None = None,
     resolution: float = 30,
     feature_sources: FeatureSourceConfig | None = None,
+    cell_filter_mode: str = CELL_FILTER_STUDY_AREA,
     save_outputs: bool = True,
     max_cells: int | None = None,
     city_grids_dir: Path = CITY_GRIDS,
+    study_areas_dir: Path = STUDY_AREAS,
     city_features_dir: Path = CITY_FEATURES,
     intermediate_dir: Path = INTERMEDIATE,
 ) -> CityFeatureResult:
@@ -389,6 +532,12 @@ def assemble_city_features(
     grid_path = _resolve_city_grid_path(city=city, resolution=resolution, city_grids_dir=city_grids_dir)
     if not grid_path.exists():
         raise FileNotFoundError(f"City grid not found: {grid_path}. Run city/grid pipeline first.")
+    study_area_path = _resolve_city_study_area_path(
+        city=city,
+        resolution=resolution,
+        study_areas_dir=study_areas_dir,
+        city_grids_dir=city_grids_dir,
+    )
 
     grid = _read_city_grid(grid_path=grid_path, max_cells=max_cells)
     if grid.empty:
@@ -401,6 +550,7 @@ def assemble_city_features(
 
     blocked_stages: list[str] = []
     city_features = _base_city_features(grid, city)
+    city_features = _annotate_cell_context(city_features, study_area_path=study_area_path)
 
     aligned_dir = _aligned_stage_dir(intermediate_dir, stem)
     if save_outputs:
@@ -462,7 +612,7 @@ def assemble_city_features(
         city_features["dist_to_water_m"] = np.nan
 
     # NDVI
-    ndvi_paths = [p for p in feature_sources.ndvi_rasters if p.exists()]
+    ndvi_paths = _validated_city_stack_rasters(city=city, layer_name="NDVI", raster_paths=feature_sources.ndvi_rasters)
     if ndvi_paths:
         ndvi_median, _ = sample_median_from_raster_stack(
             grid_gdf=city_features,
@@ -470,6 +620,7 @@ def assemble_city_features(
             resolution=resolution,
             resampling=Resampling.bilinear,
             normalization=NDVI_NORMALIZATION,
+            stack_label=f"NDVI city_id={int(city['city_id'])} city_name={city['city_name']}",
         )
         city_features["ndvi_median_may_aug"] = ndvi_median
     else:
@@ -477,7 +628,7 @@ def assemble_city_features(
         city_features["ndvi_median_may_aug"] = np.nan
 
     # ECOSTRESS / LST
-    lst_paths = [p for p in feature_sources.lst_rasters if p.exists()]
+    lst_paths = _validated_city_stack_rasters(city=city, layer_name="LST", raster_paths=feature_sources.lst_rasters)
     if lst_paths:
         lst_median, n_valid = sample_median_from_raster_stack(
             grid_gdf=city_features,
@@ -485,6 +636,7 @@ def assemble_city_features(
             resolution=resolution,
             resampling=Resampling.bilinear,
             normalization=LST_NORMALIZATION,
+            stack_label=f"LST city_id={int(city['city_id'])} city_name={city['city_name']}",
         )
         city_features["lst_median_may_aug"] = lst_median
         city_features["n_valid_ecostress_passes"] = pd.Series(n_valid, dtype="Int64")
@@ -495,12 +647,13 @@ def assemble_city_features(
         city_features["n_valid_ecostress_passes"] = pd.Series(pd.array([pd.NA] * len(city_features), dtype="Int64"))
         lst_stage_available = False
 
-    city_features = _finalize_city_feature_columns(city_features)
+    city_features = _finalize_city_feature_columns(city_features, extra_columns=CELL_CONTEXT_COLUMNS)
 
     city_features_unfiltered = city_features.copy()
-    city_features_filtered = _apply_rule_filters(city_features, lst_stage_available=lst_stage_available)
+    city_features_training = _apply_cell_filter(city_features, cell_filter_mode=cell_filter_mode)
+    city_features_filtered = _apply_rule_filters(city_features_training, lst_stage_available=lst_stage_available)
     city_features_filtered = _assign_hotspot(city_features_filtered)
-    city_features_filtered = _finalize_city_feature_columns(city_features_filtered)
+    city_features_filtered = _finalize_city_feature_columns(city_features_filtered, extra_columns=CELL_CONTEXT_COLUMNS)
 
     city_features_gpkg_path: Path | None = None
     city_features_parquet_path: Path | None = None
@@ -542,12 +695,14 @@ def assemble_city_features(
 
 def extract_features_for_all_cities(
     resolution: float = 30,
+    cell_filter_mode: str = CELL_FILTER_STUDY_AREA,
     save_outputs: bool = True,
     continue_on_error: bool = True,
     city_ids: list[int] | None = None,
     existing_grids_only: bool = False,
     max_cells: int | None = None,
     city_grids_dir: Path = CITY_GRIDS,
+    study_areas_dir: Path = STUDY_AREAS,
     city_features_dir: Path = CITY_FEATURES,
     intermediate_dir: Path = INTERMEDIATE,
 ) -> BatchFeatureResult:
@@ -572,6 +727,7 @@ def extract_features_for_all_cities(
                         "city_name": cname,
                         "status": "skipped_missing_grid",
                         "n_rows": 0,
+                        "cell_filter_mode": cell_filter_mode,
                         "city_features_parquet_path": "",
                         "blocked_stages": "grid_missing",
                         "error": "",
@@ -583,9 +739,11 @@ def extract_features_for_all_cities(
             result = assemble_city_features(
                 city_id=cid,
                 resolution=resolution,
+                cell_filter_mode=cell_filter_mode,
                 save_outputs=save_outputs,
                 max_cells=max_cells,
                 city_grids_dir=city_grids_dir,
+                study_areas_dir=study_areas_dir,
                 city_features_dir=city_features_dir,
                 intermediate_dir=intermediate_dir,
             )
@@ -595,6 +753,7 @@ def extract_features_for_all_cities(
                     "city_name": cname,
                     "status": "ok",
                     "n_rows": result.n_rows,
+                    "cell_filter_mode": cell_filter_mode,
                     "city_features_parquet_path": str(result.city_features_parquet_path) if result.city_features_parquet_path else "",
                     "blocked_stages": ";".join(result.blocked_stages),
                     "error": "",
@@ -608,6 +767,7 @@ def extract_features_for_all_cities(
                     "city_name": cname,
                     "status": "error",
                     "n_rows": 0,
+                    "cell_filter_mode": cell_filter_mode,
                     "city_features_parquet_path": "",
                     "blocked_stages": "",
                     "error": str(exc),

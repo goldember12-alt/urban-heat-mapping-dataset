@@ -4,7 +4,12 @@ import argparse
 import logging
 from pathlib import Path
 
-from src.feature_assembly import FeatureSourceConfig, assemble_city_features
+from src.feature_assembly import (
+    CELL_FILTER_CORE_CITY,
+    CELL_FILTER_STUDY_AREA,
+    FeatureSourceConfig,
+    assemble_city_features,
+)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -14,6 +19,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     selector.add_argument("--city-id", type=int, help="City ID from cities.csv")
 
     parser.add_argument("--resolution", type=float, default=30, help="Grid resolution in meters")
+    parser.add_argument(
+        "--cell-filter-mode",
+        type=str,
+        default=CELL_FILTER_STUDY_AREA,
+        choices=[CELL_FILTER_STUDY_AREA, CELL_FILTER_CORE_CITY],
+        help="Keep all study-area cells or only core-city cells in the final per-city output",
+    )
     parser.add_argument("--no-save", action="store_true", help="Run extraction without writing outputs")
     parser.add_argument(
         "--max-cells",
@@ -74,6 +86,7 @@ def main() -> None:
         city_id=args.city_id,
         resolution=args.resolution,
         feature_sources=sources,
+        cell_filter_mode=args.cell_filter_mode,
         save_outputs=not args.no_save,
         max_cells=max_cells,
     )

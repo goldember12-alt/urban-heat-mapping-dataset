@@ -10,6 +10,8 @@
 - `state`: state abbreviation
 - `climate_group`: climate group label
 - `buffer_m`: applied buffer distance in meters
+- `core_geometry_wkt`: original unbuffered Census urban-area geometry serialized as WKT in the same projected CRS
+- `core_geometry_crs`: CRS string for `core_geometry_wkt`
 
 ### City grids (`data_processed/city_grids/*.gpkg`)
 
@@ -178,8 +180,8 @@ When source data is available, aligned rasters may include:
 
 ### Per-city intermediate tables (`data_processed/intermediate/city_features/`)
 
-- `*_features_unfiltered.parquet`: before open-water / ECOSTRESS pass-count row drops
-- `*_features_filtered.parquet`: after row-drop rules
+- `*_features_unfiltered.parquet`: before spatial core-city filtering, open-water drops, and ECOSTRESS pass-count row drops
+- `*_features_filtered.parquet`: after any requested spatial filter plus the row-drop rules
 
 ## Per-City Feature Outputs (`data_processed/city_features/*.gpkg|*.parquet`)
 
@@ -200,9 +202,14 @@ Final per-city feature columns:
 - `n_valid_ecostress_passes`: number of valid LST observations used in the median (if available)
 - `hotspot_10pct`: boolean indicator for top 10% LST cells within city
 
+Additional per-city output audit fields:
+
+- `is_core_city_cell`: boolean flag marking cells retained by `--cell-filter-mode core_city`
+- `is_buffer_ring_cell`: boolean flag marking cells outside the saved core urban footprint but inside the buffered study area
+
 ## Final Dataset Outputs (`data_processed/final/final_dataset.*`)
 
-Schema matches per-city feature columns listed above.
+Schema matches the required per-city feature columns listed above and does not include the per-city-only audit fields.
 
 ## Row Rules
 

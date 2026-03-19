@@ -9,6 +9,7 @@ Build a reproducible Python geospatial workflow to create a 30 m cell-level urba
 Implemented in code:
 
 - Boundary, study-area, and 30 m grid processing for the 30-city city list.
+- Study-area outputs now persist the original urban-core geometry alongside the buffered acquisition geometry.
 - Batch city-processing runner for one city or all configured cities.
 - Raster alignment, DEM, NLCD, hydro distance, city feature assembly, and final dataset assembly.
 - AppEEARS AOI export from buffered study areas.
@@ -20,8 +21,13 @@ Implemented in code:
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 - Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
+- Cache audit/cleanup utility now inventories `data_raw/cache/`, classifies artifacts by retention tier, writes JSON metadata outside the cache tree, and supports dry-run targeted prune plans for safe regenerable artifacts.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
 - AppEEARS feature-source discovery now recognizes native value-layer filenames and excludes QA/cloud/error sidecars with explicit logging.
+- Full-stack orchestration has completed end to end for Phoenix (`city_id=1`), Tucson (`2`), Las Vegas (`3`), and Albuquerque (`4`), with per-city feature outputs on disk.
+- The NDVI/LST handoff now requires AppEEARS-like native filename markers, so stale generic files such as `ndvi_1.tif`, `ndvi_2.tif`, or `lst_1.tif` are not treated as native value rasters.
+- Raster-stack sampling now validates TIFF readability before use and skips unreadable stale files with warnings as long as enough valid rasters remain for the city.
+- Feature assembly now supports `cell_filter_mode=study_area` (current behavior) and `cell_filter_mode=core_city` (buffered acquisition, core-city-only training cells).
 - Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
 - Phoenix-only summary CLI now profiles the materialized Phoenix analysis dataset and writes a research-style markdown deliverable with supporting tables and figures.
 
@@ -31,19 +37,25 @@ Standardization status:
 - AppEEARS acquisition is standardized in code for all 30 cities.
 - Support-layer acquisition/prep is standardized in code around deterministic per-city raw-input paths plus deterministic prepared outputs.
 - Reusable upstream caches for support-layer acquisition now live under `data_raw/cache/`.
-- The current remaining blocker for all-city support-layer prep is execution of the new raw acquisition stage for the remaining 29 cities, not missing code paths.
+- The current remaining blocker for broader scaling is data volume, long wall-clock runtime, and remaining city-specific source variability across the unfinished cities, not missing orchestration code paths.
 
 ## Testing Status
 
-As of 2026-03-18:
+As of 2026-03-19:
 
-- Focused regression subset: `21 passed` via:
-  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py tests/test_acquisition_orchestration.py tests/test_feature_assembly.py -q"`
+- Focused regression subset: `23 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py tests/test_full_stack_orchestration.py tests/test_raw_data_acquisition.py tests/test_raster_features.py -q"`
+- Additional focused buffer-policy subset: `21 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_batch_city_processing.py tests/test_city_processing.py tests/test_feature_assembly.py tests/test_full_stack_orchestration.py -q"`
 - Latest previously recorded full-suite result:
   - `69 passed` via `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest -q"`
 
 Test-verified in the latest checkpoint:
 
+- New cache cleanup coverage passed: `4 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_cache_cleanup.py -q"`
+- Mixed-folder AppEEARS discovery now ignores generic stale filenames like `ndvi_1.tif` and keeps only native AppEEARS value rasters when both are present.
+- Raster-stack sampling now skips invalid TIFFs with a warning instead of crashing the city when valid rasters remain.
 - Focused AppEEARS rerun-state regressions passed: `18 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_appeears_client.py tests/test_appeears_acquisition.py -q"`
 - Focused AppEEARS client, AppEEARS acquisition, and raw-acquisition resilience subsets passed: `22 passed` via:
@@ -74,6 +86,7 @@ Implemented:
 - `src.run_city_processing` and `src.run_city_batch_processing` generate study areas and 30 m grids.
 - `src.run_support_layers --preflight-only` serves as the deterministic prerequisite audit for support-layer readiness.
 - `src.run_raw_data_acquisition` performs deterministic raw DEM/NLCD/hydro acquisition and clipping into the standardized raw folders, with reusable caches and summary outputs.
+- `src.run_cache_cleanup` audits cache growth, records a JSON manifest outside `data_raw/cache/`, and supports safe dry-run prune plans for regenerable extracted artifacts and partial downloads.
 - `src.run_support_layers` performs deterministic support-layer prep once raw support inputs exist.
 - `src.run_acquisition_orchestration` sequences raw support acquisition, support-layer prep, NDVI AppEEARS, and ECOSTRESS AppEEARS into one restart-safe CLI.
 - `src.run_full_stack_orchestration` extends the same flow through feature assembly and writes one per-city stage-status summary row.
@@ -86,10 +99,45 @@ Test-verified:
 - Support-layer audit, raw acquisition helpers, prep, and prepared-output discovery are covered by `tests/test_support_layers.py` and `tests/test_raw_data_acquisition.py`.
 - Thin acquisition orchestration coverage is included in `tests/test_acquisition_orchestration.py`.
 - Full-stack city orchestration coverage is included in `tests/test_full_stack_orchestration.py`.
-- The latest focused regression result is `21 passed`; the last recorded full-suite result remains `69 passed`.
+- Raster stack validation and stale-legacy AppEEARS handoff coverage are included in `tests/test_feature_assembly.py` and `tests/test_raster_features.py`.
+- Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
+- The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
 
 Manually verified:
 
+- 2026-03-19 real workspace cache/storage audit:
+  - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run_20260319.json"` in dry-run mode.
+  - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate_20260319.json"` in dry-run mode.
+  - Confirmed `data_raw/cache/` currently accounts for about `63.72 GB` across `80` files, dominated by `hydro_extracted=25.15 GB`, `nlcd_bundle=21.97 GB`, and `hydro_package=12.64 GB`.
+  - Confirmed the conservative active-run dry-run plan with `--protect-recent-hours 24` proposed `0 GB` for deletion and blocked `27.80 GB` solely because the candidate files were newer than 24 hours.
+  - Confirmed the no-age-gate dry-run plan proposed `27.83 GB` across `28` files for safe regenerable cleanup, consisting of hydro extracted GeoPackages, NLCD extracted rasters, and `.part` partial downloads.
+  - Confirmed downstream support outputs remain small relative to cache: `data_raw/dem=0.126 GB`, `data_raw/nlcd=0.035 GB`, `data_raw/hydro=0.031 GB`, `data_processed/support_layers=0.055 GB`.
+  - Confirmed by SHA-256 that Tucson, Las Vegas, and Albuquerque DEM/NLCD raw outputs are byte-identical to their prepared counterparts; hydro prepared outputs are not byte-identical but remain the same clipped downstream derivative stage.
+- 2026-03-19 real-city Phoenix buffer-policy validation:
+  - Regenerated `src.run_city_processing --city-id 1 --buffer-m 2000 --resolution 30`.
+  - Confirmed `data_processed/study_areas/01_phoenix_az_study_area.gpkg` now contains non-empty `core_geometry_wkt` and `core_geometry_crs=EPSG:32612`.
+  - Ran `src.run_city_features --city-id 1 --cell-filter-mode core_city` successfully with `blocked_stages=` blank.
+  - Phoenix per-city feature rows changed from `4,735,561` buffered-study-area rows to `3,199,440` core-city rows.
+  - Phoenix intermediate unfiltered table retained both `is_core_city_cell` and `is_buffer_ring_cell`; filtered/core-city outputs retained only core cells.
+  - A temporary `assemble_final_dataset(...)` run succeeded, confirming the new per-city audit fields do not break downstream final-dataset assembly.
+  - A temporary AppEEARS AOI export and support-layer geometry/bbox read against the refreshed Phoenix `study_area.gpkg` also succeeded, confirming the added metadata columns do not break those downstream readers.
+- Confirmed current on-disk completion state for cities `1-4`:
+  - `data_processed/city_features/01_phoenix_az_features.parquet`
+  - `data_processed/city_features/02_tucson_az_features.parquet`
+  - `data_processed/city_features/03_las_vegas_nv_features.parquet`
+  - `data_processed/city_features/04_albuquerque_nm_features.parquet`
+- Confirmed current AOI, raw support, and prepared-support directories exist for cities `1-4`:
+  - `data_processed/appeears_aoi/01_phoenix_az_aoi.geojson`
+  - `data_processed/appeears_aoi/02_tucson_az_aoi.geojson`
+  - `data_processed/appeears_aoi/03_las_vegas_nv_aoi.geojson`
+  - `data_processed/appeears_aoi/04_albuquerque_nm_aoi.geojson`
+  - `data_raw/dem/{phoenix,tucson,las_vegas,albuquerque}/`
+  - `data_processed/support_layers/{01_phoenix_az,02_tucson_az,03_las_vegas_nv,04_albuquerque_nm}/`
+- Confirmed current AppEEARS status summaries for cities `2-4`:
+  - NDVI summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
+  - ECOSTRESS summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
+- No fresh live orchestration rerun was executed in the 2026-03-19 checkpoint; readiness assessment is based on current on-disk outputs plus the new focused regression pass.
+- Phoenix is now manually verified in `core_city` mode; the remaining cities still need the same refresh if they will join an overnight `core_city` run.
 - Verified the moved virtual environment resolves against the new OneDrive-backed workspace:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'import sys, pathlib; print(sys.executable); print(pathlib.Path(sys.executable).exists())'"`
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'from src.config import PROJECT_ROOT, DATA_RAW, DATA_PROCESSED; print(PROJECT_ROOT); print(DATA_RAW); print(DATA_PROCESSED)'"`
@@ -190,13 +238,13 @@ Currently materialized on disk:
 - `data_processed/study_areas/`: all 30 cities
 - `data_processed/city_grids/`: all 30 cities at 30 m
 - `data_processed/batch_city_processing_summary_30m.csv`
-- `data_processed/appeears_aoi/`: Phoenix only
+- `data_processed/appeears_aoi/`: Phoenix, Tucson, Las Vegas, Albuquerque
 - `data_raw/cache/`: ready for reusable DEM/NLCD/hydro downloads but not yet populated by a full all-city acquisition run
-- `data_raw/dem/`: Phoenix only
-- `data_raw/nlcd/`: Phoenix only
-- `data_raw/hydro/`: Phoenix only
-- `data_raw/ndvi/`: Phoenix only
-- `data_raw/ecostress/`: Phoenix only
+- `data_raw/dem/`: Phoenix, Tucson, Las Vegas, Albuquerque
+- `data_raw/nlcd/`: Phoenix, Tucson, Las Vegas, Albuquerque
+- `data_raw/hydro/`: Phoenix, Tucson, Las Vegas, Albuquerque
+- `data_raw/ndvi/`: Phoenix, Tucson, Las Vegas, Albuquerque
+- `data_raw/ecostress/`: Phoenix, Tucson, Las Vegas, Albuquerque
 - `data_processed/support_layers/`:
   - `support_layers_preflight_summary.json`
   - `support_layers_preflight_summary.csv`
@@ -208,25 +256,44 @@ Currently materialized on disk:
   - `01_phoenix_az/nlcd_land_cover_prepared.tif`
   - `01_phoenix_az/nlcd_impervious_prepared.tif`
   - `01_phoenix_az/hydro_water_prepared.gpkg`
+  - `02_tucson_az/*`
+  - `03_las_vegas_nv/*`
+  - `04_albuquerque_nm/*`
 - `data_processed/appeears_status/`:
   - `appeears_ndvi_preflight_summary.json`
   - `appeears_ndvi_preflight_summary.csv`
-  - Phoenix acquisition summaries for NDVI and ECOSTRESS
+  - acquisition summaries for Phoenix, Tucson, Las Vegas, and Albuquerque for NDVI and ECOSTRESS
 - `data_processed/orchestration/`:
   - `acquisition_orchestration_summary.json`
   - `acquisition_orchestration_summary.csv`
   - `full_stack_city_orchestration_summary.json`
   - `full_stack_city_orchestration_summary.csv`
+- `data_processed/city_features/`:
+  - per-city feature outputs for Phoenix, Tucson, Las Vegas, and Albuquerque
+  - Phoenix was regenerated on 2026-03-19 in `cell_filter_mode=core_city`; Tucson, Las Vegas, and Albuquerque remain in buffered `study_area` mode
 
 Explicit blocker statement:
 
 - The prior manual blocker for standardized DEM/NLCD/hydro population is resolved in code.
-- The current practical blocker for all-30-city support-layer prep is running the new raw acquisition stage for the remaining 29 cities and waiting for large official downloads to complete.
-- The current real blocker for all-30-city AppEEARS acquisition is still missing AOIs for 29 cities, not missing study areas.
+- The current practical blocker for broader scaling is running the same pipeline for the remaining 26 unfinished cities and waiting for large official downloads and AppEEARS bundles to complete.
+- The current operational risks are heavy NLCD/NHDPlus I/O, OneDrive-backed workspace churn on large files, and city-specific source quirks that have not yet been observed outside the first four completed cities.
+- Overnight `core_city` runs now have one real-city proof point in Phoenix, but the study-area metadata refresh has not yet been applied across the other completed cities.
 
 ## Immediate Next Step
 
-Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell, unset any stale `APPEEARS_API_TOKEN`, then rerun `src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31`. The rerun should now reuse saved AppEEARS `task_id` values by polling first, download completed bundles for those same tasks, and only submit a new request if no reusable task exists.
+Before the next multi-city batch, keep the current cache policy conservative and avoid live deletion during active downloads. When the current batch finishes, rerun the dry-run plan without the recent-file gate and review the JSON manifest:
+
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run.json"`
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate.json"`
+
+After that, resume the controlled city batch:
+
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 5,6,7 --start-date 2023-05-01 --end-date 2023-08-31"`
+
+Recommended operator setup before that run:
+
+- Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell.
+- Unset any stale `APPEEARS_API_TOKEN` if one is still present.
 
 ## Current Output Structure
 
@@ -242,6 +309,7 @@ Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell, unset 
 - `data_processed/final/`
 - `outputs/phoenix_data_summary.md`
 - `outputs/phoenix_data_summary/`
+- `outputs/storage/`
 - `data_raw/cache/`
 - `data_raw/dem/<city_slug>/`
 - `data_raw/nlcd/<city_slug>/`
@@ -254,16 +322,136 @@ Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell, unset 
 - Full all-city raw DEM acquisition has not been executed yet.
 - Full all-city raw NLCD acquisition/clipping has not been executed yet.
 - Full all-city raw hydro acquisition/clipping has not been executed yet.
-- Full support-layer prep has not yet been materialized beyond Phoenix.
-- AOIs are still only materialized for Phoenix.
-- Full all-city AppEEARS acquisition has not started beyond Phoenix-ready assets.
-- Fresh post-move AppEEARS submit/download validation has not been proven yet; the 2026-03-18 Phoenix orchestration run reused already-materialized raw rasters.
+- Full support-layer prep has not yet been materialized beyond the first four completed cities.
+- Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
+- Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
+- Broader cross-climate validation beyond the first four Southwestern cities is still pending.
+- The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
 - The new full-stack city orchestration starts at raw support acquisition, not city boundary/grid generation; city-processing remains a separate prerequisite for cities missing study areas or grids.
-- Additional uncapped city-by-city feature validation beyond Phoenix is still pending.
+- Additional uncapped city-by-city feature validation beyond the first four completed cities is still pending.
 - Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 - Raw support acquisition still depends on very large official NLCD and NHDPlus source downloads; long wall-clock times are expected even when the code is behaving correctly.
+- `data_processed/city_grids/` is now a separate major storage hotspot at about `25.09 GB` and will need its own retention/compression review after cache cleanup.
 
 ## Checkpoint Log
+
+### 2026-03-19 - Checkpoint: Cache Storage Audit And Safe Cleanup Utility Added
+
+- Date / checkpoint:
+  - 2026-03-19 cache growth audit and cleanup tooling for `data_raw/cache/`.
+- Change made:
+  - Added `src.cache_cleanup` and `src.run_cache_cleanup` to inventory cache files, classify them by retention tier, preserve JSON metadata outside the cache tree, and support dry-run targeted prune plans for `partials`, `nlcd-extracted`, `hydro-extracted`, `extracted`, and `regenerable`.
+  - Added tests covering category classification, source-archive safety checks, dry-run pruning logic, and non-cache path protection.
+  - Updated README and workflow docs with the new storage-audit CLI and the recommended dry-run-first policy.
+- Files touched:
+  - `src/cache_cleanup.py`
+  - `src/run_cache_cleanup.py`
+  - `tests/test_cache_cleanup.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_cache_cleanup.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run.json"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate.json"`
+- Test status:
+  - Focused cache cleanup subset passed: `4 passed`.
+- Manual verification status:
+  - Real workspace dry-run storage audit measured `data_raw/cache/` at about `63.72 GB`.
+  - The conservative active-run dry-run plan proposed `0 GB` for deletion with a 24-hour age gate.
+  - The no-age-gate dry-run plan proposed `27.83 GB` for safe regenerable cleanup without touching NLCD bundles, DEM tiles, or hydro package ZIPs.
+- Next recommended step:
+  - Wait until the current city batch is no longer actively downloading, then rerun the dry-run with `--protect-recent-hours 0` and review the JSON manifest before any live `--execute` prune.
+
+### 2026-03-19 - Checkpoint: Buffer Policy Parameterized For Feature Assembly
+
+- Date / checkpoint:
+  - 2026-03-19 study-area buffer propagation audit plus minimal policy split between acquisition footprint and training footprint.
+- Change made:
+  - Persisted the original unbuffered urban-core geometry inside each study-area GeoPackage.
+  - Added `cell_filter_mode` support to feature assembly, batch feature extraction, full pipeline, and full-stack orchestration.
+  - Added per-cell audit flags `is_core_city_cell` and `is_buffer_ring_cell` to per-city outputs and intermediate tables.
+  - Kept AppEEARS AOI creation, raw support acquisition, and support-layer prep tied to the saved study-area geometry, so buffered acquisition can coexist with core-city-only training cells.
+- Files touched:
+  - `src/city_processing.py`
+  - `src/feature_assembly.py`
+  - `src/full_pipeline.py`
+  - `src/full_stack_orchestration.py`
+  - `src/run_city_features.py`
+  - `src/run_city_features_batch.py`
+  - `src/run_full_stack_orchestration.py`
+  - `tests/test_city_processing.py`
+  - `tests/test_feature_assembly.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_city_features --city-id 1 --cell-filter-mode core_city"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31 --cell-filter-mode core_city"`
+- Test status:
+  - Focused buffer-policy subset passed: `21 passed`.
+- Manual verification status:
+  - Phoenix was manually rerun on refreshed real-city outputs and passed the end-to-end metadata + feature-filtering check.
+- Next recommended step:
+  - Refresh the remaining target cities' study-area files before launching an overnight `core_city` batch, so the workspace does not stay mixed between `study_area` and `core_city` outputs.
+
+### 2026-03-19 - Checkpoint: Phoenix Core-City Manual Validation
+
+- Date / checkpoint:
+  - 2026-03-19 real-city validation of the new study-area metadata and feature filtering path.
+- Change made:
+  - Regenerated Phoenix city processing with `--buffer-m 2000` so the study-area GeoPackage carries `core_geometry_wkt`.
+  - Rebuilt Phoenix features with `--cell-filter-mode core_city`.
+  - Verified temp final-dataset assembly still succeeds with the new per-city audit fields present.
+- Files touched:
+  - `data_processed/study_areas/01_phoenix_az_study_area.gpkg`
+  - `data_processed/city_grids/01_phoenix_az_grid_30m.gpkg`
+  - `data_processed/intermediate/city_features/01_phoenix_az_features_unfiltered.parquet`
+  - `data_processed/intermediate/city_features/01_phoenix_az_features_filtered.parquet`
+  - `data_processed/city_features/01_phoenix_az_features.gpkg`
+  - `data_processed/city_features/01_phoenix_az_features.parquet`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_city_processing --city-id 1 --buffer-m 2000 --resolution 30"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_city_features --city-id 1 --cell-filter-mode core_city"`
+- Test status:
+  - No new pytest suite was needed beyond the existing 21-pass buffer-policy subset; this checkpoint adds manual validation.
+- Manual verification status:
+  - `core_geometry_wkt` present and non-empty in the Phoenix study-area GeoPackage.
+  - Phoenix feature outputs contain `is_core_city_cell` / `is_buffer_ring_cell`.
+  - Phoenix filtered row count decreased from `4,735,561` buffered-study-area rows to `3,199,440` core-city rows.
+  - Temporary final-dataset assembly succeeded without schema breakage.
+  - Temporary AppEEARS AOI export plus support-layer geometry/bbox reads also succeeded on the refreshed Phoenix study-area file.
+- Next recommended step:
+  - Refresh study-area files for the next overnight target set, then launch the same run pattern with `--cell-filter-mode core_city`.
+
+### 2026-03-19 - Checkpoint: Stale Legacy Raster Handoff Hardened
+
+- Date / checkpoint:
+  - 2026-03-19 targeted NDVI/LST feature-assembly hardening after the Tucson stale-file failure.
+- Change made:
+  - Tightened native AppEEARS raster matching so generic legacy filenames such as `ndvi_1.tif`, `ndvi_2.tif`, and `lst_1.tif` no longer count as native value rasters.
+  - Added raster-path validation before NDVI/LST stack sampling so unreadable or corrupt TIFFs are warned and skipped instead of aborting the city when valid rasters remain.
+  - Added regression coverage for a mixed directory containing valid native AppEEARS rasters plus invalid legacy TIFFs, and for stack sampling with mixed valid/invalid TIFF inputs.
+- Files touched:
+  - `src/feature_assembly.py`
+  - `src/raster_features.py`
+  - `tests/test_feature_assembly.py`
+  - `tests/test_raster_features.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py tests/test_full_stack_orchestration.py tests/test_raw_data_acquisition.py tests/test_raster_features.py -q"`
+- Test status:
+  - Focused regression subset passed: `23 passed`.
+- Manual verification status:
+  - Confirmed current on-disk full-stack outputs exist for Phoenix, Tucson, Las Vegas, and Albuquerque.
+  - Confirmed the current AppEEARS status summaries for cities `2-4` report `remote_task_status=done`.
+  - No fresh live city rerun was executed in this checkpoint.
+- Next recommended step:
+  - Run one more controlled full-stack batch, for example `--city-ids 5,6,7`, before promoting to `--all-missing`.
 
 ### 2026-03-18 - Checkpoint: AppEEARS Saved-Task Reruns Fixed
 
