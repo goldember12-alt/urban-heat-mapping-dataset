@@ -65,12 +65,21 @@ def read_auth_from_environment() -> AppEEARSAuthConfig:
     if not preflight.is_configured:
         raise ValueError(preflight.message)
 
+    username = os.getenv(EARTHDATA_USERNAME_ENV)
+    password = os.getenv(EARTHDATA_PASSWORD_ENV)
+    if username and password:
+        token = os.getenv(APPEEARS_TOKEN_ENV)
+        if token:
+            logger.info(
+                "Both %s and Earthdata credentials are set; preferring Earthdata login to mint a fresh bearer token",
+                APPEEARS_TOKEN_ENV,
+            )
+        return AppEEARSAuthConfig(token=None, username=username, password=password)
+
     token = os.getenv(APPEEARS_TOKEN_ENV)
     if token:
         return AppEEARSAuthConfig(token=token, username=None, password=None)
 
-    username = os.getenv(EARTHDATA_USERNAME_ENV)
-    password = os.getenv(EARTHDATA_PASSWORD_ENV)
     return AppEEARSAuthConfig(token=None, username=username, password=password)
 
 
@@ -79,6 +88,16 @@ def appeears_credential_preflight() -> AppEEARSCredentialPreflight:
     token = os.getenv(APPEEARS_TOKEN_ENV)
     username = os.getenv(EARTHDATA_USERNAME_ENV)
     password = os.getenv(EARTHDATA_PASSWORD_ENV)
+
+    if username and password and token:
+        return AppEEARSCredentialPreflight(
+            is_configured=True,
+            missing_vars=(),
+            message=(
+                f"Configured via {EARTHDATA_USERNAME_ENV} and {EARTHDATA_PASSWORD_ENV}; "
+                f"{APPEEARS_TOKEN_ENV} is also set but will be ignored in favor of a fresh login token."
+            ),
+        )
 
     if token:
         return AppEEARSCredentialPreflight(
@@ -193,6 +212,21 @@ def _response_error_detail(response: Any) -> str:
     return text[:2000]
 
 
+def _submission_failure_label(status_code: int, response_detail: str, auth_mode: str) -> str:
+    detail = response_detail.lower()
+    if status_code in {400, 422}:
+        return "bad_payload"
+    if status_code == 401:
+        return "auth_failure"
+    if status_code == 403:
+        if auth_mode == APPEEARS_TOKEN_ENV:
+            return "stale_or_invalid_token"
+        if "permission" in detail or "read-protected" in detail or "forbidden" in detail:
+            return "permission_or_eula_issue"
+        return "forbidden_request"
+    return "request_failed"
+
+
 class AppEEARSClient:
     """Thin AppEEARS API client with env-driven auth and simple task methods."""
 
@@ -226,6 +260,13 @@ class AppEEARSClient:
         if not self._token:
             self.authenticate()
         return {"Authorization": f"Bearer {self._token}"}
+
+    def _auth_mode(self) -> str:
+        if self._auth.username and self._auth.password:
+            return "earthdata_login"
+        if self._token or self._auth.token:
+            return APPEEARS_TOKEN_ENV
+        return "unconfigured"
 
     def authenticate(self) -> str:
         """Return a bearer token, exchanging Earthdata user/pass if needed."""
@@ -340,18 +381,36 @@ class AppEEARSClient:
                 city_id, product = _extract_submit_context(json)
                 city_label = str(city_id) if city_id is not None else "unknown"
                 product_label = product or "unknown"
+                auth_mode = self._auth_mode()
+                failure_label = _submission_failure_label(
+                    status_code=response.status_code,
+                    response_detail=response_detail,
+                    auth_mode=auth_mode,
+                )
+                hint = ""
+                if failure_label == "stale_or_invalid_token":
+                    hint = (
+                        f" Unset {APPEEARS_TOKEN_ENV} or provide {EARTHDATA_USERNAME_ENV}/{EARTHDATA_PASSWORD_ENV} "
+                        "so the client can mint a fresh bearer token."
+                    )
+                elif failure_label == "permission_or_eula_issue":
+                    hint = " Confirm the Earthdata/AppEEARS account has accepted required terms and can submit this product in the web UI."
+                elif failure_label == "bad_payload":
+                    hint = " Verify the product/layer/date/AOI payload against the AppEEARS product catalog."
                 logger.error(
-                    "AppEEARS task submission failed: status=%s city_id=%s product=%s response=%s",
+                    "AppEEARS task submission failed: label=%s status=%s auth_mode=%s city_id=%s product=%s response=%s",
+                    failure_label,
                     response.status_code,
+                    auth_mode,
                     city_label,
                     product_label,
                     response_detail,
                 )
                 raise AppEEARSRequestError(
                     (
-                        "AppEEARS task submission failed "
-                        f"(status={response.status_code}, city_id={city_label}, product={product_label}): "
-                        f"{response_detail}"
+                        f"AppEEARS task submission failed [{failure_label}] "
+                        f"(status={response.status_code}, auth_mode={auth_mode}, city_id={city_label}, product={product_label}): "
+                        f"{response_detail}{hint}"
                     ),
                     status_code=response.status_code,
                     response_text=response_detail,

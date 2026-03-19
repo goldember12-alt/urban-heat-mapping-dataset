@@ -326,3 +326,270 @@ def test_run_appeears_acquisition_marks_missing_credentials_with_explicit_env_va
     assert "APPEEARS_API_TOKEN" in row["message"]
     assert "EARTHDATA_USERNAME" in row["message"]
     assert "EARTHDATA_PASSWORD" in row["message"]
+
+
+class _ExistingTaskClient:
+    def __init__(self, remote_status: str, bundle_files: list[dict[str, str]] | None = None):
+        self.remote_status = remote_status
+        self.bundle_files = bundle_files or []
+        self.submit_calls = 0
+        self.poll_calls: list[str] = []
+        self.download_calls: list[tuple[str, str, Path]] = []
+
+    def submit_area_task(self, payload):
+        self.submit_calls += 1
+        raise AssertionError("submit_area_task should not be called when an existing task_id is reusable")
+
+    def get_task(self, task_id: str):
+        self.poll_calls.append(task_id)
+        return {"status": self.remote_status}
+
+    def list_bundle_files(self, task_id: str):
+        return self.bundle_files
+
+    def download_bundle_file(self, task_id: str, file_id: str, destination: Path):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(file_id)
+        self.download_calls.append((task_id, file_id, destination))
+        return destination
+
+
+def test_run_appeears_acquisition_reuses_existing_task_id_and_downloads_done_bundle(tmp_path: Path, monkeypatch):
+    cities = pd.DataFrame(
+        {
+            "city_id": [2],
+            "city_name": ["Tucson"],
+            "state": ["AZ"],
+            "climate_group": ["hot_arid"],
+            "lat": [32.22],
+            "lon": [-110.97],
+        }
+    )
+    preflight_summary = pd.DataFrame(
+        {
+            "city_id": [2],
+            "expected_study_area_path": [str(tmp_path / "study_areas" / "tucson.gpkg")],
+            "expected_aoi_path": [str(tmp_path / "appeears_aoi" / "tucson.geojson")],
+        }
+    )
+    aoi_summary = pd.DataFrame(
+        {
+            "city_id": [2],
+            "status": ["completed"],
+            "study_area_path": [str(tmp_path / "study_areas" / "tucson.gpkg")],
+            "aoi_path": [str(tmp_path / "appeears_aoi" / "tucson.geojson")],
+        }
+    )
+    existing = {
+        2: {
+            "city_id": 2,
+            "city_name": "Tucson",
+            "status": "pending",
+            "task_id": "task-2",
+            "remote_task_status": "pending",
+            "product": "MOD13A1.061",
+            "layer": "_500m_16_days_NDVI",
+        }
+    }
+    client = _ExistingTaskClient(
+        remote_status="done",
+        bundle_files=[
+            {"file_id": "1", "file_name": "ndvi_1.tif"},
+            {"file_id": "2", "file_name": "ndvi_2.tif"},
+        ],
+    )
+
+    monkeypatch.setenv("EARTHDATA_USERNAME", "user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "pass")
+    monkeypatch.setattr("src.appeears_acquisition.load_cities", lambda: cities)
+    monkeypatch.setattr("src.appeears_acquisition._load_existing_records", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.audit_appeears_acquisition_readiness",
+        lambda **kwargs: AcquisitionPreflightResult(
+            summary=preflight_summary,
+            summary_json_path=tmp_path / "appeears_status" / "preflight.json",
+            summary_csv_path=tmp_path / "appeears_status" / "preflight.csv",
+        ),
+    )
+    monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
+    monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", lambda: client)
+
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[2],
+        retry_incomplete=True,
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert client.submit_calls == 0
+    assert client.poll_calls == ["task-2"]
+    assert row["task_id"] == "task-2"
+    assert row["remote_task_status"] == "done"
+    assert row["status"] == "completed"
+    assert int(row["n_files_downloaded"]) == 2
+    assert int(row["n_files_existing"]) == 0
+
+
+def test_run_appeears_acquisition_reuses_existing_task_id_without_resubmitting_when_remote_still_running(
+    tmp_path: Path,
+    monkeypatch,
+):
+    cities = pd.DataFrame(
+        {
+            "city_id": [3],
+            "city_name": ["Las Vegas"],
+            "state": ["NV"],
+            "climate_group": ["hot_arid"],
+            "lat": [36.17],
+            "lon": [-115.14],
+        }
+    )
+    preflight_summary = pd.DataFrame(
+        {
+            "city_id": [3],
+            "expected_study_area_path": [str(tmp_path / "study_areas" / "las_vegas.gpkg")],
+            "expected_aoi_path": [str(tmp_path / "appeears_aoi" / "las_vegas.geojson")],
+        }
+    )
+    aoi_summary = pd.DataFrame(
+        {
+            "city_id": [3],
+            "status": ["completed"],
+            "study_area_path": [str(tmp_path / "study_areas" / "las_vegas.gpkg")],
+            "aoi_path": [str(tmp_path / "appeears_aoi" / "las_vegas.geojson")],
+        }
+    )
+    existing = {
+        3: {
+            "city_id": 3,
+            "city_name": "Las Vegas",
+            "status": "pending",
+            "task_id": "task-3",
+            "remote_task_status": "pending",
+            "product": "MOD13A1.061",
+            "layer": "_500m_16_days_NDVI",
+        }
+    }
+    client = _ExistingTaskClient(remote_status="running")
+
+    monkeypatch.setenv("EARTHDATA_USERNAME", "user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "pass")
+    monkeypatch.setattr("src.appeears_acquisition.load_cities", lambda: cities)
+    monkeypatch.setattr("src.appeears_acquisition._load_existing_records", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.audit_appeears_acquisition_readiness",
+        lambda **kwargs: AcquisitionPreflightResult(
+            summary=preflight_summary,
+            summary_json_path=tmp_path / "appeears_status" / "preflight.json",
+            summary_csv_path=tmp_path / "appeears_status" / "preflight.csv",
+        ),
+    )
+    monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
+    monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", lambda: client)
+
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[3],
+        retry_incomplete=True,
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert client.submit_calls == 0
+    assert client.poll_calls == ["task-3"]
+    assert row["task_id"] == "task-3"
+    assert row["remote_task_status"] == "running"
+    assert row["status"] == "pending"
+    assert "awaiting completion" in row["message"]
+
+
+def test_run_appeears_acquisition_marks_done_bundle_with_existing_files_as_skipped_existing(tmp_path: Path, monkeypatch):
+    cities = pd.DataFrame(
+        {
+            "city_id": [4],
+            "city_name": ["Albuquerque"],
+            "state": ["NM"],
+            "climate_group": ["cold"],
+            "lat": [35.08],
+            "lon": [-106.65],
+        }
+    )
+    preflight_summary = pd.DataFrame(
+        {
+            "city_id": [4],
+            "expected_study_area_path": [str(tmp_path / "study_areas" / "albuquerque.gpkg")],
+            "expected_aoi_path": [str(tmp_path / "appeears_aoi" / "albuquerque.geojson")],
+        }
+    )
+    aoi_summary = pd.DataFrame(
+        {
+            "city_id": [4],
+            "status": ["completed"],
+            "study_area_path": [str(tmp_path / "study_areas" / "albuquerque.gpkg")],
+            "aoi_path": [str(tmp_path / "appeears_aoi" / "albuquerque.geojson")],
+        }
+    )
+    existing = {
+        4: {
+            "city_id": 4,
+            "city_name": "Albuquerque",
+            "status": "pending",
+            "task_id": "task-4",
+            "remote_task_status": "pending",
+            "product": "MOD13A1.061",
+            "layer": "_500m_16_days_NDVI",
+        }
+    }
+    client = _ExistingTaskClient(
+        remote_status="done",
+        bundle_files=[
+            {"file_id": "1", "file_name": "ndvi_1.tif"},
+            {"file_id": "2", "file_name": "ndvi_2.tif"},
+        ],
+    )
+
+    download_dir = tmp_path / "raw" / "ndvi" / "albuquerque"
+    download_dir.mkdir(parents=True, exist_ok=True)
+    (download_dir / "ndvi_1.tif").write_text("existing")
+    (download_dir / "ndvi_2.tif").write_text("existing")
+
+    monkeypatch.setenv("EARTHDATA_USERNAME", "user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "pass")
+    monkeypatch.setattr("src.appeears_acquisition.load_cities", lambda: cities)
+    monkeypatch.setattr("src.appeears_acquisition._load_existing_records", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.audit_appeears_acquisition_readiness",
+        lambda **kwargs: AcquisitionPreflightResult(
+            summary=preflight_summary,
+            summary_json_path=tmp_path / "appeears_status" / "preflight.json",
+            summary_csv_path=tmp_path / "appeears_status" / "preflight.csv",
+        ),
+    )
+    monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
+    monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", lambda: client)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.resolve_city_download_dir",
+        lambda **kwargs: download_dir,
+    )
+
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[4],
+        retry_incomplete=True,
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert client.submit_calls == 0
+    assert client.poll_calls == ["task-4"]
+    assert len(client.download_calls) == 0
+    assert row["status"] == "skipped_existing"
+    assert int(row["n_files_downloaded"]) == 0
+    assert int(row["n_files_existing"]) == 2

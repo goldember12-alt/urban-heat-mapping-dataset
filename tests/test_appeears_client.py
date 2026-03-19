@@ -1,6 +1,13 @@
 import pytest
 
-from src.appeears_client import AppEEARSAuthConfig, AppEEARSClient, AppEEARSRequestError, build_area_task_payload
+from src.appeears_client import (
+    AppEEARSAuthConfig,
+    AppEEARSClient,
+    AppEEARSRequestError,
+    appeears_credential_preflight,
+    build_area_task_payload,
+    read_auth_from_environment,
+)
 
 
 class _FakeResponse:
@@ -19,6 +26,20 @@ class _FakeSession:
 
     def request(self, method, url, headers=None, json=None, timeout=None):
         return self._response
+
+
+def test_read_auth_from_environment_prefers_earthdata_credentials_over_static_token(monkeypatch):
+    monkeypatch.setenv("APPEEARS_API_TOKEN", "stale-token")
+    monkeypatch.setenv("EARTHDATA_USERNAME", "user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "pass")
+
+    auth = read_auth_from_environment()
+    preflight = appeears_credential_preflight()
+
+    assert auth.token is None
+    assert auth.username == "user"
+    assert auth.password == "pass"
+    assert "ignored in favor of a fresh login token" in preflight.message
 
 
 def test_build_area_task_payload_converts_cli_dates_to_appeears_format():
@@ -104,7 +125,48 @@ def test_submit_task_error_includes_status_response_city_and_product():
     msg = str(err)
     assert err.status_code == 400
     assert "status=400" in msg
+    assert "[bad_payload]" in msg
     assert "city_id=1" in msg
     assert "product=MOD13A1.061" in msg
     assert "Invalid layer selection" in msg
     assert err.response_text == "Invalid layer selection"
+
+
+def test_submit_task_403_with_static_token_is_classified_as_stale_or_invalid_token():
+    response = _FakeResponse(
+        status_code=403,
+        json_payload={"message": "You don't have the permission to access the requested resource."},
+    )
+    client = AppEEARSClient(
+        auth=AppEEARSAuthConfig(token="stale-token", username=None, password=None),
+        session=_FakeSession(response),
+    )
+
+    payload = build_area_task_payload(
+        task_name="ndvi_phoenix_2023",
+        product="MOD13A1.061",
+        layer="500m_16_days_NDVI",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        aoi_feature_collection={
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"city_id": 1},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[-112.1, 33.4], [-112.0, 33.4], [-112.0, 33.5], [-112.1, 33.5], [-112.1, 33.4]]],
+                    },
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(AppEEARSRequestError) as exc_info:
+        client.submit_area_task(payload)
+
+    msg = str(exc_info.value)
+    assert "[stale_or_invalid_token]" in msg
+    assert "auth_mode=APPEEARS_API_TOKEN" in msg
+    assert "Unset APPEEARS_API_TOKEN" in msg

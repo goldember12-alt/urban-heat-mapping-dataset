@@ -1,15 +1,21 @@
 import re
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import geopandas as gpd
+import pandas as pd
+import requests
 from shapely.geometry import LineString, box
 
+import src.raw_data_acquisition as raw_data_acquisition
 from src.city_processing import city_output_paths
 from src.load_cities import load_cities
 from src.raw_data_acquisition import (
     _dem_tile_key,
     _select_latest_products_by_key,
+    _tnm_products,
+    _acquire_hydro_for_city,
     _zip_member_name,
     collect_nhdplus_water_features,
     run_raw_data_acquisition,
@@ -72,6 +78,154 @@ def test_collect_nhdplus_water_features_reads_expected_layers(tmp_path: Path):
 
     assert sorted(water["source_layer"].unique().tolist()) == ["NHDFlowline", "NHDWaterbody"]
     assert len(water) == 2
+
+
+def test_collect_nhdplus_water_features_uses_bbox_when_reading_layers(tmp_path: Path, monkeypatch):
+    package_path = tmp_path / "nhdplus_sample.gpkg"
+    waterbody = gpd.GeoDataFrame({"FType": [390]}, geometry=[box(0, 0, 5, 5)], crs="EPSG:3857")
+    flowline = gpd.GeoDataFrame({"FType": [460]}, geometry=[LineString([(0, 10), (10, 10)])], crs="EPSG:3857")
+
+    waterbody.to_file(package_path, layer="NHDWaterbody", driver="GPKG")
+    flowline.to_file(package_path, layer="NHDFlowline", driver="GPKG")
+
+    study_area = gpd.GeoDataFrame({"city_id": [1]}, geometry=[box(-1, -1, 12, 12)], crs="EPSG:3857")
+
+    recorded_kwargs: list[dict[str, object]] = []
+    real_read_file = gpd.read_file
+
+    def _tracking_read_file(*args, **kwargs):
+        if Path(args[0]) == package_path:
+            recorded_kwargs.append(dict(kwargs))
+        return real_read_file(*args, **kwargs)
+
+    monkeypatch.setattr(raw_data_acquisition.gpd, "read_file", _tracking_read_file)
+
+    water = collect_nhdplus_water_features(package_path=package_path, study_area_gdf=study_area)
+
+    assert len(water) == 2
+    assert len(recorded_kwargs) == 2
+    assert all("bbox" in kwargs for kwargs in recorded_kwargs)
+    assert all(len(tuple(kwargs["bbox"])) == 4 for kwargs in recorded_kwargs)
+
+
+class _FakeTNMResponse:
+    def __init__(self, status_code: int, payload: dict[str, object]):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = str(payload)
+        self.headers: dict[str, str] = {}
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} error", response=self)
+
+    def close(self):
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeTNMSession:
+    def __init__(self, responses: list[_FakeTNMResponse]):
+        self._responses = list(responses)
+        self.calls: list[tuple[str, str, object]] = []
+
+    def request(self, method, url, params=None, stream=False, timeout=None):
+        self.calls.append((method, url, params))
+        return self._responses.pop(0)
+
+
+def test_tnm_products_retries_transient_gateway_timeout(monkeypatch):
+    session = _FakeTNMSession(
+        [
+            _FakeTNMResponse(504, {"error": "Gateway Timeout"}),
+            _FakeTNMResponse(200, {"items": [{"downloadURL": "https://example.com/final.tif"}]}),
+        ]
+    )
+    monkeypatch.setattr(raw_data_acquisition.time, "sleep", lambda *_args, **_kwargs: None)
+
+    items = _tnm_products(
+        session=session,
+        dataset_name="dataset",
+        bbox_wgs84=(-1.0, -1.0, 1.0, 1.0),
+    )
+
+    assert len(items) == 1
+    assert items[0]["downloadURL"] == "https://example.com/final.tif"
+    assert len(session.calls) == 2
+
+
+def test_acquire_hydro_for_city_requeries_dead_package_url(tmp_path: Path, monkeypatch):
+    study_area = gpd.GeoDataFrame({"city_id": [3]}, geometry=[box(0, 0, 1, 1)], crs="EPSG:4326")
+    output_path = tmp_path / "las_vegas_hydro.gpkg"
+    cache_dir = tmp_path / "cache"
+    session = requests.Session()
+    query_calls: list[int] = []
+
+    initial_items = [
+        {
+            "title": "HU) 4 - 1606",
+            "format": "GeoPackage",
+            "downloadURL": "https://example.com/NHDPLUS_H_1606_old.zip",
+            "publicationDate": "2022-04-18",
+            "lastUpdated": "2022-04-18T00:00:00",
+        }
+    ]
+    refreshed_items = [
+        {
+            "title": "HU) 4 - 1606",
+            "format": "GeoPackage",
+            "downloadURL": "https://example.com/NHDPLUS_H_1606_new.zip",
+            "publicationDate": "2025-01-01",
+            "lastUpdated": "2025-01-01T00:00:00",
+        }
+    ]
+
+    def fake_tnm_products(**kwargs):
+        query_calls.append(1)
+        return initial_items if len(query_calls) == 1 else refreshed_items
+
+    def fake_download_file(*, url, destination, **kwargs):
+        if url.endswith("_old.zip"):
+            raise requests.HTTPError("404", response=SimpleNamespace(status_code=404))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("zip")
+        return destination
+
+    def fake_extract_zip_member(zip_path: Path, member_name: str, destination: Path) -> Path:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("gpkg")
+        return destination
+
+    def fake_collect(package_path: Path, study_area_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        return gpd.GeoDataFrame({"source_layer": ["NHDWaterbody"]}, geometry=[box(0, 0, 1, 1)], crs=study_area_gdf.crs)
+
+    monkeypatch.setattr(raw_data_acquisition, "_study_area_bbox_wgs84", lambda *_args, **_kwargs: (-1.0, -1.0, 1.0, 1.0))
+    monkeypatch.setattr(raw_data_acquisition, "_study_area_geometry", lambda *_args, **_kwargs: (study_area, study_area.geometry.iloc[0]))
+    monkeypatch.setattr(raw_data_acquisition, "_tnm_products", fake_tnm_products)
+    monkeypatch.setattr(raw_data_acquisition, "_download_file", fake_download_file)
+    monkeypatch.setattr(raw_data_acquisition, "_hydro_geopackage_zip_member", lambda *_args, **_kwargs: "package.gpkg")
+    monkeypatch.setattr(raw_data_acquisition, "_extract_zip_member", fake_extract_zip_member)
+    monkeypatch.setattr(raw_data_acquisition, "collect_nhdplus_water_features", fake_collect)
+    monkeypatch.setattr(raw_data_acquisition, "_write_vector_output", lambda gdf, output_path, layer="water": output_path)
+
+    result = _acquire_hydro_for_city(
+        study_area_path=tmp_path / "study_area.gpkg",
+        output_path=output_path,
+        session=session,
+        cache_dir=cache_dir,
+    )
+
+    assert query_calls == [1, 1]
+    assert result["source_urls"] == ["https://example.com/NHDPLUS_H_1606_new.zip"]
+    assert result["n_source_files"] == 1
 
 
 def test_run_raw_data_acquisition_skips_existing_outputs_without_force(tmp_path: Path):

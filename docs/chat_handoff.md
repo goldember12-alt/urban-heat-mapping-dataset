@@ -44,9 +44,20 @@ As of 2026-03-18:
 
 Test-verified in the latest checkpoint:
 
+- Focused AppEEARS rerun-state regressions passed: `18 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_appeears_client.py tests/test_appeears_acquisition.py -q"`
+- Focused AppEEARS client, AppEEARS acquisition, and raw-acquisition resilience subsets passed: `22 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_appeears_client.py tests/test_raw_data_acquisition.py tests/test_appeears_acquisition.py -q"`
+- Raw acquisition logging and hydro read-path regression subset passed: `5 passed` via `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_raw_data_acquisition.py -q"`.
 - DEM TNM Access product deduplication keeps the newest tile version per 1x1 degree tile.
 - Annual NLCD bundle member selection resolves the 2021 land-cover raster deterministically.
 - NHDPlus HR water export reads the expected water layers and ignores unrelated layers.
+- NHDPlus HR water-layer reads now pass a spatial `bbox` into `geopandas.read_file`, preventing full-layer reads for each city-sized clip.
+- AppEEARS auth selection now prefers Earthdata credentials over a simultaneously configured static `APPEEARS_API_TOKEN`, ensuring task submission mints a fresh bearer token instead of reusing a stale one.
+- AppEEARS task-submission errors now classify `401` as auth failure, `400/422` as bad payload, and `403` as either stale token or likely permission/EULA issue depending on auth mode.
+- AppEEARS reruns now reuse persisted `task_id` values by polling existing tasks first, downloading completed bundles for those same tasks, and only submitting new tasks when no reusable saved task exists or the old remote task is terminal-invalid.
+- AppEEARS acquisition summaries no longer label in-progress remote work as `not_started`; reruns now keep active tasks in AppEEARS-specific in-progress statuses and mark `done + files already present` as `skipped_existing`.
+- TNM product queries and downloads now retry transient `408/429/5xx` failures with exponential backoff, and hydro package `404` URLs trigger one metadata refresh/retry before the package is skipped or the dataset fails cleanly.
 - The raw acquisition runner skips already materialized deterministic outputs unless `--force` is passed.
 - Prior coverage for city processing, AppEEARS acquisition, support-layer preflight/prep, and feature assembly still passes.
 - Native AppEEARS filename discovery is covered for both underscore-delimited and native dotted layer names.
@@ -154,6 +165,25 @@ Manually verified:
   - `data_processed/orchestration/full_stack_city_orchestration_summary.csv`
   - Phoenix summary row reported `raw_support_acquisition_status=skipped_existing`, `support_layer_prep_status=skipped_existing`, `appeears_ndvi_status=skipped_existing`, `appeears_ecostress_status=skipped_existing`, `feature_assembly_status=skipped_existing`, `overall_status=completed`
   - The new full-stack runner successfully reused already-materialized Phoenix artifacts end to end without unnecessary reruns
+- Investigated the 2026-03-18 Tucson raw-acquisition pause for `src.run_full_stack_orchestration --city-ids 2,3,4 ...`:
+  - `data_raw/cache/nlcd/bundles/Annual_NLCD_LndCov_2015-2024_CU_C1V1.zip` is `13.12 GB`
+  - `data_raw/cache/nlcd/bundles/Annual_NLCD_FctImp_2015-2024_CU_C1V1.zip` is `8.85 GB`
+  - Cached hydro ZIPs for Tucson HU4 packages `1504` and `1505` were `515.01 MB` and `574.62 MB`, with extracted GeoPackages of `1038.59 MB` and `1145.52 MB`
+  - The apparent "stall" was consistent with silent heavyweight I/O plus opaque post-download work, not an infinite loop in the clipping logic
+- Ran a real-data Tucson hydro smoke timing after adding spatially filtered hydro reads:
+  - `@'...collect_nhdplus_water_features...'@ | & '.\.venv\Scripts\python.exe' -`
+- Observed output:
+  - `NHDPLUS_H_1504_HU4_20220901_GPKG.gpkg rows=0 elapsed_s=0.28`
+  - `NHDPLUS_H_1505_HU4_20220901_GPKG.gpkg rows=4307 elapsed_s=2.98`
+  - This checkpoint manually verified that local hydro package reads are now fast once the `.gpkg` is on disk; the remaining long pole is the size of the official downloads plus any incomplete transfer such as Tucson HU4 `1508`
+- Investigated the 2026-03-18 full-stack failures for cities `2,3,4`:
+  - `appeears_ndvi_acquisition_summary.csv` shows Tucson, Las Vegas, and Albuquerque NDVI submissions all failed with `status=403` and the same permission-style response body for `MOD13A1.061`
+  - `raw_data_acquisition_summary.csv` shows Las Vegas hydro failed on `NHDPLUS_H_1606_HU4_20220418_GPKG.zip` with `404`, while Albuquerque DEM and hydro failed on TNM Access product queries with `504 Gateway Timeout`
+  - Official AppEEARS materials were checked and still document `POST /login` with Earthdata credentials followed by `Authorization: Bearer <token>` on `/task`, so the likely local defect was stale-token precedence rather than obsolete header formatting
+- Investigated the AppEEARS rerun bug after task-completion emails arrived:
+  - The persisted NDVI and ECOSTRESS summary rows already contained real `task_id` values for Tucson, Las Vegas, and Albuquerque
+  - The old acquisition state machine still stored those active rows as `status=not_started`, so orchestration with `retry_incomplete=True` treated them as candidates for a fresh submission
+  - The rerun logic now treats an existing nonterminal `task_id` as reusable work: poll first, download if done, and submit only when no usable saved task exists
 
 Currently materialized on disk:
 
@@ -196,7 +226,7 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Load credentials into the current shell, then run `src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31`. Once that looks good, scale to `src.run_full_stack_orchestration --all-missing --start-date 2023-05-01 --end-date 2023-08-31`.
+Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell, unset any stale `APPEEARS_API_TOKEN`, then rerun `src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31`. The rerun should now reuse saved AppEEARS `task_id` values by polling first, download completed bundles for those same tasks, and only submit a new request if no reusable task exists.
 
 ## Current Output Structure
 
@@ -231,8 +261,86 @@ Load credentials into the current shell, then run `src.run_full_stack_orchestrat
 - The new full-stack city orchestration starts at raw support acquisition, not city boundary/grid generation; city-processing remains a separate prerequisite for cities missing study areas or grids.
 - Additional uncapped city-by-city feature validation beyond Phoenix is still pending.
 - Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
+- Raw support acquisition still depends on very large official NLCD and NHDPlus source downloads; long wall-clock times are expected even when the code is behaving correctly.
 
 ## Checkpoint Log
+
+### 2026-03-18 - Checkpoint: AppEEARS Saved-Task Reruns Fixed
+
+- Date / checkpoint:
+  - 2026-03-18 AppEEARS rerun-state fix for persisted task reuse.
+- Change made:
+  - Updated the AppEEARS acquisition state machine to treat an existing saved `task_id` as reusable work unless the prior remote task is terminal-failed.
+  - Added explicit logging for existing `task_id` discovery, polling, remote status returns, bundle listing/download start, bundle sync counts, and the reason a fresh submission is chosen.
+  - Stopped mapping active remote tasks to `status=not_started`; in-progress rows now remain in AppEEARS-specific in-progress statuses while completed bundle reuse resolves to `skipped_existing`.
+  - Added regression tests covering saved-task polling without resubmission, completed-task download reuse, and the `done + files already present -> skipped_existing` path.
+- Files touched:
+  - `src/appeears_acquisition.py`
+  - `tests/test_appeears_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_appeears_client.py tests/test_appeears_acquisition.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31"`
+- Test status:
+  - Focused AppEEARS rerun-state subset passed: `18 passed`.
+- Manual verification status:
+  - No fresh live AppEEARS rerun was executed in this checkpoint.
+  - The failure mode was confirmed from persisted summary rows and fixed in unit tests that assert existing `task_id` values are polled instead of resubmitted.
+- Next recommended step:
+  - Rerun the same `2,3,4` full-stack batch and confirm no new AppEEARS request emails are triggered for already-submitted tasks.
+
+### 2026-03-18 - Checkpoint: AppEEARS Auth Refresh And TNM Retry/Fallback Hardened
+
+- Date / checkpoint:
+  - 2026-03-18 targeted blocker fixes for AppEEARS submission failures and TNM raw-acquisition resilience.
+- Change made:
+  - Changed AppEEARS auth selection to prefer `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` over a simultaneously configured `APPEEARS_API_TOKEN`, so submission uses a fresh `/login` bearer token instead of silently preferring a stale static token.
+  - Added clearer AppEEARS task-submission error classification for stale token/auth failure, permission or EULA issues, and bad payloads.
+  - Added TNM request retry/backoff for transient query/download failures and a hydro-package 404 refresh path that requeries TNM metadata for the same HU4 before giving up.
+  - Added focused regression tests for auth precedence, AppEEARS failure classification, TNM retry behavior, and hydro dead-URL fallback.
+- Files touched:
+  - `src/appeears_client.py`
+  - `src/raw_data_acquisition.py`
+  - `tests/test_appeears_client.py`
+  - `tests/test_raw_data_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_appeears_client.py tests/test_raw_data_acquisition.py tests/test_appeears_acquisition.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31"`
+- Test status:
+  - Focused AppEEARS/TNM regression subset passed: `22 passed`.
+- Manual verification status:
+  - Confirmed the failing AppEEARS summary rows all returned `403` during task submission for Tucson, Las Vegas, and Albuquerque.
+  - Confirmed the failing TNM summary rows were a Las Vegas hydro `404` dead package URL and Albuquerque DEM/hydro `504` TNM query timeouts.
+  - Verified against current official AppEEARS materials that the supported flow still uses `/login` plus a bearer token on `/task`; no evidence was found that the header format itself had changed.
+- Next recommended step:
+  - Load Earthdata credentials, unset any stale `APPEEARS_API_TOKEN`, and rerun the same `2,3,4` full-stack batch to confirm AppEEARS submission succeeds and TNM failures downgrade to retries or cleanly classified errors.
+
+### 2026-03-18 - Checkpoint: Raw Acquisition Stall Diagnosis And Logging Tightened
+
+- Date / checkpoint:
+  - 2026-03-18 diagnosis of long raw-support acquisition pauses during Tucson full-stack orchestration.
+- Change made:
+  - Added byte-size and completion logging for raw support downloads so multi-GB NLCD and multi-hundred-MB hydro transfers no longer look idle.
+  - Added extraction logging for cached ZIP members.
+  - Updated NHDPlus water-layer loading to pass a study-area `bbox` into `geopandas.read_file`, reducing unnecessary full-package reads before hydro clipping.
+  - Added a regression test that locks in the new spatially filtered hydro read behavior.
+- Files touched:
+  - `src/raw_data_acquisition.py`
+  - `tests/test_raw_data_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_raw_data_acquisition.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 2,3,4 --start-date 2023-05-01 --end-date 2023-08-31"`
+- Test status:
+  - Focused raw-acquisition regression subset passed: `5 passed`.
+- Manual verification status:
+  - Confirmed cached Tucson NLCD bundle sizes of `13.12 GB` and `8.85 GB`.
+  - Confirmed cached Tucson hydro package sizes above `500 MB` each, with extracted GeoPackages above `1 GB`.
+  - Real-data Tucson hydro smoke timing completed in `0.28s` and `2.98s` for the currently extracted packages after the `bbox` optimization.
+  - The prior apparent stall is now understood as a combination of very large official downloads, previously sparse logging, and expensive hydro package reads before this checkpoint.
+- Next recommended step:
+  - Rerun the Tucson/Albuquerque/Las Vegas orchestration batch and watch the new progress logs to verify whether the remaining delay is simply the unfinished HU4 `1508` transfer.
 
 ### 2026-03-18 - Checkpoint: AppEEARS Discovery Fix And Thin Acquisition Orchestrator Added
 

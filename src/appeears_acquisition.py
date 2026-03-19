@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 
 _PRODUCT_TYPE_NDVI = "ndvi"
 _PRODUCT_TYPE_ECOSTRESS = "ecostress"
+STATUS_SUBMITTED = "submitted"
+STATUS_PENDING = "pending"
 
 
 @dataclass(frozen=True)
@@ -106,7 +108,14 @@ def resolve_city_download_dir(
 
 def is_incomplete_status(status: str | None) -> bool:
     normalized = (status or "").strip().lower()
-    return normalized in {"", STATUS_NOT_STARTED, STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_FAILED}
+    return normalized in {
+        "",
+        STATUS_NOT_STARTED,
+        STATUS_SUBMITTED,
+        STATUS_PENDING,
+        STATUS_BLOCKED_MISSING_CREDENTIALS,
+        STATUS_FAILED,
+    }
 
 
 def filter_cities_for_retry(
@@ -239,6 +248,29 @@ def _is_remote_failed(remote_status: str) -> bool:
     return remote_status in {"error", "failed", "failure", "canceled", "cancelled"}
 
 
+def _status_for_incomplete_remote(remote_status: str) -> str:
+    normalized = (remote_status or "").strip().lower()
+    if normalized == STATUS_SUBMITTED:
+        return STATUS_SUBMITTED
+    return STATUS_PENDING
+
+
+def _submission_decision(
+    *,
+    run_submit: bool,
+    task_id: str,
+    previous_remote_status: str,
+) -> tuple[bool, str]:
+    normalized_remote_status = (previous_remote_status or "").strip().lower()
+    if not run_submit:
+        return False, "submission_disabled_for_this_run_mode"
+    if task_id and not _is_remote_failed(normalized_remote_status):
+        return False, "existing_task_id_is_reusable"
+    if task_id and _is_remote_failed(normalized_remote_status):
+        return True, f"existing_task_terminal_invalid:{normalized_remote_status}"
+    return True, "no_existing_task_id"
+
+
 def _base_record(
     city: pd.Series,
     product_type: str,
@@ -287,6 +319,7 @@ def _download_completed_bundle(
     task_id: str,
     download_dir: Path,
 ) -> tuple[int, int, int]:
+    logger.info("Listing AppEEARS bundle files for task_id=%s into %s", task_id, download_dir)
     files = client.list_bundle_files(task_id)
     if len(files) == 0:
         raise RuntimeError("bundle_empty")
@@ -311,6 +344,13 @@ def _download_completed_bundle(
         client.download_bundle_file(task_id=task_id, file_id=str(file_id), destination=destination)
         n_downloaded += 1
 
+    logger.info(
+        "Bundle sync finished for task_id=%s: total=%s downloaded=%s reused=%s",
+        task_id,
+        len(files),
+        n_downloaded,
+        n_existing,
+    )
     return len(files), n_downloaded, n_existing
 
 
@@ -494,6 +534,7 @@ def run_appeears_acquisition(
         previous = existing_records.get(city_id, {})
         previous_status = str(previous.get("status", "")).strip().lower()
         task_id = str(previous.get("task_id", ""))
+        previous_remote_status = str(previous.get("remote_task_status", "")).strip().lower()
         aoi_row = aoi_by_city.get(city_id)
         aoi_status = str(aoi_row.get("status", "")) if aoi_row is not None else ""
         if aoi_status in {"blocked", STATUS_FAILED}:
@@ -505,9 +546,10 @@ def run_appeears_acquisition(
         if not run_submit and not task_id:
             continue
 
-        should_submit = run_submit and (
-            not task_id
-            or (retry_incomplete and previous_status in {STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_NOT_STARTED, STATUS_FAILED})
+        should_submit, _ = _submission_decision(
+            run_submit=run_submit,
+            task_id=task_id,
+            previous_remote_status=previous_remote_status,
         )
         if should_submit or (run_poll and bool(task_id)) or (run_download and bool(task_id)):
             auth_required_city_ids.add(city_id)
@@ -600,6 +642,26 @@ def run_appeears_acquisition(
             continue
 
         task_id = str(record.get("task_id", ""))
+        previous_remote_status = str(record.get("remote_task_status", "")).strip().lower()
+        should_submit, submit_reason = _submission_decision(
+            run_submit=run_submit,
+            task_id=task_id,
+            previous_remote_status=previous_remote_status,
+        )
+
+        if task_id:
+            logger.info(
+                "Existing task_id found for city_id=%s product_type=%s: %s",
+                city_id,
+                normalized_product_type,
+                task_id,
+            )
+            logger.info(
+                "Polling/downloading existing task_id for city_id=%s product_type=%s because %s",
+                city_id,
+                normalized_product_type,
+                submit_reason,
+            )
 
         if not run_submit and not task_id:
             record["status"] = STATUS_FAILED
@@ -616,12 +678,13 @@ def run_appeears_acquisition(
             records_by_city[city_id] = record
             continue
 
-        should_submit = run_submit and (
-            not task_id
-            or (retry_incomplete and previous_status in {STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_NOT_STARTED, STATUS_FAILED})
-        )
-
         if should_submit:
+            logger.info(
+                "Submitting new AppEEARS task for city_id=%s product_type=%s because %s",
+                city_id,
+                normalized_product_type,
+                submit_reason,
+            )
             submit_error: str | None = None
             try:
                 aoi_payload = load_aoi_feature_collection(Path(record["aoi_path"]))
@@ -647,9 +710,9 @@ def run_appeears_acquisition(
                     record["product"] = candidate_product
                     record["layer"] = spec.layer
                     record["task_id"] = task_id
-                    record["status"] = STATUS_NOT_STARTED
+                    record["status"] = STATUS_SUBMITTED
                     record["error"] = ""
-                    record["message"] = "task submitted; rerun to poll/download completion"
+                    record["message"] = f"task submitted; {submit_reason}"
                     submit_error = None
                     break
                 except AppEEARSRequestError as exc:
@@ -670,9 +733,22 @@ def run_appeears_acquisition(
 
         if run_poll and task_id:
             try:
+                logger.info(
+                    "Polling existing AppEEARS task_id=%s for city_id=%s product_type=%s",
+                    task_id,
+                    city_id,
+                    normalized_product_type,
+                )
                 task_payload = client_instance.get_task(task_id)
                 remote_status = _infer_remote_task_status(task_payload)
                 record["remote_task_status"] = remote_status
+                logger.info(
+                    "Remote AppEEARS status for city_id=%s task_id=%s product_type=%s: %s",
+                    city_id,
+                    task_id,
+                    normalized_product_type,
+                    remote_status,
+                )
 
                 if _is_remote_failed(remote_status):
                     record["status"] = STATUS_FAILED
@@ -681,9 +757,9 @@ def run_appeears_acquisition(
                     records_by_city[city_id] = record
                     continue
 
-                record["status"] = STATUS_NOT_STARTED
+                record["status"] = _status_for_incomplete_remote(remote_status)
                 record["error"] = ""
-                record["message"] = f"remote task status={remote_status}; rerun until done"
+                record["message"] = f"remote task status={remote_status}; awaiting completion"
 
                 if not _is_remote_complete(remote_status):
                     records_by_city[city_id] = record
@@ -698,7 +774,7 @@ def run_appeears_acquisition(
         if run_download and task_id:
             remote_status = str(record.get("remote_task_status", "")).lower()
             if not _is_remote_complete(remote_status):
-                record["status"] = STATUS_NOT_STARTED
+                record["status"] = _status_for_incomplete_remote(remote_status)
                 record["error"] = ""
                 record["message"] = f"remote task status={remote_status}; download deferred"
                 records_by_city[city_id] = record
@@ -712,6 +788,13 @@ def run_appeears_acquisition(
             download_dir.mkdir(parents=True, exist_ok=True)
 
             try:
+                logger.info(
+                    "Starting AppEEARS bundle download for city_id=%s task_id=%s product_type=%s into %s",
+                    city_id,
+                    task_id,
+                    normalized_product_type,
+                    download_dir,
+                )
                 n_bundle_files, n_downloaded, n_existing = _download_completed_bundle(
                     client=client_instance,
                     task_id=task_id,

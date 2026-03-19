@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -64,6 +65,8 @@ _HU4_TITLE_PATTERN = re.compile(r"HU\) 4 - (\d{4})", re.IGNORECASE)
 _WATER_LAYER_CANDIDATES = ("NHDWaterbody", "NHDArea", "NHDFlowline")
 _AREA_FTYPE_CODES = {390, 436, 445, 460, 484}
 _FLOWLINE_FTYPE_CODES = {334, 336, 343, 428, 460, 558}
+_RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_MAX_REQUEST_ATTEMPTS = 4
 
 
 @dataclass(frozen=True)
@@ -121,41 +124,148 @@ def _study_area_bbox_wgs84(study_area_path: Path) -> tuple[float, float, float, 
     return (float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3]))
 
 
+def _request_with_retry(
+    session: requests.Session,
+    method: str,
+    url: str,
+    *,
+    params: dict[str, str] | None = None,
+    stream: bool = False,
+    timeout: tuple[int, int] | int = REQUEST_TIMEOUT,
+    context: str,
+) -> requests.Response:
+    last_error: requests.RequestException | None = None
+    for attempt in range(1, _MAX_REQUEST_ATTEMPTS + 1):
+        try:
+            response = session.request(method, url, params=params, stream=stream, timeout=timeout)
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_REQUEST_ATTEMPTS:
+                logger.warning(
+                    "%s failed with status=%s on attempt %s/%s; retrying",
+                    context,
+                    response.status_code,
+                    attempt,
+                    _MAX_REQUEST_ATTEMPTS,
+                )
+                response.close()
+                time.sleep(2 ** (attempt - 1))
+                continue
+            response.raise_for_status()
+            return response
+        except requests.RequestException as exc:
+            response = getattr(exc, "response", None)
+            status_code = getattr(response, "status_code", None)
+            is_retryable = isinstance(exc, (requests.Timeout, requests.ConnectionError)) or status_code in _RETRYABLE_STATUS_CODES
+            if is_retryable and attempt < _MAX_REQUEST_ATTEMPTS:
+                logger.warning(
+                    "%s failed on attempt %s/%s with %s; retrying",
+                    context,
+                    attempt,
+                    _MAX_REQUEST_ATTEMPTS,
+                    exc,
+                )
+                time.sleep(2 ** (attempt - 1))
+                last_error = exc
+                continue
+            raise
+
+    if last_error is not None:  # pragma: no cover
+        raise last_error
+    raise RuntimeError(f"{context} failed without returning a response")  # pragma: no cover
+
+
 def _download_file(session: requests.Session, url: str, destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() and destination.stat().st_size > 0:
+        logger.info("Using cached download %s", destination)
         return destination
 
     temp_path = destination.with_suffix(destination.suffix + ".part")
     if temp_path.exists():
         temp_path.unlink()
 
-    logger.info("Downloading %s", url)
-    with session.get(url, stream=True, timeout=REQUEST_TIMEOUT) as response:
+    chunk_size = 1024 * 1024
+    progress_interval_bytes = 512 * 1024 * 1024
+    started = time.perf_counter()
+    with _request_with_retry(
+        session=session,
+        method="GET",
+        url=url,
+        stream=True,
+        timeout=REQUEST_TIMEOUT,
+        context=f"Download request for {url}",
+    ) as response:
         response.raise_for_status()
+        total_bytes_header = response.headers.get("Content-Length", "")
+        total_bytes = int(total_bytes_header) if str(total_bytes_header).isdigit() else 0
+        if total_bytes > 0:
+            logger.info(
+                "Downloading %s -> %s (%.2f MB)",
+                url,
+                destination,
+                total_bytes / (1024 * 1024),
+            )
+        else:
+            logger.info("Downloading %s -> %s", url, destination)
+
+        downloaded = 0
+        next_progress_log = progress_interval_bytes
         with temp_path.open("wb") as handle:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
+            for chunk in response.iter_content(chunk_size=chunk_size):
                 if chunk:
                     handle.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded >= next_progress_log:
+                        if total_bytes > 0:
+                            logger.info(
+                                "Download progress %s: %.2f / %.2f MB (%.1f%%)",
+                                destination.name,
+                                downloaded / (1024 * 1024),
+                                total_bytes / (1024 * 1024),
+                                100.0 * downloaded / total_bytes,
+                            )
+                        else:
+                            logger.info(
+                                "Download progress %s: %.2f MB",
+                                destination.name,
+                                downloaded / (1024 * 1024),
+                            )
+                        next_progress_log += progress_interval_bytes
 
     temp_path.replace(destination)
+    elapsed = time.perf_counter() - started
+    logger.info(
+        "Finished download %s in %.1f s (%.2f MB)",
+        destination,
+        elapsed,
+        destination.stat().st_size / (1024 * 1024),
+    )
     return destination
 
 
 def _extract_zip_member(zip_path: Path, member_name: str, destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() and destination.stat().st_size > 0:
+        logger.info("Using cached extracted member %s", destination)
         return destination
 
     temp_path = destination.with_suffix(destination.suffix + ".part")
     if temp_path.exists():
         temp_path.unlink()
 
+    started = time.perf_counter()
+    logger.info("Extracting %s from %s -> %s", member_name, zip_path.name, destination)
     with zipfile.ZipFile(zip_path) as archive:
         with archive.open(member_name) as src, temp_path.open("wb") as dst:
             dst.write(src.read())
 
     temp_path.replace(destination)
+    elapsed = time.perf_counter() - started
+    logger.info(
+        "Finished extracting %s in %.1f s (%.2f MB)",
+        destination,
+        elapsed,
+        destination.stat().st_size / (1024 * 1024),
+    )
     return destination
 
 
@@ -217,7 +327,14 @@ def _tnm_products(
     if prod_formats:
         params["prodFormats"] = prod_formats
 
-    response = session.get(f"{TNM_ACCESS_BASE_URL}/products", params=params, timeout=REQUEST_TIMEOUT)
+    response = _request_with_retry(
+        session=session,
+        method="GET",
+        url=f"{TNM_ACCESS_BASE_URL}/products",
+        params=params,
+        timeout=REQUEST_TIMEOUT,
+        context=f"TNM products query for {dataset_name}",
+    )
     response.raise_for_status()
     payload = response.json()
     return payload.get("items", []) if isinstance(payload, dict) else []
@@ -370,12 +487,30 @@ def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDa
         available_layers[layer_name.lower()] = layer_name
     frames: list[gpd.GeoDataFrame] = []
 
+    logger.info("Scanning NHDPlus package %s for water layers", package_path.name)
     for candidate in _WATER_LAYER_CANDIDATES:
         layer_name = available_layers.get(candidate.lower())
         if layer_name is None:
             continue
 
-        water = gpd.read_file(package_path, layer=layer_name)
+        study_in_layer_crs = study_area_gdf.to_crs(pyogrio.read_info(package_path, layer=layer_name)["crs"])
+        layer_geometry = _union_geometry(study_in_layer_crs.geometry)
+        layer_bbox = tuple(float(value) for value in study_in_layer_crs.total_bounds)
+        logger.info(
+            "Reading hydro layer %s from %s within bbox=%s",
+            layer_name,
+            package_path.name,
+            ",".join(f"{value:.2f}" for value in layer_bbox),
+        )
+        started = time.perf_counter()
+        water = gpd.read_file(package_path, layer=layer_name, bbox=layer_bbox)
+        logger.info(
+            "Loaded hydro layer %s from %s in %.1f s (%s rows before filtering)",
+            layer_name,
+            package_path.name,
+            time.perf_counter() - started,
+            len(water),
+        )
         if water.empty or water.crs is None:
             continue
 
@@ -384,8 +519,6 @@ def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDa
             continue
 
         water = _filter_water_layer(water, candidate)
-        study_in_layer_crs = study_area_gdf.to_crs(water.crs)
-        layer_geometry = _union_geometry(study_in_layer_crs.geometry)
         water = water[water.geometry.intersects(layer_geometry)].copy()
         if water.empty:
             continue
@@ -506,6 +639,29 @@ def _hydro_geopackage_zip_member(zip_path: Path) -> str:
     return matches[0]
 
 
+def _select_hydro_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    geopackage_items = [item for item in items if "geopackage" in str(item.get("format", "")).lower()]
+    return _select_latest_products_by_key(geopackage_items, key_parser=_hu4_key)
+
+
+def _refresh_hydro_item(
+    session: requests.Session,
+    bbox_wgs84: tuple[float, float, float, float],
+    hu4_key: str,
+) -> dict[str, Any] | None:
+    refreshed_items = _select_hydro_items(
+        _tnm_products(
+            session=session,
+            dataset_name=TNM_NHDPLUS_HR_DATASET,
+            bbox_wgs84=bbox_wgs84,
+        )
+    )
+    for item in refreshed_items:
+        if _hu4_key(item) == hu4_key:
+            return item
+    return None
+
+
 def _acquire_hydro_for_city(
     study_area_path: Path,
     output_path: Path,
@@ -518,25 +674,52 @@ def _acquire_hydro_for_city(
         dataset_name=TNM_NHDPLUS_HR_DATASET,
         bbox_wgs84=bbox_wgs84,
     )
-    geopackage_items = [item for item in items if "geopackage" in str(item.get("format", "")).lower()]
-    selected_items = _select_latest_products_by_key(geopackage_items, key_parser=_hu4_key)
+    selected_items = _select_hydro_items(items)
     if len(selected_items) == 0:
         raise RuntimeError("hydro_packages_not_found")
 
     study_area, _ = _study_area_geometry(study_area_path)
     all_water_frames: list[gpd.GeoDataFrame] = []
     cache_paths: list[str] = []
+    successful_items: list[dict[str, Any]] = []
+    package_errors: list[str] = []
 
     for item in selected_items:
         download_url = str(item.get("downloadURL", "") or "")
         if not download_url:
             continue
         hu4_key = _hu4_key(item) or "unknown_hu4"
-        zip_path = _download_file(
-            session=session,
-            url=download_url,
-            destination=cache_dir / "packages" / hu4_key / Path(download_url).name,
-        )
+        try:
+            zip_path = _download_file(
+                session=session,
+                url=download_url,
+                destination=cache_dir / "packages" / hu4_key / Path(download_url).name,
+            )
+            item_used = item
+        except requests.HTTPError as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code != 404:
+                raise
+
+            logger.warning(
+                "Hydro package URL returned 404 for hu4=%s; refreshing TNM metadata before giving up: %s",
+                hu4_key,
+                download_url,
+            )
+            refreshed_item = _refresh_hydro_item(session=session, bbox_wgs84=bbox_wgs84, hu4_key=hu4_key)
+            refreshed_url = str(refreshed_item.get("downloadURL", "") or "") if refreshed_item else ""
+            if not refreshed_url or refreshed_url == download_url:
+                package_errors.append(f"hu4={hu4_key}: dead_url={download_url}")
+                logger.warning("No replacement hydro package URL found for hu4=%s", hu4_key)
+                continue
+
+            zip_path = _download_file(
+                session=session,
+                url=refreshed_url,
+                destination=cache_dir / "packages" / hu4_key / Path(refreshed_url).name,
+            )
+            item_used = refreshed_item
+
         member_name = _hydro_geopackage_zip_member(zip_path)
         package_path = _extract_zip_member(
             zip_path=zip_path,
@@ -544,9 +727,13 @@ def _acquire_hydro_for_city(
             destination=cache_dir / "extracted" / Path(member_name).name,
         )
         cache_paths.append(str(package_path))
+        successful_items.append(item_used)
         water = collect_nhdplus_water_features(package_path=package_path, study_area_gdf=study_area)
         if not water.empty:
             all_water_frames.append(water)
+
+    if not cache_paths and package_errors:
+        raise RuntimeError("; ".join(package_errors))
 
     if all_water_frames:
         combined = pd.concat(all_water_frames, ignore_index=True)
@@ -557,8 +744,10 @@ def _acquire_hydro_for_city(
         water_gdf = gpd.GeoDataFrame({"source_layer": pd.Series(dtype=str)}, geometry=[], crs=study_area.crs)
 
     _write_vector_output(water_gdf, output_path=output_path)
+    if package_errors:
+        logger.warning("Hydro acquisition completed with skipped HU4 packages: %s", "; ".join(package_errors))
     return {
-        "source_urls": [str(item.get("downloadURL", "")) for item in selected_items],
+        "source_urls": [str(item.get("downloadURL", "")) for item in successful_items],
         "cache_paths": cache_paths,
         "n_source_files": len(cache_paths),
     }
