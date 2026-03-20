@@ -271,6 +271,23 @@ def _submission_decision(
     return True, "no_existing_task_id"
 
 
+def _appeears_failure_details(exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, AppEEARSRequestError):
+        recoverable_hint = " rerun is safe/recommended once the transient issue clears." if exc.recoverable else ""
+        return {
+            "error": str(exc),
+            "failure_reason": exc.reason,
+            "recoverable": bool(exc.recoverable),
+            "message": f"{exc}{recoverable_hint}",
+        }
+    return {
+        "error": str(exc),
+        "failure_reason": "unexpected_error",
+        "recoverable": False,
+        "message": str(exc),
+    }
+
+
 def _base_record(
     city: pd.Series,
     product_type: str,
@@ -293,6 +310,7 @@ def _base_record(
         "study_area_path": str(previous.get("study_area_path", "")),
         "aoi_path": str(previous.get("aoi_path", "")),
         "download_dir": str(previous.get("download_dir", "")),
+        "task_name": str(previous.get("task_name", "")),
         "task_id": str(previous.get("task_id", "")),
         "remote_task_status": str(previous.get("remote_task_status", "")),
         "status": str(previous.get("status", STATUS_NOT_STARTED)).lower(),
@@ -300,6 +318,9 @@ def _base_record(
         "n_files_downloaded": int(previous.get("n_files_downloaded", 0) or 0),
         "n_files_existing": int(previous.get("n_files_existing", 0) or 0),
         "error": str(previous.get("error", "")),
+        "failure_reason": str(previous.get("failure_reason", "")),
+        "recoverable": bool(previous.get("recoverable", False)),
+        "submit_decision_reason": str(previous.get("submit_decision_reason", "")),
         "message": str(previous.get("message", "")),
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
     }
@@ -604,6 +625,8 @@ def run_appeears_acquisition(
         if aoi_row is None:
             record["status"] = STATUS_FAILED
             record["error"] = "aoi_stage_missing"
+            record["failure_reason"] = "aoi_stage_missing"
+            record["recoverable"] = False
             record["message"] = "AppEEARS AOI export did not return a row for this city"
             records_by_city[city_id] = record
             continue
@@ -615,12 +638,16 @@ def run_appeears_acquisition(
         if aoi_status == "blocked":
             record["status"] = STATUS_FAILED
             record["error"] = str(aoi_row.get("error", "")) or "study_area_missing"
+            record["failure_reason"] = "aoi_blocked"
+            record["recoverable"] = False
             record["message"] = "AppEEARS AOI export is blocked by missing study-area prerequisites"
             records_by_city[city_id] = record
             continue
         if aoi_status == STATUS_FAILED:
             record["status"] = STATUS_FAILED
             record["error"] = str(aoi_row.get("error", "")) or "aoi_export_failed"
+            record["failure_reason"] = "aoi_export_failed"
+            record["recoverable"] = False
             record["message"] = "AppEEARS AOI export failed"
             records_by_city[city_id] = record
             continue
@@ -629,6 +656,8 @@ def run_appeears_acquisition(
         if city_id not in target_city_ids:
             record["status"] = STATUS_SKIPPED_EXISTING
             record["error"] = ""
+            record["failure_reason"] = ""
+            record["recoverable"] = False
             record["message"] = "existing completed acquisition retained"
             records_by_city[city_id] = record
             continue
@@ -637,6 +666,8 @@ def run_appeears_acquisition(
         if previous_status == STATUS_COMPLETED and not retry_incomplete:
             record["status"] = STATUS_SKIPPED_EXISTING
             record["error"] = ""
+            record["failure_reason"] = ""
+            record["recoverable"] = False
             record["message"] = "existing completed acquisition retained"
             records_by_city[city_id] = record
             continue
@@ -648,6 +679,7 @@ def run_appeears_acquisition(
             task_id=task_id,
             previous_remote_status=previous_remote_status,
         )
+        record["submit_decision_reason"] = submit_reason
 
         if task_id:
             logger.info(
@@ -666,6 +698,8 @@ def run_appeears_acquisition(
         if not run_submit and not task_id:
             record["status"] = STATUS_FAILED
             record["error"] = "task_id_missing"
+            record["failure_reason"] = "task_id_missing"
+            record["recoverable"] = False
             record["message"] = "no saved task_id is available for poll/download-only mode"
             records_by_city[city_id] = record
             continue
@@ -674,6 +708,8 @@ def run_appeears_acquisition(
         if client_instance is None:
             record["status"] = STATUS_BLOCKED_MISSING_CREDENTIALS
             record["error"] = "missing_credentials"
+            record["failure_reason"] = "missing_credentials"
+            record["recoverable"] = False
             record["message"] = client_error or "AppEEARS credentials are not configured"
             records_by_city[city_id] = record
             continue
@@ -685,17 +721,21 @@ def run_appeears_acquisition(
                 normalized_product_type,
                 submit_reason,
             )
-            submit_error: str | None = None
             try:
                 aoi_payload = load_aoi_feature_collection(Path(record["aoi_path"]))
             except Exception as exc:
                 record["status"] = STATUS_FAILED
                 record["error"] = f"aoi_load_error:{exc}"
+                record["failure_reason"] = "aoi_load_error"
+                record["recoverable"] = False
+                record["message"] = str(exc)
                 records_by_city[city_id] = record
                 continue
 
+            submit_failure: AppEEARSRequestError | None = None
+            task_name = f"{normalized_product_type}_{record['city_slug']}_{start_date}_{end_date}"
+            record["task_name"] = task_name
             for candidate_product in spec.product_candidates:
-                task_name = f"{normalized_product_type}_{record['city_slug']}_{start_date}_{end_date}"
                 payload = build_area_task_payload(
                     task_name=task_name,
                     product=candidate_product,
@@ -712,22 +752,33 @@ def run_appeears_acquisition(
                     record["task_id"] = task_id
                     record["status"] = STATUS_SUBMITTED
                     record["error"] = ""
+                    record["failure_reason"] = ""
+                    record["recoverable"] = False
                     record["message"] = f"task submitted; {submit_reason}"
-                    submit_error = None
+                    submit_failure = None
                     break
                 except AppEEARSRequestError as exc:
-                    submit_error = str(exc)
+                    submit_failure = exc
                     logger.warning(
-                        "Task submit failed for city_id=%s product=%s: %s",
+                        "Task submit failed for city_id=%s product=%s reason=%s recoverable=%s: %s",
                         city_id,
                         candidate_product,
+                        exc.reason,
+                        exc.recoverable,
                         exc,
                     )
+                    if exc.recoverable:
+                        break
+                    if exc.reason not in {"bad_payload", "permission_or_eula_issue", "forbidden_request"}:
+                        break
 
-            if submit_error is not None:
+            if submit_failure is not None:
+                failure = _appeears_failure_details(submit_failure)
                 record["status"] = STATUS_FAILED
-                record["error"] = submit_error
-                record["message"] = submit_error
+                record["error"] = str(failure["error"])
+                record["failure_reason"] = str(failure["failure_reason"])
+                record["recoverable"] = bool(failure["recoverable"])
+                record["message"] = str(failure["message"])
                 records_by_city[city_id] = record
                 continue
 
@@ -753,21 +804,28 @@ def run_appeears_acquisition(
                 if _is_remote_failed(remote_status):
                     record["status"] = STATUS_FAILED
                     record["error"] = f"task_failed:{remote_status}"
+                    record["failure_reason"] = "remote_task_failed"
+                    record["recoverable"] = False
                     record["message"] = f"remote task failed with status={remote_status}"
                     records_by_city[city_id] = record
                     continue
 
                 record["status"] = _status_for_incomplete_remote(remote_status)
                 record["error"] = ""
+                record["failure_reason"] = ""
+                record["recoverable"] = False
                 record["message"] = f"remote task status={remote_status}; awaiting completion"
 
                 if not _is_remote_complete(remote_status):
                     records_by_city[city_id] = record
                     continue
             except AppEEARSRequestError as exc:
+                failure = _appeears_failure_details(exc)
                 record["status"] = STATUS_FAILED
-                record["error"] = f"poll_error:{exc}"
-                record["message"] = str(exc)
+                record["error"] = f"poll_error:{failure['error']}"
+                record["failure_reason"] = f"poll_{failure['failure_reason']}"
+                record["recoverable"] = bool(failure["recoverable"])
+                record["message"] = str(failure["message"])
                 records_by_city[city_id] = record
                 continue
 
@@ -776,6 +834,8 @@ def run_appeears_acquisition(
             if not _is_remote_complete(remote_status):
                 record["status"] = _status_for_incomplete_remote(remote_status)
                 record["error"] = ""
+                record["failure_reason"] = ""
+                record["recoverable"] = False
                 record["message"] = f"remote task status={remote_status}; download deferred"
                 records_by_city[city_id] = record
                 continue
@@ -806,23 +866,34 @@ def run_appeears_acquisition(
                 if n_downloaded > 0:
                     record["status"] = STATUS_COMPLETED
                     record["error"] = ""
+                    record["failure_reason"] = ""
+                    record["recoverable"] = False
                     record["message"] = f"downloaded {n_downloaded} bundle files"
                 elif n_existing > 0:
                     record["status"] = STATUS_SKIPPED_EXISTING
                     record["error"] = ""
+                    record["failure_reason"] = ""
+                    record["recoverable"] = False
                     record["message"] = f"reused {n_existing} existing bundle files"
                 elif n_downloaded + n_existing > 0:
                     record["status"] = STATUS_COMPLETED
                     record["error"] = ""
+                    record["failure_reason"] = ""
+                    record["recoverable"] = False
                     record["message"] = "bundle files were already available"
                 else:
                     record["status"] = STATUS_FAILED
                     record["error"] = "no_bundle_files_downloaded"
+                    record["failure_reason"] = "no_bundle_files_downloaded"
+                    record["recoverable"] = True
                     record["message"] = "AppEEARS reported completion but no bundle files were available"
             except Exception as exc:
+                failure = _appeears_failure_details(exc)
                 record["status"] = STATUS_FAILED
-                record["error"] = f"download_error:{exc}"
-                record["message"] = str(exc)
+                record["error"] = f"download_error:{failure['error']}"
+                record["failure_reason"] = f"download_{failure['failure_reason']}"
+                record["recoverable"] = bool(failure["recoverable"])
+                record["message"] = str(failure["message"])
 
         records_by_city[city_id] = record
 

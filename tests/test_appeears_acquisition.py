@@ -15,7 +15,7 @@ from src.appeears_acquisition import (
     resolve_city_download_dir,
     run_appeears_acquisition,
 )
-from src.appeears_client import build_area_task_payload
+from src.appeears_client import AppEEARSRequestError, build_area_task_payload
 from src.load_cities import load_cities
 
 
@@ -328,6 +328,81 @@ def test_run_appeears_acquisition_marks_missing_credentials_with_explicit_env_va
     assert "EARTHDATA_PASSWORD" in row["message"]
 
 
+def test_run_appeears_acquisition_records_recoverable_submit_failure(tmp_path: Path, monkeypatch):
+    class _RecoverableSubmitClient:
+        def __init__(self):
+            self.submit_calls = 0
+
+        def submit_area_task(self, payload):
+            self.submit_calls += 1
+            raise AppEEARSRequestError(
+                "AppEEARS API request failed for POST /task: timed out",
+                reason="request_timeout",
+                recoverable=True,
+                task_name=payload["task_name"],
+            )
+
+    cities = pd.DataFrame(
+        {
+            "city_id": [1],
+            "city_name": ["Phoenix"],
+            "state": ["AZ"],
+            "climate_group": ["hot_arid"],
+            "lat": [33.45],
+            "lon": [-112.07],
+        }
+    )
+    preflight_summary = pd.DataFrame(
+        {
+            "city_id": [1],
+            "expected_study_area_path": [str(tmp_path / "study_areas" / "phoenix.gpkg")],
+            "expected_aoi_path": [str(tmp_path / "appeears_aoi" / "phoenix.geojson")],
+        }
+    )
+    aoi_summary = pd.DataFrame(
+        {
+            "city_id": [1],
+            "status": ["completed"],
+            "study_area_path": [str(tmp_path / "study_areas" / "phoenix.gpkg")],
+            "aoi_path": [str(tmp_path / "appeears_aoi" / "phoenix.geojson")],
+        }
+    )
+    client = _RecoverableSubmitClient()
+
+    monkeypatch.setenv("EARTHDATA_USERNAME", "user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "pass")
+    monkeypatch.setattr("src.appeears_acquisition.load_cities", lambda: cities)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.audit_appeears_acquisition_readiness",
+        lambda **kwargs: AcquisitionPreflightResult(
+            summary=preflight_summary,
+            summary_json_path=tmp_path / "appeears_status" / "preflight.json",
+            summary_csv_path=tmp_path / "appeears_status" / "preflight.csv",
+        ),
+    )
+    monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.load_aoi_feature_collection",
+        lambda *_args, **_kwargs: {"type": "FeatureCollection", "features": []},
+    )
+    monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", lambda: client)
+
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[1],
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert client.submit_calls == 1
+    assert row["status"] == "failed"
+    assert row["failure_reason"] == "request_timeout"
+    assert bool(row["recoverable"]) is True
+    assert row["task_name"] == "ndvi_phoenix_2023-05-01_2023-08-31"
+
+
 class _ExistingTaskClient:
     def __init__(self, remote_status: str, bundle_files: list[dict[str, str]] | None = None):
         self.remote_status = remote_status
@@ -413,6 +488,10 @@ def test_run_appeears_acquisition_reuses_existing_task_id_and_downloads_done_bun
     )
     monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
     monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", lambda: client)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.resolve_city_download_dir",
+        lambda **kwargs: tmp_path / "raw" / "ndvi" / "tucson",
+    )
 
     result = run_appeears_acquisition(
         product_type="ndvi",

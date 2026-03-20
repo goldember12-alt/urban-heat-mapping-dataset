@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from src.appeears_client import (
     AppEEARSAuthConfig,
@@ -26,6 +27,19 @@ class _FakeSession:
 
     def request(self, method, url, headers=None, json=None, timeout=None):
         return self._response
+
+
+class _SequenceSession:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def request(self, method, url, headers=None, json=None, timeout=None):
+        self.calls.append({"method": method, "url": url, "json": json})
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def test_read_auth_from_environment_prefers_earthdata_credentials_over_static_token(monkeypatch):
@@ -170,3 +184,86 @@ def test_submit_task_403_with_static_token_is_classified_as_stale_or_invalid_tok
     assert "[stale_or_invalid_token]" in msg
     assert "auth_mode=APPEEARS_API_TOKEN" in msg
     assert "Unset APPEEARS_API_TOKEN" in msg
+
+
+def test_submit_task_timeout_recovers_by_matching_existing_task_name():
+    session = _SequenceSession(
+        [
+            requests.Timeout("timed out"),
+            _FakeResponse(
+                status_code=200,
+                json_payload=[{"task_name": "ndvi_phoenix_2023", "task_id": "task-123"}],
+            ),
+        ]
+    )
+    client = AppEEARSClient(
+        auth=AppEEARSAuthConfig(token="test-token", username=None, password=None),
+        session=session,
+    )
+    payload = build_area_task_payload(
+        task_name="ndvi_phoenix_2023",
+        product="MOD13A1.061",
+        layer="500m_16_days_NDVI",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        aoi_feature_collection={
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"city_id": 1},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[-112.1, 33.4], [-112.0, 33.4], [-112.0, 33.5], [-112.1, 33.5], [-112.1, 33.4]]],
+                    },
+                }
+            ],
+        },
+    )
+
+    result = client.submit_area_task(payload)
+
+    assert result.task_id == "task-123"
+    assert session.calls[0]["url"].endswith("/task")
+    assert session.calls[1]["url"].endswith("/task")
+
+
+def test_submit_task_timeout_without_matching_task_raises_recoverable_error():
+    session = _SequenceSession(
+        [
+            requests.Timeout("timed out"),
+            _FakeResponse(status_code=200, json_payload=[]),
+        ]
+    )
+    client = AppEEARSClient(
+        auth=AppEEARSAuthConfig(token="test-token", username=None, password=None),
+        session=session,
+    )
+    payload = build_area_task_payload(
+        task_name="ndvi_phoenix_2023",
+        product="MOD13A1.061",
+        layer="500m_16_days_NDVI",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        aoi_feature_collection={
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"city_id": 1},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[-112.1, 33.4], [-112.0, 33.4], [-112.0, 33.5], [-112.1, 33.5], [-112.1, 33.4]]],
+                    },
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(AppEEARSRequestError) as exc_info:
+        client.submit_area_task(payload)
+
+    err = exc_info.value
+    assert err.reason == "request_timeout"
+    assert err.recoverable is True
+    assert "submission state remains unknown" in str(err)

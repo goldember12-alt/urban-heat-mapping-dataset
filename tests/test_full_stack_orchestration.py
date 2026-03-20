@@ -267,3 +267,82 @@ def test_run_full_stack_orchestration_all_missing_uses_missing_city_subset(monke
     assert calls[2][1]["city_ids"] == [2]
     assert calls[3][1]["city_ids"] == [2]
     assert result.summary["city_id"].tolist() == [2]
+
+
+def test_run_full_stack_orchestration_carries_stage_failure_metadata(monkeypatch, tmp_path: Path):
+    cities = pd.DataFrame(
+        {
+            "city_id": [1],
+            "city_name": ["Phoenix"],
+            "state": ["AZ"],
+            "climate_group": ["hot_arid"],
+            "lat": [33.45],
+            "lon": [-112.07],
+        }
+    )
+
+    monkeypatch.setattr(orchestration, "load_cities", lambda: cities)
+    monkeypatch.setattr(
+        orchestration,
+        "expected_city_feature_output_paths",
+        lambda **kwargs: CityFeatureOutputPaths(
+            city_features_gpkg_path=tmp_path / "city_features" / "phoenix.gpkg",
+            city_features_parquet_path=tmp_path / "city_features" / "phoenix.parquet",
+            intermediate_unfiltered_path=tmp_path / "intermediate" / "phoenix_unfiltered.parquet",
+            intermediate_filtered_path=tmp_path / "intermediate" / "phoenix_filtered.parquet",
+        ),
+    )
+    monkeypatch.setattr(
+        orchestration,
+        "run_raw_data_acquisition",
+        lambda **kwargs: RawAcquisitionResult(
+            summary=pd.DataFrame(
+                {
+                    "city_id": [1, 1, 1],
+                    "dataset": ["dem", "nlcd", "hydro"],
+                    "status": ["failed", "completed", "completed"],
+                    "error": ["stream interrupted", "", ""],
+                    "failure_reason": ["download_stream_interrupted", "", ""],
+                    "recoverable": [True, False, False],
+                }
+            ),
+            summary_json_path=tmp_path / "raw.json",
+            summary_csv_path=tmp_path / "raw.csv",
+        ),
+    )
+    monkeypatch.setattr(
+        orchestration,
+        "prepare_support_layers",
+        lambda **kwargs: SupportLayerPrepResult(
+            summary=pd.DataFrame({"city_id": [1], "status": ["not_started"], "error": [""], "message": [""]}),
+            summary_json_path=tmp_path / "support.json",
+            summary_csv_path=tmp_path / "support.csv",
+        ),
+    )
+    monkeypatch.setattr(
+        orchestration,
+        "run_appeears_acquisition",
+        lambda **kwargs: AcquisitionRunResult(
+            summary=pd.DataFrame({"city_id": [1], "status": ["not_started"], "error": [""], "message": [""]}),
+            summary_json_path=tmp_path / f"{kwargs['product_type']}.json",
+            summary_csv_path=tmp_path / f"{kwargs['product_type']}.csv",
+        ),
+    )
+    monkeypatch.setattr(
+        orchestration,
+        "assemble_city_features",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("feature assembly should not run")),
+    )
+
+    result = orchestration.run_full_stack_orchestration(
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[1],
+        orchestration_dir=tmp_path / "orchestration",
+        city_features_dir=tmp_path / "city_features",
+        intermediate_dir=tmp_path / "intermediate",
+    )
+
+    row = result.summary.iloc[0]
+    assert row["raw_support_acquisition_failure_reason"] == "download_stream_interrupted"
+    assert bool(row["raw_support_acquisition_recoverable"]) is True

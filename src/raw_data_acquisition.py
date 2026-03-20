@@ -67,6 +67,7 @@ _AREA_FTYPE_CODES = {390, 436, 445, 460, 484}
 _FLOWLINE_FTYPE_CODES = {334, 336, 343, 428, 460, 558}
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 _MAX_REQUEST_ATTEMPTS = 4
+_MAX_DOWNLOAD_ATTEMPTS = 6
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,25 @@ class RawAcquisitionResult:
     summary: pd.DataFrame
     summary_json_path: Path
     summary_csv_path: Path
+
+
+class RawAcquisitionError(RuntimeError):
+    """Structured raw-acquisition failure with recoverability metadata."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        category: str,
+        recoverable: bool,
+        details: str = "",
+    ) -> None:
+        message = reason if not details else f"{reason}: {details}"
+        super().__init__(message)
+        self.reason = reason
+        self.category = category
+        self.recoverable = recoverable
+        self.details = details
 
 
 def _summary_paths(support_layers_dir: Path = SUPPORT_LAYERS) -> tuple[Path, Path]:
@@ -124,20 +144,157 @@ def _study_area_bbox_wgs84(study_area_path: Path) -> tuple[float, float, float, 
     return (float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3]))
 
 
+def _response_preview(response: requests.Response, limit: int = 300) -> str:
+    text = str(getattr(response, "text", "") or "").strip()
+    return text[:limit].replace("\n", " ")
+
+
+def _validate_json_response(response: requests.Response) -> None:
+    try:
+        response.json()
+    except ValueError as exc:
+        content_type = str(response.headers.get("Content-Type", "") or "")
+        raise RawAcquisitionError(
+            "invalid_json_response",
+            category="remote_payload",
+            recoverable=True,
+            details=f"content_type={content_type or 'unknown'} preview={_response_preview(response)!r}",
+        ) from exc
+
+
+def _download_total_bytes(response: requests.Response, resume_from: int) -> int:
+    content_range = str(response.headers.get("Content-Range", "") or "")
+    if "/" in content_range:
+        total = content_range.rsplit("/", 1)[-1].strip()
+        if total.isdigit():
+            return int(total)
+
+    content_length = str(response.headers.get("Content-Length", "") or "")
+    if content_length.isdigit():
+        if response.status_code == 206 and resume_from > 0:
+            return resume_from + int(content_length)
+        return int(content_length)
+    return 0
+
+
+def _classify_raw_acquisition_error(exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, RawAcquisitionError):
+        return {
+            "failure_reason": exc.reason,
+            "failure_category": exc.category,
+            "recoverable": bool(exc.recoverable),
+            "error": str(exc),
+        }
+
+    if isinstance(exc, requests.exceptions.ChunkedEncodingError):
+        return {
+            "failure_reason": "download_stream_interrupted",
+            "failure_category": "network_download",
+            "recoverable": True,
+            "error": str(exc),
+        }
+
+    if isinstance(exc, requests.SSLError):
+        return {
+            "failure_reason": "tls_verification_failed",
+            "failure_category": "network_tls",
+            "recoverable": True,
+            "error": str(exc),
+        }
+
+    if isinstance(exc, requests.Timeout):
+        return {
+            "failure_reason": "request_timeout",
+            "failure_category": "network_timeout",
+            "recoverable": True,
+            "error": str(exc),
+        }
+
+    if isinstance(exc, requests.ConnectionError):
+        return {
+            "failure_reason": "connection_error",
+            "failure_category": "network_connection",
+            "recoverable": True,
+            "error": str(exc),
+        }
+
+    if isinstance(exc, requests.JSONDecodeError):
+        return {
+            "failure_reason": "invalid_json_response",
+            "failure_category": "remote_payload",
+            "recoverable": True,
+            "error": str(exc),
+        }
+
+    if isinstance(exc, FileNotFoundError):
+        return {
+            "failure_reason": "source_member_missing",
+            "failure_category": "source_content",
+            "recoverable": False,
+            "error": str(exc),
+        }
+
+    message = str(exc).strip() or exc.__class__.__name__
+    if message == "dem_tiles_not_found":
+        return {
+            "failure_reason": "dem_tiles_not_found",
+            "failure_category": "source_discovery",
+            "recoverable": False,
+            "error": message,
+        }
+    if message == "dem_tile_downloads_missing":
+        return {
+            "failure_reason": "dem_tile_downloads_missing",
+            "failure_category": "source_download",
+            "recoverable": True,
+            "error": message,
+        }
+    if message == "hydro_packages_not_found":
+        return {
+            "failure_reason": "hydro_packages_not_found",
+            "failure_category": "source_discovery",
+            "recoverable": False,
+            "error": message,
+        }
+    if message == "study_area_missing":
+        return {
+            "failure_reason": "study_area_missing",
+            "failure_category": "prerequisite",
+            "recoverable": False,
+            "error": message,
+        }
+    return {
+        "failure_reason": "unexpected_error",
+        "failure_category": "unexpected",
+        "recoverable": False,
+        "error": message,
+    }
+
+
 def _request_with_retry(
     session: requests.Session,
     method: str,
     url: str,
     *,
     params: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
     stream: bool = False,
     timeout: tuple[int, int] | int = REQUEST_TIMEOUT,
     context: str,
+    validator: Callable[[requests.Response], None] | None = None,
 ) -> requests.Response:
-    last_error: requests.RequestException | None = None
+    last_error: Exception | None = None
     for attempt in range(1, _MAX_REQUEST_ATTEMPTS + 1):
+        response: requests.Response | None = None
         try:
-            response = session.request(method, url, params=params, stream=stream, timeout=timeout)
+            response = session.request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                stream=stream,
+                timeout=timeout,
+            )
             if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_REQUEST_ATTEMPTS:
                 logger.warning(
                     "%s failed with status=%s on attempt %s/%s; retrying",
@@ -150,11 +307,17 @@ def _request_with_retry(
                 time.sleep(2 ** (attempt - 1))
                 continue
             response.raise_for_status()
+            if validator is not None:
+                validator(response)
             return response
-        except requests.RequestException as exc:
-            response = getattr(exc, "response", None)
+        except (requests.RequestException, RawAcquisitionError) as exc:
+            response = response or getattr(exc, "response", None)
             status_code = getattr(response, "status_code", None)
-            is_retryable = isinstance(exc, (requests.Timeout, requests.ConnectionError)) or status_code in _RETRYABLE_STATUS_CODES
+            is_retryable = (
+                isinstance(exc, (requests.Timeout, requests.ConnectionError))
+                or (isinstance(exc, RawAcquisitionError) and exc.recoverable)
+                or status_code in _RETRYABLE_STATUS_CODES
+            )
             if is_retryable and attempt < _MAX_REQUEST_ATTEMPTS:
                 logger.warning(
                     "%s failed on attempt %s/%s with %s; retrying",
@@ -163,6 +326,8 @@ def _request_with_retry(
                     _MAX_REQUEST_ATTEMPTS,
                     exc,
                 )
+                if response is not None:
+                    response.close()
                 time.sleep(2 ** (attempt - 1))
                 last_error = exc
                 continue
@@ -180,66 +345,112 @@ def _download_file(session: requests.Session, url: str, destination: Path) -> Pa
         return destination
 
     temp_path = destination.with_suffix(destination.suffix + ".part")
-    if temp_path.exists():
-        temp_path.unlink()
-
     chunk_size = 1024 * 1024
     progress_interval_bytes = 512 * 1024 * 1024
     started = time.perf_counter()
-    with _request_with_retry(
-        session=session,
-        method="GET",
-        url=url,
-        stream=True,
-        timeout=REQUEST_TIMEOUT,
-        context=f"Download request for {url}",
-    ) as response:
-        response.raise_for_status()
-        total_bytes_header = response.headers.get("Content-Length", "")
-        total_bytes = int(total_bytes_header) if str(total_bytes_header).isdigit() else 0
-        if total_bytes > 0:
-            logger.info(
-                "Downloading %s -> %s (%.2f MB)",
-                url,
-                destination,
-                total_bytes / (1024 * 1024),
+    for attempt in range(1, _MAX_DOWNLOAD_ATTEMPTS + 1):
+        resume_from = temp_path.stat().st_size if temp_path.exists() else 0
+        headers = {"Range": f"bytes={resume_from}-"} if resume_from > 0 else None
+        try:
+            with _request_with_retry(
+                session=session,
+                method="GET",
+                url=url,
+                headers=headers,
+                stream=True,
+                timeout=REQUEST_TIMEOUT,
+                context=f"Download request for {url}",
+            ) as response:
+                write_mode = "wb"
+                if resume_from > 0 and response.status_code == 206:
+                    write_mode = "ab"
+                    logger.info(
+                        "Resuming download %s -> %s from %.2f MB",
+                        url,
+                        destination,
+                        resume_from / (1024 * 1024),
+                    )
+                elif resume_from > 0 and response.status_code == 200:
+                    logger.warning(
+                        "Server ignored resume request for %s; restarting download from byte 0",
+                        destination.name,
+                    )
+                    temp_path.unlink(missing_ok=True)
+                    resume_from = 0
+                total_bytes = _download_total_bytes(response, resume_from=resume_from)
+                if total_bytes > 0:
+                    logger.info(
+                        "Downloading %s -> %s (%.2f MB total)",
+                        url,
+                        destination,
+                        total_bytes / (1024 * 1024),
+                    )
+                else:
+                    logger.info("Downloading %s -> %s", url, destination)
+
+                downloaded = resume_from
+                next_progress_log = max(progress_interval_bytes, downloaded + progress_interval_bytes)
+                with temp_path.open(write_mode) as handle:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            handle.write(chunk)
+                            downloaded += len(chunk)
+                            if downloaded >= next_progress_log:
+                                if total_bytes > 0:
+                                    logger.info(
+                                        "Download progress %s: %.2f / %.2f MB (%.1f%%)",
+                                        destination.name,
+                                        downloaded / (1024 * 1024),
+                                        total_bytes / (1024 * 1024),
+                                        100.0 * downloaded / total_bytes,
+                                    )
+                                else:
+                                    logger.info(
+                                        "Download progress %s: %.2f MB",
+                                        destination.name,
+                                        downloaded / (1024 * 1024),
+                                    )
+                                next_progress_log += progress_interval_bytes
+
+                final_size = temp_path.stat().st_size if temp_path.exists() else 0
+                if total_bytes > 0 and final_size < total_bytes:
+                    raise RawAcquisitionError(
+                        "download_incomplete",
+                        category="network_download",
+                        recoverable=True,
+                        details=f"expected={total_bytes} actual={final_size}",
+                    )
+                temp_path.replace(destination)
+                elapsed = time.perf_counter() - started
+                logger.info(
+                    "Finished download %s in %.1f s (%.2f MB)",
+                    destination,
+                    elapsed,
+                    destination.stat().st_size / (1024 * 1024),
+                )
+                return destination
+        except (requests.RequestException, RawAcquisitionError) as exc:
+            partial_size = temp_path.stat().st_size if temp_path.exists() else 0
+            recoverable = isinstance(
+                exc,
+                (requests.Timeout, requests.ConnectionError, requests.exceptions.ChunkedEncodingError),
+            ) or (
+                isinstance(exc, RawAcquisitionError) and exc.recoverable
             )
-        else:
-            logger.info("Downloading %s -> %s", url, destination)
+            if recoverable and attempt < _MAX_DOWNLOAD_ATTEMPTS:
+                logger.warning(
+                    "Download interrupted for %s on attempt %s/%s after %.2f MB; retrying with resume if supported: %s",
+                    destination.name,
+                    attempt,
+                    _MAX_DOWNLOAD_ATTEMPTS,
+                    partial_size / (1024 * 1024),
+                    exc,
+                )
+                time.sleep(2 ** (attempt - 1))
+                continue
+            raise
 
-        downloaded = 0
-        next_progress_log = progress_interval_bytes
-        with temp_path.open("wb") as handle:
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    handle.write(chunk)
-                    downloaded += len(chunk)
-                    if downloaded >= next_progress_log:
-                        if total_bytes > 0:
-                            logger.info(
-                                "Download progress %s: %.2f / %.2f MB (%.1f%%)",
-                                destination.name,
-                                downloaded / (1024 * 1024),
-                                total_bytes / (1024 * 1024),
-                                100.0 * downloaded / total_bytes,
-                            )
-                        else:
-                            logger.info(
-                                "Download progress %s: %.2f MB",
-                                destination.name,
-                                downloaded / (1024 * 1024),
-                            )
-                        next_progress_log += progress_interval_bytes
-
-    temp_path.replace(destination)
-    elapsed = time.perf_counter() - started
-    logger.info(
-        "Finished download %s in %.1f s (%.2f MB)",
-        destination,
-        elapsed,
-        destination.stat().st_size / (1024 * 1024),
-    )
-    return destination
+    raise RawAcquisitionError("download_failed", category="network_download", recoverable=True)  # pragma: no cover
 
 
 def _extract_zip_member(zip_path: Path, member_name: str, destination: Path) -> Path:
@@ -334,10 +545,27 @@ def _tnm_products(
         params=params,
         timeout=REQUEST_TIMEOUT,
         context=f"TNM products query for {dataset_name}",
+        validator=_validate_json_response,
     )
     response.raise_for_status()
     payload = response.json()
-    return payload.get("items", []) if isinstance(payload, dict) else []
+    if not isinstance(payload, dict):
+        raise RawAcquisitionError(
+            "tnm_products_unexpected_payload",
+            category="remote_payload",
+            recoverable=True,
+            details=f"type={type(payload).__name__}",
+        )
+
+    items = payload.get("items", [])
+    if not isinstance(items, list):
+        raise RawAcquisitionError(
+            "tnm_products_missing_items",
+            category="remote_payload",
+            recoverable=True,
+            details=f"type={type(items).__name__}",
+        )
+    return [item for item in items if isinstance(item, dict)]
 
 
 def _clip_raster_to_study_area(source_path: Path, study_area_path: Path, output_path: Path) -> Path:
@@ -750,6 +978,7 @@ def _acquire_hydro_for_city(
         "source_urls": [str(item.get("downloadURL", "")) for item in successful_items],
         "cache_paths": cache_paths,
         "n_source_files": len(cache_paths),
+        "warnings": package_errors,
     }
 
 
@@ -886,9 +1115,14 @@ def run_raw_data_acquisition(
                     "expected_secondary_output_path": str(secondary_output_path) if secondary_output_path else "",
                     "status": "",
                     "error": "",
+                    "failure_reason": "",
+                    "failure_category": "",
+                    "recoverable": False,
                     "source_urls": "",
                     "cache_paths": "",
                     "n_source_files": 0,
+                    "warnings": "",
+                    "warning_count": 0,
                     "updated_at_utc": generated_at_utc,
                 }
 
@@ -933,10 +1167,24 @@ def run_raw_data_acquisition(
                     record["source_urls"] = ";".join(result.get("source_urls", []))
                     record["cache_paths"] = ";".join(result.get("cache_paths", []))
                     record["n_source_files"] = int(result.get("n_source_files", 0) or 0)
+                    warnings = [str(value) for value in result.get("warnings", []) if str(value).strip()]
+                    record["warnings"] = ";".join(warnings)
+                    record["warning_count"] = len(warnings)
                 except Exception as exc:  # pragma: no cover - exercised in integration/manual runs
-                    logger.exception("Raw acquisition failed for city_id=%s dataset=%s", city_id, item)
+                    failure = _classify_raw_acquisition_error(exc)
+                    logger.exception(
+                        "Raw acquisition failed for city_id=%s dataset=%s reason=%s category=%s recoverable=%s",
+                        city_id,
+                        item,
+                        failure["failure_reason"],
+                        failure["failure_category"],
+                        failure["recoverable"],
+                    )
                     record["status"] = STATUS_FAILED
-                    record["error"] = str(exc)
+                    record["error"] = str(failure["error"])
+                    record["failure_reason"] = str(failure["failure_reason"])
+                    record["failure_category"] = str(failure["failure_category"])
+                    record["recoverable"] = bool(failure["recoverable"])
 
                 records.append(record)
 

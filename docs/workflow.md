@@ -52,11 +52,12 @@ AOI export is executed automatically by the acquisition runner.
 
 1. Authenticate with AppEEARS from environment variables only.
 2. Submit area tasks per city and product/date range.
-3. Poll task status.
-4. Download completed bundle files to immutable raw folders:
+3. If a submit attempt times out or drops the connection, reuse a matching server task by deterministic `task_name` when the API task list exposes it; otherwise record a recoverable failure for rerun rather than silently creating blind duplicate submissions.
+4. Poll task status with retry/backoff for transient network, HTTP `408/429/5xx`, and invalid-JSON responses.
+5. Download completed bundle files to immutable raw folders:
    - `data_raw/ndvi/<city_slug>/`
    - `data_raw/ecostress/<city_slug>/`
-5. Persist resumable status summaries:
+6. Persist resumable status summaries with structured `failure_reason`, `recoverable`, and `submit_decision_reason` fields:
    - `data_processed/appeears_status/appeears_ndvi_acquisition_summary.json|csv`
    - `data_processed/appeears_status/appeears_ecostress_acquisition_summary.json|csv`
 
@@ -132,7 +133,7 @@ Get-Content .env.local | Where-Object { $_ -match '^\s*[^#].+=' } | ForEach-Obje
 4. Run AppEEARS NDVI with resumable state and explicit missing-credential blocking.
 5. Run AppEEARS ECOSTRESS with resumable state and explicit missing-credential blocking.
 6. Run feature assembly only when upstream support and AppEEARS stages are complete or safely reusable.
-7. Write one per-city status row with stage-level `status`, `error`, and `message` fields to:
+7. Write one per-city status row with stage-level `status`, `error`, `failure_reason`, `recoverable`, and `message` fields to:
    - `data_processed/orchestration/full_stack_city_orchestration_summary.json|csv`
 
 CLI:
@@ -182,14 +183,17 @@ CLI:
    - NLCD via MRLC Annual NLCD CONUS bundles cached once under `data_raw/cache/nlcd/`
    - Hydro via TNM Access API queries against NHDPlus HR GeoPackage HU4 packages
 4. Download source archives/tiles into `data_raw/cache/` and reuse them across reruns.
-5. Mosaic and clip DEM tiles to the city study area, then write:
+5. Preserve `.part` files for interrupted large downloads and resume hydro package ZIP transfers with HTTP range requests when the remote host supports them.
+6. Validate TNM product-query responses before calling `response.json()`; retry transient invalid/non-JSON TNM bodies instead of crashing with `JSONDecodeError`.
+7. Treat dead HU4 package URLs as warnings only when at least one intersecting HU4 package succeeded for the city; otherwise fail the hydro dataset cleanly.
+8. Mosaic and clip DEM tiles to the city study area, then write:
    - `data_raw/dem/<city_slug>/<city_slug>_dem_3dep_30m.tif`
-6. Extract the cached 2021 Annual NLCD land-cover and impervious rasters, clip per city, then write:
+9. Extract the cached 2021 Annual NLCD land-cover and impervious rasters, clip per city, then write:
    - `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_land_cover_30m.tif`
    - `data_raw/nlcd/<city_slug>/<city_slug>_nlcd_2021_impervious_30m.tif`
-7. Extract intersecting NHDPlus HR water layers from cached HU4 GeoPackages, clip to the study area, then write:
+10. Extract intersecting NHDPlus HR water layers from cached HU4 GeoPackages, clip to the study area, then write:
    - `data_raw/hydro/<city_slug>/<city_slug>_nhdplus_water.gpkg`
-8. Persist resumable run status:
+11. Persist resumable run status with structured `failure_reason`, `failure_category`, `recoverable`, `warnings`, and `warning_count` fields:
    - `data_processed/support_layers/raw_data_acquisition_summary.json|csv`
 
 CLI:

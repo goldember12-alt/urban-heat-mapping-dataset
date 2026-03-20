@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from src.config import (
 )
 
 logger = logging.getLogger(__name__)
+_RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_MAX_API_ATTEMPTS = 4
 
 
 @dataclass(frozen=True)
@@ -45,12 +48,18 @@ class AppEEARSRequestError(RuntimeError):
         response_text: str = "",
         city_id: int | None = None,
         product: str | None = None,
+        reason: str = "request_failed",
+        recoverable: bool = False,
+        task_name: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.response_text = response_text
         self.city_id = city_id
         self.product = product
+        self.reason = reason
+        self.recoverable = recoverable
+        self.task_name = task_name
 
 
 @dataclass(frozen=True)
@@ -195,6 +204,15 @@ def _extract_submit_context(payload: dict[str, Any] | None) -> tuple[int | None,
     return city_id, str(product) if isinstance(product, str) and product else None
 
 
+def _extract_task_name(payload: dict[str, Any] | None) -> str | None:
+    if payload is None:
+        return None
+    value = payload.get("task_name")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def _response_error_detail(response: Any) -> str:
     try:
         body_json = response.json()
@@ -224,7 +242,29 @@ def _submission_failure_label(status_code: int, response_detail: str, auth_mode:
         if "permission" in detail or "read-protected" in detail or "forbidden" in detail:
             return "permission_or_eula_issue"
         return "forbidden_request"
+    if status_code == 429:
+        return "rate_limited"
+    if status_code in {500, 502, 503, 504}:
+        return "upstream_unavailable"
     return "request_failed"
+
+
+def _request_exception_reason(exc: requests.RequestException) -> tuple[str, bool]:
+    if isinstance(exc, requests.Timeout):
+        return "request_timeout", True
+    if isinstance(exc, requests.ConnectionError):
+        return "connection_error", True
+    return "request_failed", False
+
+
+def _parse_task_id(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for key in ("task_id", "taskid", "task"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 class AppEEARSClient:
@@ -306,14 +346,74 @@ class AppEEARSClient:
 
     def submit_area_task(self, payload: dict[str, Any]) -> AppEEARSTaskResponse:
         """Submit an AppEEARS area task and return the task id."""
-        result = self._request_json("POST", "/task", json=payload)
-        if not isinstance(result, dict):
-            raise AppEEARSRequestError("Task submission returned an unexpected response payload")
+        task_name = _extract_task_name(payload)
+        last_error: AppEEARSRequestError | None = None
 
-        task_id = result.get("task_id") or result.get("taskid") or result.get("task")
-        if not isinstance(task_id, str) or not task_id:
-            raise AppEEARSRequestError("Task submission returned no task_id")
-        return AppEEARSTaskResponse(task_id=task_id, raw=result)
+        for attempt in range(1, _MAX_API_ATTEMPTS + 1):
+            try:
+                result = self._request_json("POST", "/task", json=payload, retryable=False)
+                if not isinstance(result, dict):
+                    raise AppEEARSRequestError(
+                        "Task submission returned an unexpected response payload",
+                        reason="unexpected_submit_payload",
+                        recoverable=False,
+                        task_name=task_name,
+                    )
+
+                task_id = _parse_task_id(result)
+                if not task_id:
+                    raise AppEEARSRequestError(
+                        "Task submission returned no task_id",
+                        reason="task_id_missing",
+                        recoverable=False,
+                        task_name=task_name,
+                    )
+                return AppEEARSTaskResponse(task_id=task_id, raw=result)
+            except AppEEARSRequestError as exc:
+                last_error = exc
+                if task_name:
+                    recovered = self.find_task_by_name(task_name)
+                    recovered_task_id = _parse_task_id(recovered)
+                    if recovered_task_id:
+                        logger.warning(
+                            "Recovered AppEEARS task after submit error by reusing task_name=%s task_id=%s reason=%s",
+                            task_name,
+                            recovered_task_id,
+                            exc.reason,
+                        )
+                        return AppEEARSTaskResponse(task_id=recovered_task_id, raw=recovered)
+
+                retryable_http_error = exc.status_code in _RETRYABLE_STATUS_CODES and not exc.recoverable
+                if retryable_http_error and attempt < _MAX_API_ATTEMPTS:
+                    logger.warning(
+                        "AppEEARS submit failed for task_name=%s on attempt %s/%s with status=%s; retrying",
+                        task_name or "unknown",
+                        attempt,
+                        _MAX_API_ATTEMPTS,
+                        exc.status_code,
+                    )
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+
+                if exc.recoverable and task_name:
+                    raise AppEEARSRequestError(
+                        (
+                            f"{exc} Follow-up lookup by task_name={task_name} found no matching task, "
+                            "so submission state remains unknown. Rerun with the same dates/city to retry safely."
+                        ),
+                        status_code=exc.status_code,
+                        response_text=exc.response_text,
+                        city_id=exc.city_id,
+                        product=exc.product,
+                        reason=exc.reason,
+                        recoverable=True,
+                        task_name=task_name,
+                    ) from exc
+                raise
+
+        if last_error is not None:  # pragma: no cover
+            raise last_error
+        raise AppEEARSRequestError("Task submission failed without a response")  # pragma: no cover
 
     def get_task(self, task_id: str) -> dict[str, Any]:
         """Fetch task status payload for an existing AppEEARS task."""
@@ -332,6 +432,41 @@ class AppEEARSClient:
             if isinstance(files, list):
                 return [x for x in files if isinstance(x, dict)]
         raise AppEEARSRequestError("Unexpected bundle list response from AppEEARS")
+
+    def list_tasks(self) -> list[dict[str, Any]]:
+        """Return the visible AppEEARS task list when the API exposes it."""
+        payload = self._request_json("GET", "/task")
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            for key in ("tasks", "items"):
+                values = payload.get(key)
+                if isinstance(values, list):
+                    return [item for item in values if isinstance(item, dict)]
+        raise AppEEARSRequestError(
+            "Unexpected task-list response from AppEEARS",
+            reason="unexpected_task_list_payload",
+            recoverable=True,
+        )
+
+    def find_task_by_name(self, task_name: str) -> dict[str, Any] | None:
+        """Best-effort recovery helper for ambiguous submit outcomes."""
+        if not task_name.strip():
+            return None
+        try:
+            tasks = self.list_tasks()
+        except AppEEARSRequestError as exc:
+            logger.warning("Task lookup by name=%s failed after submit ambiguity: %s", task_name, exc)
+            return None
+
+        matches = [
+            item
+            for item in tasks
+            if str(item.get("task_name") or item.get("taskName") or "").strip() == task_name
+        ]
+        if not matches:
+            return None
+        return matches[-1]
 
     def download_bundle_file(self, task_id: str, file_id: str, destination: Path) -> Path:
         """Download one bundle file to disk (new files only)."""
@@ -363,67 +498,138 @@ class AppEEARSClient:
         temp_path.replace(destination)
         return destination
 
-    def _request_json(self, method: str, path: str, json: dict[str, Any] | None = None) -> Any:
-        try:
-            response = self._session.request(
-                method=method,
-                url=self._api_url(path),
-                headers=self._headers(),
-                json=json,
-                timeout=self._timeout,
-            )
-        except requests.RequestException as exc:
-            raise AppEEARSRequestError(f"AppEEARS API request failed for {method} {path}: {exc}") from exc
-
-        if response.status_code >= 400:
-            response_detail = _response_error_detail(response)
-            if method.upper() == "POST" and path == "/task":
-                city_id, product = _extract_submit_context(json)
-                city_label = str(city_id) if city_id is not None else "unknown"
-                product_label = product or "unknown"
-                auth_mode = self._auth_mode()
-                failure_label = _submission_failure_label(
-                    status_code=response.status_code,
-                    response_detail=response_detail,
-                    auth_mode=auth_mode,
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        json: dict[str, Any] | None = None,
+        *,
+        retryable: bool = True,
+    ) -> Any:
+        for attempt in range(1, _MAX_API_ATTEMPTS + 1):
+            try:
+                response = self._session.request(
+                    method=method,
+                    url=self._api_url(path),
+                    headers=self._headers(),
+                    json=json,
+                    timeout=self._timeout,
                 )
-                hint = ""
-                if failure_label == "stale_or_invalid_token":
-                    hint = (
-                        f" Unset {APPEEARS_TOKEN_ENV} or provide {EARTHDATA_USERNAME_ENV}/{EARTHDATA_PASSWORD_ENV} "
-                        "so the client can mint a fresh bearer token."
+            except requests.RequestException as exc:
+                reason, recoverable = _request_exception_reason(exc)
+                if retryable and recoverable and attempt < _MAX_API_ATTEMPTS:
+                    logger.warning(
+                        "AppEEARS API request retrying method=%s path=%s attempt=%s/%s reason=%s error=%s",
+                        method,
+                        path,
+                        attempt,
+                        _MAX_API_ATTEMPTS,
+                        reason,
+                        exc,
                     )
-                elif failure_label == "permission_or_eula_issue":
-                    hint = " Confirm the Earthdata/AppEEARS account has accepted required terms and can submit this product in the web UI."
-                elif failure_label == "bad_payload":
-                    hint = " Verify the product/layer/date/AOI payload against the AppEEARS product catalog."
-                logger.error(
-                    "AppEEARS task submission failed: label=%s status=%s auth_mode=%s city_id=%s product=%s response=%s",
-                    failure_label,
-                    response.status_code,
-                    auth_mode,
-                    city_label,
-                    product_label,
-                    response_detail,
-                )
+                    time.sleep(2 ** (attempt - 1))
+                    continue
                 raise AppEEARSRequestError(
-                    (
-                        f"AppEEARS task submission failed [{failure_label}] "
-                        f"(status={response.status_code}, auth_mode={auth_mode}, city_id={city_label}, product={product_label}): "
-                        f"{response_detail}{hint}"
-                    ),
+                    f"AppEEARS API request failed for {method} {path}: {exc}",
+                    reason=reason,
+                    recoverable=recoverable,
+                    task_name=_extract_task_name(json),
+                ) from exc
+
+            if response.status_code >= 400:
+                response_detail = _response_error_detail(response)
+                if response.status_code in _RETRYABLE_STATUS_CODES and retryable and attempt < _MAX_API_ATTEMPTS:
+                    logger.warning(
+                        "AppEEARS API request retrying method=%s path=%s attempt=%s/%s status=%s",
+                        method,
+                        path,
+                        attempt,
+                        _MAX_API_ATTEMPTS,
+                        response.status_code,
+                    )
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+
+                if method.upper() == "POST" and path == "/task":
+                    city_id, product = _extract_submit_context(json)
+                    city_label = str(city_id) if city_id is not None else "unknown"
+                    product_label = product or "unknown"
+                    auth_mode = self._auth_mode()
+                    failure_label = _submission_failure_label(
+                        status_code=response.status_code,
+                        response_detail=response_detail,
+                        auth_mode=auth_mode,
+                    )
+                    hint = ""
+                    if failure_label == "stale_or_invalid_token":
+                        hint = (
+                            f" Unset {APPEEARS_TOKEN_ENV} or provide {EARTHDATA_USERNAME_ENV}/{EARTHDATA_PASSWORD_ENV} "
+                            "so the client can mint a fresh bearer token."
+                        )
+                    elif failure_label == "permission_or_eula_issue":
+                        hint = " Confirm the Earthdata/AppEEARS account has accepted required terms and can submit this product in the web UI."
+                    elif failure_label == "bad_payload":
+                        hint = " Verify the product/layer/date/AOI payload against the AppEEARS product catalog."
+                    logger.error(
+                        "AppEEARS task submission failed: label=%s status=%s auth_mode=%s city_id=%s product=%s response=%s",
+                        failure_label,
+                        response.status_code,
+                        auth_mode,
+                        city_label,
+                        product_label,
+                        response_detail,
+                    )
+                    raise AppEEARSRequestError(
+                        (
+                            f"AppEEARS task submission failed [{failure_label}] "
+                            f"(status={response.status_code}, auth_mode={auth_mode}, city_id={city_label}, product={product_label}): "
+                            f"{response_detail}{hint}"
+                        ),
+                        status_code=response.status_code,
+                        response_text=response_detail,
+                        city_id=city_id,
+                        product=product,
+                        reason=failure_label,
+                        recoverable=response.status_code in _RETRYABLE_STATUS_CODES,
+                        task_name=_extract_task_name(json),
+                    )
+
+                raise AppEEARSRequestError(
+                    f"AppEEARS API request failed for {method} {path}: status={response.status_code}, response={response_detail}",
                     status_code=response.status_code,
                     response_text=response_detail,
-                    city_id=city_id,
-                    product=product,
+                    reason="request_failed",
+                    recoverable=response.status_code in _RETRYABLE_STATUS_CODES,
+                    task_name=_extract_task_name(json),
                 )
 
-            raise AppEEARSRequestError(
-                f"AppEEARS API request failed for {method} {path}: status={response.status_code}, response={response_detail}",
-                status_code=response.status_code,
-                response_text=response_detail,
-            )
+            try:
+                return response.json()
+            except ValueError as exc:
+                if retryable and attempt < _MAX_API_ATTEMPTS:
+                    logger.warning(
+                        "AppEEARS API request returned invalid JSON for method=%s path=%s attempt=%s/%s; retrying",
+                        method,
+                        path,
+                        attempt,
+                        _MAX_API_ATTEMPTS,
+                    )
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+                raise AppEEARSRequestError(
+                    f"AppEEARS API request returned invalid JSON for {method} {path}: {_response_error_detail(response)}",
+                    status_code=response.status_code,
+                    response_text=_response_error_detail(response),
+                    reason="invalid_json_response",
+                    recoverable=True,
+                    task_name=_extract_task_name(json),
+                ) from exc
 
-        return response.json()
+        raise AppEEARSRequestError(
+            f"AppEEARS API request exhausted retries for {method} {path}",
+            reason="request_retries_exhausted",
+            recoverable=True,
+            task_name=_extract_task_name(json),
+        )  # pragma: no cover
 
 

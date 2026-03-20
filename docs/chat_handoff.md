@@ -15,11 +15,13 @@ Implemented in code:
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
+- AppEEARS submit handling now preserves deterministic `task_name` state, retries transient GET/status JSON failures, and records recoverable submit failures instead of flattening all timeouts into generic hard failures.
 - Thin acquisition orchestration runner that sequences raw support acquisition, support-layer prep, NDVI AppEEARS, ECOSTRESS AppEEARS, and writes a restart-safe status summary.
 - Full-stack city orchestration runner that extends raw/support/AppEEARS stages through feature assembly and writes one per-city stage summary row.
 - Deterministic AppEEARS preflight/audit path that computes expected per-city study area, AOI, raw download, and status-summary paths; validates AOI CRS; and writes machine-readable preflight outputs.
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 - Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
+- Raw support downloads now preserve `.part` files, resume interrupted large hydro ZIP transfers when the host supports byte ranges, and record structured `failure_reason` / `failure_category` / `recoverable` metadata plus hydro warning details.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
 - Cache audit/cleanup utility now inventories `data_raw/cache/`, classifies artifacts by retention tier, writes JSON metadata outside the cache tree, and supports dry-run targeted prune plans for safe regenerable artifacts.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
@@ -41,7 +43,12 @@ Standardization status:
 
 ## Testing Status
 
-As of 2026-03-19:
+As of 2026-03-20:
+
+- Focused raw/AppEEARS/full-stack hardening subset: `35 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
+- Acquisition orchestration compatibility subset: `2 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_acquisition_orchestration.py -q"`
 
 - Focused regression subset: `23 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py tests/test_full_stack_orchestration.py tests/test_raw_data_acquisition.py tests/test_raster_features.py -q"`
@@ -70,6 +77,9 @@ Test-verified in the latest checkpoint:
 - AppEEARS reruns now reuse persisted `task_id` values by polling existing tasks first, downloading completed bundles for those same tasks, and only submitting new tasks when no reusable saved task exists or the old remote task is terminal-invalid.
 - AppEEARS acquisition summaries no longer label in-progress remote work as `not_started`; reruns now keep active tasks in AppEEARS-specific in-progress statuses and mark `done + files already present` as `skipped_existing`.
 - TNM product queries and downloads now retry transient `408/429/5xx` failures with exponential backoff, and hydro package `404` URLs trigger one metadata refresh/retry before the package is skipped or the dataset fails cleanly.
+- TNM product-query parsing now retries transient invalid/non-JSON bodies instead of crashing in `response.json()`.
+- Large hydro ZIP downloads now keep partial files and resume after interrupted chunked transfers instead of restarting from byte `0`.
+- Raw support and AppEEARS summaries now expose structured failure metadata (`failure_reason`, `recoverable`, plus raw-stage `failure_category` / warning fields), and full-stack orchestration now carries those fields into its per-city stage summary.
 - The raw acquisition runner skips already materialized deterministic outputs unless `--force` is passed.
 - Prior coverage for city processing, AppEEARS acquisition, support-layer preflight/prep, and feature assembly still passes.
 - Native AppEEARS filename discovery is covered for both underscore-delimited and native dotted layer names.
@@ -102,6 +112,7 @@ Test-verified:
 - Raster stack validation and stale-legacy AppEEARS handoff coverage are included in `tests/test_feature_assembly.py` and `tests/test_raster_features.py`.
 - Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
+- The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
 
 Manually verified:
 
@@ -137,6 +148,7 @@ Manually verified:
   - NDVI summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
   - ECOSTRESS summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
 - No fresh live orchestration rerun was executed in the 2026-03-19 checkpoint; readiness assessment is based on current on-disk outputs plus the new focused regression pass.
+- No fresh live rerun of the affected cities (`5,6,7,21,27`) has been executed after the 2026-03-20 network-recovery hardening; this checkpoint is test-verified only.
 - Phoenix is now manually verified in `core_city` mode; the remaining cities still need the same refresh if they will join an overnight `core_city` run.
 - Verified the moved virtual environment resolves against the new OneDrive-backed workspace:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'import sys, pathlib; print(sys.executable); print(pathlib.Path(sys.executable).exists())'"`
@@ -286,9 +298,9 @@ Before the next multi-city batch, keep the current cache policy conservative and
 - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run.json"`
 - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate.json"`
 
-After that, resume the controlled city batch:
+After that, rerun the concrete failure cohort from the 2026-03-20 orchestration log and inspect the new structured summary fields:
 
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 5,6,7 --start-date 2023-05-01 --end-date 2023-08-31"`
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 5,6,7,21,27 --start-date 2023-05-01 --end-date 2023-08-31"`
 
 Recommended operator setup before that run:
 
@@ -332,8 +344,44 @@ Recommended operator setup before that run:
 - Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 - Raw support acquisition still depends on very large official NLCD and NHDPlus source downloads; long wall-clock times are expected even when the code is behaving correctly.
 - `data_processed/city_grids/` is now a separate major storage hotspot at about `25.09 GB` and will need its own retention/compression review after cache cleanup.
+- The new TNM/AppEEARS recovery paths still need a real rerun against the affected cities from the 2026-03-20 failure log for manual confirmation.
 
 ## Checkpoint Log
+
+### 2026-03-20 - Checkpoint: Network Recovery Paths Hardened For Raw Acquisition And AppEEARS
+
+- Date / checkpoint:
+  - 2026-03-20 hardening based on the `cities5.30logfile.txt` orchestration failures for cities `5,6,7,21,27`.
+- Change made:
+  - Added resumable raw-download support that preserves `.part` files and resumes interrupted hydro ZIP transfers instead of restarting from scratch.
+  - Hardened TNM product queries so transient invalid/non-JSON bodies are retried and reported as structured payload failures rather than crashing in `response.json()`.
+  - Kept dead HU4 package URLs as warnings only when at least one intersecting package succeeds; otherwise the hydro dataset still fails cleanly.
+  - Hardened AppEEARS submit handling so ambiguous timeout/connection failures first try to recover by deterministic `task_name`, and otherwise persist a recoverable structured failure instead of a generic opaque error.
+  - Propagated `failure_reason` / `recoverable` fields into AppEEARS summaries and full-stack orchestration stage rows.
+  - Added regression tests for interrupted hydro downloads, TNM invalid JSON, recoverable AppEEARS submit failures, ambiguous submit recovery by task name, and full-stack failure-metadata propagation.
+- Files touched:
+  - `src/raw_data_acquisition.py`
+  - `src/appeears_client.py`
+  - `src/appeears_acquisition.py`
+  - `src/full_stack_orchestration.py`
+  - `tests/test_raw_data_acquisition.py`
+  - `tests/test_appeears_client.py`
+  - `tests/test_appeears_acquisition.py`
+  - `tests/test_full_stack_orchestration.py`
+  - `docs/workflow.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_acquisition_orchestration.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 5,6,7,21,27 --start-date 2023-05-01 --end-date 2023-08-31"`
+- Test status:
+  - Focused hardening subset passed: `35 passed`.
+  - Acquisition orchestration compatibility subset passed: `2 passed`.
+- Manual verification status:
+  - No live rerun was executed in this checkpoint.
+  - Verification is currently unit/integration-test based plus failure-path tracing from the attached orchestration log.
+- Next recommended step:
+  - Rerun cities `5,6,7,21,27` and inspect the raw/AppEEARS/full-stack summaries for the new `failure_reason`, `recoverable`, and raw hydro `warnings` fields.
 
 ### 2026-03-19 - Checkpoint: Cache Storage Audit And Safe Cleanup Utility Added
 

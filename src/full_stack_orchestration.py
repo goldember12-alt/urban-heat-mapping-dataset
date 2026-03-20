@@ -59,56 +59,127 @@ def _write_summary_outputs(
     return summary
 
 
-def _empty_stage_result(message: str = "") -> dict[str, str]:
-    return {"status": STATUS_NOT_STARTED, "error": "", "message": message}
+def _empty_stage_result(message: str = "") -> dict[str, Any]:
+    return {"status": STATUS_NOT_STARTED, "error": "", "failure_reason": "", "recoverable": False, "message": message}
 
 
-def _failed_stage_result(error: str, message: str = "") -> dict[str, str]:
-    return {"status": STATUS_FAILED, "error": error, "message": message or error}
+def _failed_stage_result(
+    error: str,
+    message: str = "",
+    *,
+    failure_reason: str = "",
+    recoverable: bool = False,
+) -> dict[str, Any]:
+    return {
+        "status": STATUS_FAILED,
+        "error": error,
+        "failure_reason": failure_reason,
+        "recoverable": recoverable,
+        "message": message or error,
+    }
 
 
 def _normalize_stage_status(
     status: str | None,
     *,
     error: str = "",
+    failure_reason: str = "",
+    recoverable: bool = False,
     message: str = "",
-) -> dict[str, str]:
+) -> dict[str, Any]:
     normalized = (status or "").strip().lower()
     if normalized in {STATUS_COMPLETED, STATUS_SKIPPED_EXISTING, STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_FAILED}:
-        return {"status": normalized, "error": error, "message": message}
+        return {
+            "status": normalized,
+            "error": error,
+            "failure_reason": failure_reason,
+            "recoverable": recoverable,
+            "message": message,
+        }
     if normalized in {"submitted", "pending", STATUS_NOT_STARTED, ""}:
         final_message = message or "stage incomplete; rerun to continue"
-        return {"status": STATUS_NOT_STARTED, "error": error, "message": final_message}
+        return {
+            "status": STATUS_NOT_STARTED,
+            "error": error,
+            "failure_reason": failure_reason,
+            "recoverable": recoverable,
+            "message": final_message,
+        }
     if normalized == "blocked":
         final_message = message or error or "stage blocked by missing prerequisites"
-        return {"status": STATUS_FAILED, "error": error or "stage_blocked", "message": final_message}
+        return {
+            "status": STATUS_FAILED,
+            "error": error or "stage_blocked",
+            "failure_reason": failure_reason or "stage_blocked",
+            "recoverable": recoverable,
+            "message": final_message,
+        }
     final_message = message or error or f"unrecognized stage status: {normalized}"
-    return {"status": STATUS_FAILED, "error": error or f"unexpected_status:{normalized}", "message": final_message}
+    return {
+        "status": STATUS_FAILED,
+        "error": error or f"unexpected_status:{normalized}",
+        "failure_reason": failure_reason or f"unexpected_status:{normalized}",
+        "recoverable": recoverable,
+        "message": final_message,
+    }
 
 
-def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, str]:
+def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
     rows = summary.loc[summary["city_id"] == city_id].copy() if not summary.empty else pd.DataFrame()
     if rows.empty:
         return _empty_stage_result("raw support acquisition did not run for this city")
 
     dataset_parts = [f"{row['dataset']}={row['status']}" for _, row in rows.iterrows()]
     errors = [str(value).strip() for value in rows.get("error", pd.Series(dtype=str)).fillna("") if str(value).strip()]
+    failure_reasons = [
+        str(value).strip()
+        for value in rows.get("failure_reason", pd.Series(dtype=str)).fillna("")
+        if str(value).strip()
+    ]
+    recoverable = bool(rows.get("recoverable", pd.Series(dtype=bool)).fillna(False).astype(bool).any())
     statuses = {str(value).strip().lower() for value in rows["status"].fillna("")}
 
     if STATUS_FAILED in statuses:
-        return _failed_stage_result("; ".join(errors) or "raw support acquisition failed", "; ".join(dataset_parts))
+        return _failed_stage_result(
+            "; ".join(errors) or "raw support acquisition failed",
+            "; ".join(dataset_parts),
+            failure_reason="; ".join(failure_reasons),
+            recoverable=recoverable,
+        )
     if "blocked" in statuses:
-        return _failed_stage_result("; ".join(errors) or "raw support acquisition blocked", "; ".join(dataset_parts))
+        return _failed_stage_result(
+            "; ".join(errors) or "raw support acquisition blocked",
+            "; ".join(dataset_parts),
+            failure_reason="; ".join(failure_reasons) or "stage_blocked",
+            recoverable=recoverable,
+        )
     if statuses == {STATUS_SKIPPED_EXISTING}:
-        return {"status": STATUS_SKIPPED_EXISTING, "error": "", "message": "; ".join(dataset_parts)}
+        return {
+            "status": STATUS_SKIPPED_EXISTING,
+            "error": "",
+            "failure_reason": "",
+            "recoverable": False,
+            "message": "; ".join(dataset_parts),
+        }
     if statuses.issubset({STATUS_COMPLETED, STATUS_SKIPPED_EXISTING}):
         final_status = STATUS_COMPLETED if STATUS_COMPLETED in statuses else STATUS_SKIPPED_EXISTING
-        return {"status": final_status, "error": "", "message": "; ".join(dataset_parts)}
+        return {
+            "status": final_status,
+            "error": "",
+            "failure_reason": "",
+            "recoverable": False,
+            "message": "; ".join(dataset_parts),
+        }
 
-    return _failed_stage_result("raw_support_status_unrecognized", "; ".join(dataset_parts))
+    return _failed_stage_result(
+        "raw_support_status_unrecognized",
+        "; ".join(dataset_parts),
+        failure_reason="raw_support_status_unrecognized",
+        recoverable=recoverable,
+    )
 
 
-def _single_row_stage(summary: pd.DataFrame, city_id: int, default_message: str) -> dict[str, str]:
+def _single_row_stage(summary: pd.DataFrame, city_id: int, default_message: str) -> dict[str, Any]:
     rows = summary.loc[summary["city_id"] == city_id].copy() if not summary.empty else pd.DataFrame()
     if rows.empty:
         return _empty_stage_result(default_message)
@@ -117,6 +188,8 @@ def _single_row_stage(summary: pd.DataFrame, city_id: int, default_message: str)
     return _normalize_stage_status(
         str(row.get("status", "")),
         error=str(row.get("error", "") or ""),
+        failure_reason=str(row.get("failure_reason", "") or ""),
+        recoverable=bool(row.get("recoverable", False)),
         message=str(row.get("message", "") or ""),
     )
 
@@ -166,6 +239,8 @@ def _feature_stage_result(
         return {
             "status": STATUS_SKIPPED_EXISTING,
             "error": "",
+            "failure_reason": "",
+            "recoverable": False,
             "message": "existing city feature outputs retained",
         }
 
@@ -181,18 +256,21 @@ def _feature_stage_result(
         )
     except Exception as exc:  # pragma: no cover - exercised in integration/manual runs
         logger.exception("Feature assembly failed for city_id=%s", int(city["city_id"]))
-        return _failed_stage_result(str(exc))
+        return _failed_stage_result(str(exc), failure_reason="feature_assembly_error")
 
     if result.blocked_stages:
         blocked = ";".join(result.blocked_stages)
         return _failed_stage_result(
             f"feature_blocked_stages:{blocked}",
             f"feature assembly returned blocked stages: {blocked}",
+            failure_reason="feature_blocked_stages",
         )
 
     return {
         "status": STATUS_COMPLETED,
         "error": "",
+        "failure_reason": "",
+        "recoverable": False,
         "message": f"rows={result.n_rows}",
     }
 
@@ -400,18 +478,28 @@ def run_full_stack_orchestration(
             "selection_mode": selection_mode,
             "raw_support_acquisition_status": stage_results["raw_support_acquisition"]["status"],
             "raw_support_acquisition_error": stage_results["raw_support_acquisition"]["error"],
+            "raw_support_acquisition_failure_reason": stage_results["raw_support_acquisition"]["failure_reason"],
+            "raw_support_acquisition_recoverable": stage_results["raw_support_acquisition"]["recoverable"],
             "raw_support_acquisition_message": stage_results["raw_support_acquisition"]["message"],
             "support_layer_prep_status": stage_results["support_layer_prep"]["status"],
             "support_layer_prep_error": stage_results["support_layer_prep"]["error"],
+            "support_layer_prep_failure_reason": stage_results["support_layer_prep"]["failure_reason"],
+            "support_layer_prep_recoverable": stage_results["support_layer_prep"]["recoverable"],
             "support_layer_prep_message": stage_results["support_layer_prep"]["message"],
             "appeears_ndvi_status": stage_results["appeears_ndvi"]["status"],
             "appeears_ndvi_error": stage_results["appeears_ndvi"]["error"],
+            "appeears_ndvi_failure_reason": stage_results["appeears_ndvi"]["failure_reason"],
+            "appeears_ndvi_recoverable": stage_results["appeears_ndvi"]["recoverable"],
             "appeears_ndvi_message": stage_results["appeears_ndvi"]["message"],
             "appeears_ecostress_status": stage_results["appeears_ecostress"]["status"],
             "appeears_ecostress_error": stage_results["appeears_ecostress"]["error"],
+            "appeears_ecostress_failure_reason": stage_results["appeears_ecostress"]["failure_reason"],
+            "appeears_ecostress_recoverable": stage_results["appeears_ecostress"]["recoverable"],
             "appeears_ecostress_message": stage_results["appeears_ecostress"]["message"],
             "feature_assembly_status": stage_results["feature_assembly"]["status"],
             "feature_assembly_error": stage_results["feature_assembly"]["error"],
+            "feature_assembly_failure_reason": stage_results["feature_assembly"]["failure_reason"],
+            "feature_assembly_recoverable": stage_results["feature_assembly"]["recoverable"],
             "feature_assembly_message": stage_results["feature_assembly"]["message"],
             "city_features_gpkg_path": str(feature_paths.city_features_gpkg_path),
             "city_features_parquet_path": str(feature_paths.city_features_parquet_path),
