@@ -23,7 +23,7 @@ Implemented in code:
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 - Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
 - Raw support downloads now preserve `.part` files, resume interrupted large hydro ZIP transfers when the host supports byte ranges, and record structured `failure_reason` / `failure_category` / `recoverable` metadata plus hydro warning details.
-- TNM malformed pseudo-JSON wrappers that embed ScienceBase/TNM upstream failures, including `RemoteDisconnected`, `Connection aborted`, `Remote end closed connection`, and `get_products.py`, now classify as recoverable `sciencebase_upstream_error` events with a 6-attempt retry/backoff policy; `dem_tiles_not_found` is now a recoverable `data_unavailable` failure and raw-acquisition TLS classification now imports `requests.exceptions.SSLError` correctly.
+- TNM malformed pseudo-JSON wrappers that embed ScienceBase/TNM upstream failures, including `RemoteDisconnected`, `Connection aborted`, `Remote end closed connection`, `Response ended prematurely`, and `get_products.py`, now classify as recoverable `sciencebase_upstream_error` events with a 6-attempt retry/backoff policy; retry-exhausted TNM `/products` `502/503/504` errors now classify as recoverable `tnm_upstream_http_error`, `dem_tiles_not_found` is now a recoverable `data_unavailable` failure, and raw-acquisition TLS classification now imports `requests.exceptions.SSLError` correctly.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
 - Cache audit/cleanup utility now inventories `data_raw/cache/`, classifies artifacts by retention tier, writes JSON metadata outside the cache tree, and supports dry-run targeted prune plans for safe regenerable artifacts.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
@@ -45,11 +45,11 @@ Standardization status:
 
 ## Testing Status
 
-As of 2026-03-20:
+As of 2026-03-21:
 
 - Focused raw/AppEEARS/full-stack hardening subset: `35 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
-- Focused ScienceBase/TNM retry subset: `20 passed` via:
+- Focused ScienceBase/TNM retry subset: `22 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_full_stack_orchestration.py -q"`
 - Focused `.env.local` bootstrap/AppEEARS/full-stack subset: `27 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
@@ -84,7 +84,8 @@ Test-verified in the latest checkpoint:
 - AppEEARS acquisition summaries no longer label in-progress remote work as `not_started`; reruns now keep active tasks in AppEEARS-specific in-progress statuses and mark `done + files already present` as `skipped_existing`.
 - TNM product queries and downloads now retry transient `408/429/5xx` failures with exponential backoff, and hydro package `404` URLs trigger one metadata refresh/retry before the package is skipped or the dataset fails cleanly.
 - TNM product-query parsing now retries transient invalid/non-JSON bodies instead of crashing in `response.json()`.
-- TNM malformed pseudo-JSON wrappers that mention ScienceBase/`HTTPSConnectionPool`/`Max retries exceeded` or surface `RemoteDisconnected` / `Connection aborted` / `get_products.py` are now classified as `sciencebase_upstream_error` and retried with a longer backoff window.
+- TNM malformed pseudo-JSON wrappers that mention ScienceBase/`HTTPSConnectionPool`/`Max retries exceeded` or surface `RemoteDisconnected` / `Connection aborted` / `Response ended prematurely` / `get_products.py` are now classified as `sciencebase_upstream_error` and retried with a longer backoff window.
+- Retry-exhausted TNM `/products` `502/503/504` responses now classify as recoverable `tnm_upstream_http_error` rows under `upstream_dependency` instead of falling through to `unexpected_error`.
 - DEM cities with no returned TNM tiles now fail as structured recoverable `dem_tiles_not_found` / `data_unavailable` rows instead of bubbling a raw runtime exception into the full pipeline.
 - Raw-acquisition TLS classification now correctly handles `requests.exceptions.SSLError` without crashing the failure-classification path.
 - Large hydro ZIP downloads now keep partial files and resume after interrupted chunked transfers instead of restarting from byte `0`.
@@ -125,7 +126,7 @@ Test-verified:
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
 - The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
 - The latest `.env.local` bootstrap regression results are `27 passed` for env bootstrap plus AppEEARS/full-stack compatibility.
-- The latest ScienceBase/TNM-specialization regression results are `20 passed` for raw acquisition plus full-stack summary propagation.
+- The latest ScienceBase/TNM-specialization regression results are `22 passed` for raw acquisition plus full-stack summary propagation.
 
 Manually verified:
 
@@ -162,6 +163,10 @@ Manually verified:
   - ECOSTRESS summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
 - No fresh live orchestration rerun was executed in the 2026-03-19 checkpoint; readiness assessment is based on current on-disk outputs plus the new focused regression pass.
 - No fresh live rerun of the affected cities (`5,6,7,21,27`) has been executed after the 2026-03-20 network-recovery hardening and follow-up TNM wrapper / DEM-tile / `SSLError` fixes; these checkpoints are test-verified only.
+- 2026-03-21 rerun log review from `rerun_affected.log`:
+  - Confirmed the earlier `sciencebase_upstream_error` fix is now active in real orchestration output, with `6` retry attempts and no full-pipeline abort.
+  - Confirmed the remaining gaps were a retry-exhausted TNM `/products` `504` that still summarized as `unexpected_error` and a malformed wrapper containing `Response ended prematurely` plus `get_products.py` that still summarized as `invalid_json_response`.
+  - No second live rerun was executed after the 2026-03-21 follow-up code fix; this new checkpoint is log-verified plus test-verified.
 - Phoenix is now manually verified in `core_city` mode; the remaining cities still need the same refresh if they will join an overnight `core_city` run.
 - Verified the moved virtual environment resolves against the new OneDrive-backed workspace:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'import sys, pathlib; print(sys.executable); print(pathlib.Path(sys.executable).exists())'"`
@@ -360,6 +365,29 @@ Recommended operator setup before that run:
 - The new TNM/AppEEARS recovery paths still need a real rerun against the affected cities from the 2026-03-20 failure log for manual confirmation.
 
 ## Checkpoint Log
+
+### 2026-03-21 - Checkpoint: TNM 504 Classification And Premature-Response Wrapper Fixed
+
+- Date / checkpoint:
+  - 2026-03-21 follow-up fixes after reviewing `rerun_affected.log`.
+- Change made:
+  - Added structured raw-acquisition classification for retry-exhausted TNM `/products` `502/503/504` `HTTPError` failures, mapping them to recoverable `tnm_upstream_http_error` under `upstream_dependency` instead of `unexpected_error`.
+  - Expanded the malformed-wrapper detector to treat `Response ended prematurely` bodies with the TNM `get_products.py` stack trace as `sciencebase_upstream_error`.
+  - Kept the existing 6-attempt retry behavior unchanged for wrapped upstream TNM failures.
+  - Added regression tests for the `Response ended prematurely` wrapper and the retry-exhausted TNM `504` classification path.
+- Files touched:
+  - `src/raw_data_acquisition.py`
+  - `tests/test_raw_data_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_raw_data_acquisition.py tests/test_full_stack_orchestration.py -q"`
+- Test status:
+  - Focused ScienceBase/TNM retry subset passed: `22 passed`.
+- Manual verification status:
+  - The remaining failure signatures were confirmed from `rerun_affected.log`.
+  - No fresh live rerun was executed after this code change.
+- Next recommended step:
+  - Rerun the affected full-stack batch once more and confirm city `14` hydro now records `tnm_upstream_http_error` and city `23` no longer emits `invalid_json_response` for the premature-response wrapper variant.
 
 ### 2026-03-20 - Checkpoint: TNM Wrapper Classification And DEM Missing-Tile Handling Fixed
 

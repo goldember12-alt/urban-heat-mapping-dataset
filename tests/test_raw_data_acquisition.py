@@ -282,6 +282,36 @@ def test_tnm_products_reclassifies_remote_disconnected_sciencebase_wrapper(monke
     assert sleep_calls == [5.0, 10.0, 20.0, 40.0, 80.0]
 
 
+def test_tnm_products_reclassifies_response_ended_prematurely_wrapper(monkeypatch):
+    malformed_body = (
+        "{errorMessage=[BadRequest] 'Response ended prematurely' , errorType=Exception, "
+        'requestId=abc123, stackTrace=["  File \\"\\/var\\/task\\/get_products.py\\", '
+        'line 56, in lambda_handler\\n    raise Exception(\\"[BadRequest]\\")"]}'
+    )
+    session = _FakeTNMSession(
+        [
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, {"items": [{"downloadURL": "https://example.com/final.tif"}]}),
+        ]
+    )
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(raw_data_acquisition.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    items = _tnm_products(
+        session=session,
+        dataset_name="dataset",
+        bbox_wgs84=(-1.0, -1.0, 1.0, 1.0),
+    )
+
+    assert len(items) == 1
+    assert len(session.calls) == 6
+    assert sleep_calls == [5.0, 10.0, 20.0, 40.0, 80.0]
+
+
 def test_acquire_dem_for_city_reports_missing_tiles_as_structured_failure(tmp_path: Path, monkeypatch):
     city = pd.Series({"city_id": 1, "city_name": "Phoenix"})
     study_area_path = tmp_path / "study_area.gpkg"
@@ -318,6 +348,23 @@ def test_classify_raw_acquisition_error_handles_tls_verification_failure():
 
     assert failure["failure_reason"] == "tls_verification_failed"
     assert failure["failure_category"] == "network_tls"
+    assert bool(failure["recoverable"]) is True
+
+
+def test_classify_raw_acquisition_error_handles_retry_exhausted_tnm_504():
+    response = SimpleNamespace(
+        status_code=504,
+        url="https://tnmaccess.nationalmap.gov/api/v1/products?datasets=dataset&bbox=0,0,1,1",
+    )
+    error = requests.HTTPError(
+        "504 Server Error: Gateway Timeout for url: https://tnmaccess.nationalmap.gov/api/v1/products?datasets=dataset&bbox=0,0,1,1",
+        response=response,
+    )
+
+    failure = raw_data_acquisition._classify_raw_acquisition_error(error)
+
+    assert failure["failure_reason"] == "tnm_upstream_http_error"
+    assert failure["failure_category"] == "upstream_dependency"
     assert bool(failure["recoverable"]) is True
 
 

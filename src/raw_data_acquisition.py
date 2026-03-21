@@ -76,12 +76,14 @@ _SCIENCEBASE_NETWORK_MARKERS = (
     "remotedisconnected",
     "connection aborted",
     "remote end closed connection",
+    "response ended prematurely",
 )
 _SCIENCEBASE_WRAPPER_MARKERS = (
     "badrequest",
     "get_products.py",
     "stacktrace",
 )
+_TNM_UPSTREAM_STATUS_CODES = {502, 503, 504}
 
 
 @dataclass(frozen=True)
@@ -171,7 +173,21 @@ def _looks_like_sciencebase_upstream_error(preview: str) -> bool:
     lowered_preview = preview.lower()
     has_network_marker = any(token in lowered_preview for token in _SCIENCEBASE_NETWORK_MARKERS)
     has_wrapper_marker = any(token in lowered_preview for token in _SCIENCEBASE_WRAPPER_MARKERS)
-    return has_network_marker and has_wrapper_marker
+    has_tnm_wrapper_trace = "get_products.py" in lowered_preview and (
+        "badrequest" in lowered_preview or "stacktrace" in lowered_preview
+    )
+    return (has_network_marker and has_wrapper_marker) or has_tnm_wrapper_trace
+
+
+def _is_tnm_products_upstream_http_error(exc: requests.HTTPError) -> bool:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if status_code not in _TNM_UPSTREAM_STATUS_CODES:
+        return False
+
+    response_url = str(getattr(response, "url", "") or "")
+    haystack = f"{response_url} {exc}".lower()
+    return "tnmaccess.nationalmap.gov" in haystack and "/api/v1/products" in haystack
 
 
 def _validate_json_response(response: requests.Response) -> None:
@@ -225,6 +241,14 @@ def _classify_raw_acquisition_error(exc: Exception) -> dict[str, Any]:
         return {
             "failure_reason": "download_stream_interrupted",
             "failure_category": "network_download",
+            "recoverable": True,
+            "error": str(exc),
+        }
+
+    if isinstance(exc, requests.HTTPError) and _is_tnm_products_upstream_http_error(exc):
+        return {
+            "failure_reason": "tnm_upstream_http_error",
+            "failure_category": "upstream_dependency",
             "recoverable": True,
             "error": str(exc),
         }
