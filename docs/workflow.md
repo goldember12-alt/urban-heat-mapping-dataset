@@ -112,6 +112,7 @@ Latest manual verification in the moved Windows workspace on 2026-03-18:
 
 Credential handling:
 
+- The AppEEARS-related CLIs now load `PROJECT_ROOT/.env.local` at startup before credential lookup, without overriding already-exported environment variables.
 - AppEEARS-dependent work now performs an explicit environment preflight before client creation when the stage truly needs auth.
 - Missing credentials produce `blocked_missing_credentials` with a message listing the exact missing env vars.
 - Non-auth stages are not blocked by that preflight.
@@ -185,6 +186,7 @@ CLI:
 4. Download source archives/tiles into `data_raw/cache/` and reuse them across reruns.
 5. Preserve `.part` files for interrupted large downloads and resume hydro package ZIP transfers with HTTP range requests when the remote host supports them.
 6. Validate TNM product-query responses before calling `response.json()`; retry transient invalid/non-JSON TNM bodies instead of crashing with `JSONDecodeError`.
+   Known special case: if TNM wraps an upstream ScienceBase failure inside malformed pseudo-JSON, classify it as a recoverable `sciencebase_upstream_error` and use a longer retry/backoff policy than generic invalid JSON.
 7. Treat dead HU4 package URLs as warnings only when at least one intersecting HU4 package succeeded for the city; otherwise fail the hydro dataset cleanly.
 8. Mosaic and clip DEM tiles to the city study area, then write:
    - `data_raw/dem/<city_slug>/<city_slug>_dem_3dep_30m.tif`

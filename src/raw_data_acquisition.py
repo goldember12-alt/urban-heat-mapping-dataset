@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 import requests
+from requests.exceptions import SSLError
 from rasterio.io import MemoryFile
 from rasterio.mask import mask
 from rasterio.merge import merge
@@ -68,6 +69,19 @@ _FLOWLINE_FTYPE_CODES = {334, 336, 343, 428, 460, 558}
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 _MAX_REQUEST_ATTEMPTS = 4
 _MAX_DOWNLOAD_ATTEMPTS = 6
+_SCIENCEBASE_NETWORK_MARKERS = (
+    "sciencebase.gov",
+    "httpsconnectionpool",
+    "max retries exceeded",
+    "remotedisconnected",
+    "connection aborted",
+    "remote end closed connection",
+)
+_SCIENCEBASE_WRAPPER_MARKERS = (
+    "badrequest",
+    "get_products.py",
+    "stacktrace",
+)
 
 
 @dataclass(frozen=True)
@@ -89,6 +103,8 @@ class RawAcquisitionError(RuntimeError):
         category: str,
         recoverable: bool,
         details: str = "",
+        retry_max_attempts: int | None = None,
+        retry_backoff_base_seconds: float | None = None,
     ) -> None:
         message = reason if not details else f"{reason}: {details}"
         super().__init__(message)
@@ -96,6 +112,8 @@ class RawAcquisitionError(RuntimeError):
         self.category = category
         self.recoverable = recoverable
         self.details = details
+        self.retry_max_attempts = retry_max_attempts
+        self.retry_backoff_base_seconds = retry_backoff_base_seconds
 
 
 def _summary_paths(support_layers_dir: Path = SUPPORT_LAYERS) -> tuple[Path, Path]:
@@ -149,16 +167,33 @@ def _response_preview(response: requests.Response, limit: int = 300) -> str:
     return text[:limit].replace("\n", " ")
 
 
+def _looks_like_sciencebase_upstream_error(preview: str) -> bool:
+    lowered_preview = preview.lower()
+    has_network_marker = any(token in lowered_preview for token in _SCIENCEBASE_NETWORK_MARKERS)
+    has_wrapper_marker = any(token in lowered_preview for token in _SCIENCEBASE_WRAPPER_MARKERS)
+    return has_network_marker and has_wrapper_marker
+
+
 def _validate_json_response(response: requests.Response) -> None:
     try:
         response.json()
     except ValueError as exc:
         content_type = str(response.headers.get("Content-Type", "") or "")
+        preview = _response_preview(response)
+        if _looks_like_sciencebase_upstream_error(preview):
+            raise RawAcquisitionError(
+                "sciencebase_upstream_error",
+                category="upstream_dependency",
+                recoverable=True,
+                details=f"content_type={content_type or 'unknown'} preview={preview!r}",
+                retry_max_attempts=6,
+                retry_backoff_base_seconds=5.0,
+            ) from exc
         raise RawAcquisitionError(
             "invalid_json_response",
             category="remote_payload",
             recoverable=True,
-            details=f"content_type={content_type or 'unknown'} preview={_response_preview(response)!r}",
+            details=f"content_type={content_type or 'unknown'} preview={preview!r}",
         ) from exc
 
 
@@ -194,7 +229,7 @@ def _classify_raw_acquisition_error(exc: Exception) -> dict[str, Any]:
             "error": str(exc),
         }
 
-    if isinstance(exc, requests.SSLError):
+    if isinstance(exc, SSLError):
         return {
             "failure_reason": "tls_verification_failed",
             "failure_category": "network_tls",
@@ -238,8 +273,8 @@ def _classify_raw_acquisition_error(exc: Exception) -> dict[str, Any]:
     if message == "dem_tiles_not_found":
         return {
             "failure_reason": "dem_tiles_not_found",
-            "failure_category": "source_discovery",
-            "recoverable": False,
+            "failure_category": "data_unavailable",
+            "recoverable": True,
             "error": message,
         }
     if message == "dem_tile_downloads_missing":
@@ -284,7 +319,9 @@ def _request_with_retry(
     validator: Callable[[requests.Response], None] | None = None,
 ) -> requests.Response:
     last_error: Exception | None = None
-    for attempt in range(1, _MAX_REQUEST_ATTEMPTS + 1):
+    max_attempts = _MAX_REQUEST_ATTEMPTS
+    attempt = 1
+    while attempt <= max_attempts:
         response: requests.Response | None = None
         try:
             response = session.request(
@@ -305,12 +342,15 @@ def _request_with_retry(
                 )
                 response.close()
                 time.sleep(2 ** (attempt - 1))
+                attempt += 1
                 continue
             response.raise_for_status()
             if validator is not None:
                 validator(response)
             return response
         except (requests.RequestException, RawAcquisitionError) as exc:
+            if isinstance(exc, RawAcquisitionError) and exc.retry_max_attempts is not None:
+                max_attempts = max(max_attempts, exc.retry_max_attempts)
             response = response or getattr(exc, "response", None)
             status_code = getattr(response, "status_code", None)
             is_retryable = (
@@ -318,20 +358,35 @@ def _request_with_retry(
                 or (isinstance(exc, RawAcquisitionError) and exc.recoverable)
                 or status_code in _RETRYABLE_STATUS_CODES
             )
-            if is_retryable and attempt < _MAX_REQUEST_ATTEMPTS:
+            backoff_base_seconds = (
+                exc.retry_backoff_base_seconds
+                if isinstance(exc, RawAcquisitionError) and exc.retry_backoff_base_seconds is not None
+                else 1.0
+            )
+            if is_retryable and attempt < max_attempts:
                 logger.warning(
                     "%s failed on attempt %s/%s with %s; retrying",
                     context,
                     attempt,
-                    _MAX_REQUEST_ATTEMPTS,
+                    max_attempts,
                     exc,
                 )
                 if response is not None:
                     response.close()
-                time.sleep(2 ** (attempt - 1))
+                time.sleep(backoff_base_seconds * (2 ** (attempt - 1)))
                 last_error = exc
+                attempt += 1
                 continue
+            if is_retryable:
+                logger.error(
+                    "%s failed on final attempt %s/%s with %s; no retries remain",
+                    context,
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
             raise
+        attempt += 1
 
     if last_error is not None:  # pragma: no cover
         raise last_error
@@ -792,7 +847,12 @@ def _acquire_dem_for_city(
     )
     selected_items = _select_latest_products_by_key(items, key_parser=_dem_tile_key)
     if len(selected_items) == 0:
-        raise RuntimeError("dem_tiles_not_found")
+        raise RawAcquisitionError(
+            "dem_tiles_not_found",
+            category="data_unavailable",
+            recoverable=True,
+            details=f"bbox={','.join(f'{value:.8f}' for value in bbox_wgs84)}",
+        )
 
     tile_paths: list[Path] = []
     for item in selected_items:

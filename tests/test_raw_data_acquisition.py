@@ -5,7 +5,9 @@ from types import SimpleNamespace
 
 import geopandas as gpd
 import pandas as pd
+import pytest
 import requests
+from requests.exceptions import SSLError
 from shapely.geometry import LineString, box
 
 import src.raw_data_acquisition as raw_data_acquisition
@@ -109,10 +111,10 @@ def test_collect_nhdplus_water_features_uses_bbox_when_reading_layers(tmp_path: 
 
 
 class _FakeTNMResponse:
-    def __init__(self, status_code: int, payload: dict[str, object]):
+    def __init__(self, status_code: int, payload: dict[str, object] | Exception, text: str | None = None):
         self.status_code = status_code
         self._payload = payload
-        self.text = str(payload)
+        self.text = text if text is not None else str(payload)
         self.headers: dict[str, str] = {}
 
     def json(self):
@@ -218,6 +220,105 @@ def test_tnm_products_retries_invalid_json_payload(monkeypatch):
 
     assert len(items) == 1
     assert len(session.calls) == 2
+
+
+def test_tnm_products_reclassifies_sciencebase_wrapper_and_uses_longer_retry_policy(monkeypatch):
+    malformed_body = (
+        "{errorMessage=[BadRequest] 'HTTPSConnectionPool(host='www.sciencebase.gov', port=443): "
+        "Max retries exceeded with url: /catalog/items?...'}"
+    )
+    session = _FakeTNMSession(
+        [
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, {"items": [{"downloadURL": "https://example.com/final.tif"}]}),
+        ]
+    )
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(raw_data_acquisition.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    items = _tnm_products(
+        session=session,
+        dataset_name="dataset",
+        bbox_wgs84=(-1.0, -1.0, 1.0, 1.0),
+    )
+
+    assert len(items) == 1
+    assert len(session.calls) == 6
+    assert sleep_calls == [5.0, 10.0, 20.0, 40.0, 80.0]
+
+
+def test_tnm_products_reclassifies_remote_disconnected_sciencebase_wrapper(monkeypatch):
+    malformed_body = (
+        "{errorMessage=[BadRequest] '('Connection aborted.', RemoteDisconnected("
+        "'Remote end closed connection without response'))', errorType=Exception, "
+        'requestId=abc123, stackTrace=["  File \\"\\/var\\/task\\/get_products.py\\", '
+        'line 56, in lambda_handler\\n    raise Exception(\\"[BadRequest]\\")"]}'
+    )
+    session = _FakeTNMSession(
+        [
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, requests.JSONDecodeError("bad json", malformed_body, 1), text=malformed_body),
+            _FakeTNMResponse(200, {"items": [{"downloadURL": "https://example.com/final.tif"}]}),
+        ]
+    )
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(raw_data_acquisition.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    items = _tnm_products(
+        session=session,
+        dataset_name="dataset",
+        bbox_wgs84=(-1.0, -1.0, 1.0, 1.0),
+    )
+
+    assert len(items) == 1
+    assert len(session.calls) == 6
+    assert sleep_calls == [5.0, 10.0, 20.0, 40.0, 80.0]
+
+
+def test_acquire_dem_for_city_reports_missing_tiles_as_structured_failure(tmp_path: Path, monkeypatch):
+    city = pd.Series({"city_id": 1, "city_name": "Phoenix"})
+    study_area_path = tmp_path / "study_area.gpkg"
+    output_path = tmp_path / "dem.tif"
+    session = requests.Session()
+
+    monkeypatch.setattr(raw_data_acquisition, "_study_area_bbox_wgs84", lambda *_args, **_kwargs: (-1.0, -1.0, 1.0, 1.0))
+    monkeypatch.setattr(raw_data_acquisition, "_tnm_products", lambda **_kwargs: [])
+
+    with pytest.raises(raw_data_acquisition.RawAcquisitionError) as excinfo:
+        raw_data_acquisition._acquire_dem_for_city(
+            city=city,
+            study_area_path=study_area_path,
+            output_path=output_path,
+            session=session,
+            cache_dir=tmp_path / "cache",
+        )
+
+    assert excinfo.value.reason == "dem_tiles_not_found"
+    assert excinfo.value.category == "data_unavailable"
+    assert excinfo.value.recoverable is True
+
+
+def test_classify_raw_acquisition_error_handles_dem_tiles_not_found():
+    failure = raw_data_acquisition._classify_raw_acquisition_error(RuntimeError("dem_tiles_not_found"))
+
+    assert failure["failure_reason"] == "dem_tiles_not_found"
+    assert failure["failure_category"] == "data_unavailable"
+    assert bool(failure["recoverable"]) is True
+
+
+def test_classify_raw_acquisition_error_handles_tls_verification_failure():
+    failure = raw_data_acquisition._classify_raw_acquisition_error(SSLError("certificate verify failed"))
+
+    assert failure["failure_reason"] == "tls_verification_failed"
+    assert failure["failure_category"] == "network_tls"
+    assert bool(failure["recoverable"]) is True
 
 
 def test_download_file_resumes_partial_after_chunked_transfer_failure(tmp_path: Path, monkeypatch):
@@ -410,4 +511,65 @@ def test_run_raw_data_acquisition_records_structured_failure_metadata(tmp_path: 
     assert row["status"] == "failed"
     assert row["failure_reason"] == "download_stream_interrupted"
     assert row["failure_category"] == "network_download"
+    assert bool(row["recoverable"]) is True
+
+
+def test_run_raw_data_acquisition_preserves_sciencebase_structured_failure_metadata(tmp_path: Path, monkeypatch):
+    city = load_cities().iloc[0]
+    study_area_path, _ = city_output_paths(
+        city,
+        resolution=30,
+        study_areas_dir=tmp_path / "study_areas",
+        city_grids_dir=tmp_path / "city_grids",
+    )
+    study_area_path.parent.mkdir(parents=True, exist_ok=True)
+    study_area_path.write_text("placeholder")
+
+    monkeypatch.setattr(
+        raw_data_acquisition,
+        "audit_support_layer_readiness",
+        lambda **kwargs: SimpleNamespace(
+            summary=pd.DataFrame(
+                [
+                    {
+                        "city_id": int(city["city_id"]),
+                        "dem_source_available": False,
+                        "nlcd_land_cover_source_available": False,
+                        "nlcd_impervious_source_available": False,
+                        "hydro_source_available": False,
+                    }
+                ]
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        raw_data_acquisition,
+        "_acquire_dem_for_city",
+        lambda **kwargs: (_ for _ in ()).throw(
+            raw_data_acquisition.RawAcquisitionError(
+                "sciencebase_upstream_error",
+                category="upstream_dependency",
+                recoverable=True,
+                details="content_type=application/json preview='{errorMessage=[BadRequest] ... sciencebase.gov ...}'",
+            )
+        ),
+    )
+
+    result = run_raw_data_acquisition(
+        dataset="dem",
+        city_ids=[int(city["city_id"])],
+        study_areas_dir=tmp_path / "study_areas",
+        city_grids_dir=tmp_path / "city_grids",
+        raw_dem_dir=tmp_path / "raw" / "dem",
+        raw_nlcd_dir=tmp_path / "raw" / "nlcd",
+        raw_hydro_dir=tmp_path / "raw" / "hydro",
+        dem_cache_dir=tmp_path / "cache" / "dem",
+        nlcd_cache_dir=tmp_path / "cache" / "nlcd",
+        hydro_cache_dir=tmp_path / "cache" / "hydro",
+        support_layers_dir=tmp_path / "support_layers",
+    )
+
+    row = result.summary.iloc[0]
+    assert row["failure_reason"] == "sciencebase_upstream_error"
+    assert row["failure_category"] == "upstream_dependency"
     assert bool(row["recoverable"]) is True

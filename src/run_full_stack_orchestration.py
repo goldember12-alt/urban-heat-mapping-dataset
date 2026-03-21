@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 
+from src.env_bootstrap import load_local_env, log_loaded_local_env
+
+_LOADED_ENV_PATH = load_local_env(Path(__file__).resolve().parents[1])
 from src.feature_assembly import CELL_FILTER_CORE_CITY, CELL_FILTER_STUDY_AREA
 from src.full_stack_orchestration import run_full_stack_orchestration
 
@@ -47,6 +51,7 @@ def _parse_city_ids(city_ids_arg: str) -> list[int] | None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    log_loaded_local_env(_LOADED_ENV_PATH)
     args = _build_arg_parser().parse_args()
 
     result = run_full_stack_orchestration(

@@ -16,12 +16,14 @@ Implemented in code:
 - AppEEARS API client with environment-only authentication.
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
 - AppEEARS submit handling now preserves deterministic `task_name` state, retries transient GET/status JSON failures, and records recoverable submit failures instead of flattening all timeouts into generic hard failures.
+- AppEEARS-related CLIs now load `PROJECT_ROOT/.env.local` before credential lookup, without overriding already-exported environment variables.
 - Thin acquisition orchestration runner that sequences raw support acquisition, support-layer prep, NDVI AppEEARS, ECOSTRESS AppEEARS, and writes a restart-safe status summary.
 - Full-stack city orchestration runner that extends raw/support/AppEEARS stages through feature assembly and writes one per-city stage summary row.
 - Deterministic AppEEARS preflight/audit path that computes expected per-city study area, AOI, raw download, and status-summary paths; validates AOI CRS; and writes machine-readable preflight outputs.
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 - Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
 - Raw support downloads now preserve `.part` files, resume interrupted large hydro ZIP transfers when the host supports byte ranges, and record structured `failure_reason` / `failure_category` / `recoverable` metadata plus hydro warning details.
+- TNM malformed pseudo-JSON wrappers that embed ScienceBase/TNM upstream failures, including `RemoteDisconnected`, `Connection aborted`, `Remote end closed connection`, and `get_products.py`, now classify as recoverable `sciencebase_upstream_error` events with a 6-attempt retry/backoff policy; `dem_tiles_not_found` is now a recoverable `data_unavailable` failure and raw-acquisition TLS classification now imports `requests.exceptions.SSLError` correctly.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
 - Cache audit/cleanup utility now inventories `data_raw/cache/`, classifies artifacts by retention tier, writes JSON metadata outside the cache tree, and supports dry-run targeted prune plans for safe regenerable artifacts.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
@@ -47,6 +49,10 @@ As of 2026-03-20:
 
 - Focused raw/AppEEARS/full-stack hardening subset: `35 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
+- Focused ScienceBase/TNM retry subset: `20 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_full_stack_orchestration.py -q"`
+- Focused `.env.local` bootstrap/AppEEARS/full-stack subset: `27 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
 - Acquisition orchestration compatibility subset: `2 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_acquisition_orchestration.py -q"`
 
@@ -78,8 +84,13 @@ Test-verified in the latest checkpoint:
 - AppEEARS acquisition summaries no longer label in-progress remote work as `not_started`; reruns now keep active tasks in AppEEARS-specific in-progress statuses and mark `done + files already present` as `skipped_existing`.
 - TNM product queries and downloads now retry transient `408/429/5xx` failures with exponential backoff, and hydro package `404` URLs trigger one metadata refresh/retry before the package is skipped or the dataset fails cleanly.
 - TNM product-query parsing now retries transient invalid/non-JSON bodies instead of crashing in `response.json()`.
+- TNM malformed pseudo-JSON wrappers that mention ScienceBase/`HTTPSConnectionPool`/`Max retries exceeded` or surface `RemoteDisconnected` / `Connection aborted` / `get_products.py` are now classified as `sciencebase_upstream_error` and retried with a longer backoff window.
+- DEM cities with no returned TNM tiles now fail as structured recoverable `dem_tiles_not_found` / `data_unavailable` rows instead of bubbling a raw runtime exception into the full pipeline.
+- Raw-acquisition TLS classification now correctly handles `requests.exceptions.SSLError` without crashing the failure-classification path.
 - Large hydro ZIP downloads now keep partial files and resume after interrupted chunked transfers instead of restarting from byte `0`.
 - Raw support and AppEEARS summaries now expose structured failure metadata (`failure_reason`, `recoverable`, plus raw-stage `failure_category` / warning fields), and full-stack orchestration now carries those fields into its per-city stage summary.
+- TNM retry logging now emits an explicit final-attempt error line, so the old `attempt 1/4`, `2/4`, `3/4`, then fail pattern is now clearly understood as four total attempts rather than three effective attempts.
+- `.env.local` is now loaded automatically at CLI startup for full-stack, acquisition-orchestration, and AppEEARS acquisition entrypoints before any AppEEARS credential lookup runs.
 - The raw acquisition runner skips already materialized deterministic outputs unless `--force` is passed.
 - Prior coverage for city processing, AppEEARS acquisition, support-layer preflight/prep, and feature assembly still passes.
 - Native AppEEARS filename discovery is covered for both underscore-delimited and native dotted layer names.
@@ -113,6 +124,8 @@ Test-verified:
 - Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
 - The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
+- The latest `.env.local` bootstrap regression results are `27 passed` for env bootstrap plus AppEEARS/full-stack compatibility.
+- The latest ScienceBase/TNM-specialization regression results are `20 passed` for raw acquisition plus full-stack summary propagation.
 
 Manually verified:
 
@@ -148,7 +161,7 @@ Manually verified:
   - NDVI summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
   - ECOSTRESS summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
 - No fresh live orchestration rerun was executed in the 2026-03-19 checkpoint; readiness assessment is based on current on-disk outputs plus the new focused regression pass.
-- No fresh live rerun of the affected cities (`5,6,7,21,27`) has been executed after the 2026-03-20 network-recovery hardening; this checkpoint is test-verified only.
+- No fresh live rerun of the affected cities (`5,6,7,21,27`) has been executed after the 2026-03-20 network-recovery hardening and follow-up TNM wrapper / DEM-tile / `SSLError` fixes; these checkpoints are test-verified only.
 - Phoenix is now manually verified in `core_city` mode; the remaining cities still need the same refresh if they will join an overnight `core_city` run.
 - Verified the moved virtual environment resolves against the new OneDrive-backed workspace:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -c 'import sys, pathlib; print(sys.executable); print(pathlib.Path(sys.executable).exists())'"`
@@ -348,6 +361,30 @@ Recommended operator setup before that run:
 
 ## Checkpoint Log
 
+### 2026-03-20 - Checkpoint: TNM Wrapper Classification And DEM Missing-Tile Handling Fixed
+
+- Date / checkpoint:
+  - 2026-03-20 follow-up fixes from `full_run.log` crash analysis.
+- Change made:
+  - Expanded TNM malformed-body detection so wrapper payloads containing `RemoteDisconnected`, `Connection aborted`, `Remote end closed connection`, or `get_products.py` classify as `sciencebase_upstream_error` instead of generic `invalid_json_response`.
+  - Preserved the extended retry behavior for those wrapped upstream failures at `6` attempts with exponential backoff.
+  - Fixed raw-acquisition TLS classification to import `SSLError` from `requests.exceptions`, removing the `AttributeError: module 'requests' has no attribute 'SSLError'` crash path.
+  - Changed empty TNM DEM tile selections to raise a structured recoverable `dem_tiles_not_found` / `data_unavailable` failure instead of a bare `RuntimeError`.
+  - Added regression tests for the `RemoteDisconnected` TNM wrapper, structured DEM missing-tile handling, and the `SSLError` classifier path.
+- Files touched:
+  - `src/raw_data_acquisition.py`
+  - `tests/test_raw_data_acquisition.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_raw_data_acquisition.py tests/test_full_stack_orchestration.py -q"`
+- Test status:
+  - Focused ScienceBase/TNM retry subset passed: `20 passed`.
+- Manual verification status:
+  - No fresh live rerun was executed in this checkpoint.
+  - The failure signatures were confirmed directly from `full_run.log`, and the fix is currently test-verified rather than manually rerun against the affected cities.
+- Next recommended step:
+  - Rerun `src.run_full_stack_orchestration --city-ids 5,6,7,21,27 --start-date 2023-05-01 --end-date 2023-08-31` and confirm the new raw-acquisition summary rows show `sciencebase_upstream_error` or `dem_tiles_not_found` without aborting the full pipeline.
+
 ### 2026-03-20 - Checkpoint: Network Recovery Paths Hardened For Raw Acquisition And AppEEARS
 
 - Date / checkpoint:
@@ -355,10 +392,12 @@ Recommended operator setup before that run:
 - Change made:
   - Added resumable raw-download support that preserves `.part` files and resumes interrupted hydro ZIP transfers instead of restarting from scratch.
   - Hardened TNM product queries so transient invalid/non-JSON bodies are retried and reported as structured payload failures rather than crashing in `response.json()`.
+  - Added a narrower TNM special case for malformed pseudo-JSON that wraps ScienceBase upstream failures, classifying it as `sciencebase_upstream_error` under `upstream_dependency` with a longer retry/backoff policy.
   - Kept dead HU4 package URLs as warnings only when at least one intersecting package succeeds; otherwise the hydro dataset still fails cleanly.
   - Hardened AppEEARS submit handling so ambiguous timeout/connection failures first try to recover by deterministic `task_name`, and otherwise persist a recoverable structured failure instead of a generic opaque error.
   - Propagated `failure_reason` / `recoverable` fields into AppEEARS summaries and full-stack orchestration stage rows.
-  - Added regression tests for interrupted hydro downloads, TNM invalid JSON, recoverable AppEEARS submit failures, ambiguous submit recovery by task name, and full-stack failure-metadata propagation.
+  - Clarified TNM retry logging by emitting a final-attempt error line when no retries remain, removing ambiguity about whether `attempt 1/4`, `2/4`, `3/4`, then fail means three or four effective tries.
+  - Added regression tests for interrupted hydro downloads, TNM invalid JSON, the ScienceBase malformed-body wrapper, recoverable AppEEARS submit failures, ambiguous submit recovery by task name, and full-stack failure-metadata propagation.
 - Files touched:
   - `src/raw_data_acquisition.py`
   - `src/appeears_client.py`
@@ -376,12 +415,41 @@ Recommended operator setup before that run:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 5,6,7,21,27 --start-date 2023-05-01 --end-date 2023-08-31"`
 - Test status:
   - Focused hardening subset passed: `35 passed`.
+  - Focused ScienceBase/TNM retry subset passed: `16 passed`.
   - Acquisition orchestration compatibility subset passed: `2 passed`.
 - Manual verification status:
   - No live rerun was executed in this checkpoint.
   - Verification is currently unit/integration-test based plus failure-path tracing from the attached orchestration log.
 - Next recommended step:
   - Rerun cities `5,6,7,21,27` and inspect the raw/AppEEARS/full-stack summaries for the new `failure_reason`, `recoverable`, and raw hydro `warnings` fields.
+
+### 2026-03-20 - Checkpoint: .env.local Bootstrap Added For AppEEARS CLIs
+
+- Date / checkpoint:
+  - 2026-03-20 local-development environment bootstrap for AppEEARS credentials.
+- Change made:
+  - Added `src.env_bootstrap` to load `PROJECT_ROOT/.env.local` without overriding existing exported environment variables.
+  - Wired that bootstrap into `src.run_full_stack_orchestration`, `src.run_acquisition_orchestration`, and `src.run_appeears_acquisition` before any AppEEARS-related imports can read environment variables.
+  - Added INFO logging that confirms `.env.local` was loaded, without logging secrets.
+  - Added unit coverage for populating `APPEEARS_API_TOKEN` from `.env.local` and preserving an already-exported environment value.
+  - Because `python-dotenv` is not installed in the current workspace, `src.env_bootstrap` includes a tiny non-overriding fallback parser so local CLI startup still works immediately.
+- Files touched:
+  - `src/env_bootstrap.py`
+  - `src/run_full_stack_orchestration.py`
+  - `src/run_acquisition_orchestration.py`
+  - `src/run_appeears_acquisition.py`
+  - `tests/test_env_bootstrap.py`
+  - `docs/workflow.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
+- Test status:
+  - Focused `.env.local` bootstrap/AppEEARS/full-stack subset passed: `27 passed`.
+- Manual verification status:
+  - No live CLI run was executed in this checkpoint.
+  - Verification is test-based in the current workspace.
+- Next recommended step:
+  - Rerun the same full-stack command from the project root and confirm the startup log reports `.env.local` loading before AppEEARS credential preflight.
 
 ### 2026-03-19 - Checkpoint: Cache Storage Audit And Safe Cleanup Utility Added
 
