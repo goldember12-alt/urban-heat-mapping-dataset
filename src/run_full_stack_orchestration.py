@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 from src.env_bootstrap import load_local_env, log_loaded_local_env
 
 _LOADED_ENV_PATH = load_local_env(Path(__file__).resolve().parents[1])
 from src.feature_assembly import CELL_FILTER_CORE_CITY, CELL_FILTER_STUDY_AREA
-from src.full_stack_orchestration import run_full_stack_orchestration
+from src.full_stack_orchestration import orchestration_exit_code, run_full_stack_orchestration
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -49,8 +50,9 @@ def _parse_city_ids(city_ids_arg: str) -> list[int] | None:
     return [int(value.strip()) for value in city_ids_arg.split(",") if value.strip()]
 
 
-def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", stream=sys.stdout, force=True)
+    logging.captureWarnings(True)
     log_loaded_local_env(_LOADED_ENV_PATH)
     args = _build_arg_parser().parse_args()
 
@@ -71,7 +73,10 @@ def main() -> None:
     print(result.summary_csv_path)
     if not result.summary.empty:
         print(result.summary[["overall_status"]].value_counts().to_string())
+    exit_code = orchestration_exit_code(result.summary)
+    print(f"exit_code={exit_code}")
+    return exit_code
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

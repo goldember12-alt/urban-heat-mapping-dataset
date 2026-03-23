@@ -16,7 +16,9 @@ from shapely.geometry import mapping
 from src.appeears_aoi import city_slug
 from src.city_processing import city_output_paths
 from src.config import CITY_GRIDS, RAW_DEM, RAW_HYDRO, RAW_NLCD, STUDY_AREAS, SUPPORT_LAYERS
+from src.error_utils import blank_exception_details, exception_details
 from src.load_cities import load_cities
+from src.vector_io import normalize_vector_geometry_dimensions, write_gpkg_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -257,9 +259,8 @@ def _clip_vector_to_study_area(
             hydro.geometry = hydro.geometry.intersection(geometry)
             hydro = hydro[hydro.geometry.notna() & ~hydro.geometry.is_empty].copy()
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    hydro.to_file(output_path, driver="GPKG")
-    return output_path
+    hydro = normalize_vector_geometry_dimensions(hydro, context=f"support-layer hydro clip {output_path.name}")
+    return write_gpkg_atomic(hydro, output_path)
 
 
 def audit_support_layer_readiness(
@@ -461,6 +462,7 @@ def prepare_support_layers(
             "status": "",
             "error": "",
             "updated_at_utc": generated_at_utc,
+            **blank_exception_details(),
         }
 
         if not bool(row["support_prep_ready"]):
@@ -503,6 +505,7 @@ def prepare_support_layers(
             logger.exception("Support-layer prep failed for city_id=%s", city_id)
             record["status"] = STATUS_FAILED
             record["error"] = str(exc)
+            record.update(exception_details(exc))
 
         records.append(record)
 

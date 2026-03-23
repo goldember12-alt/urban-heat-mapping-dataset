@@ -28,6 +28,7 @@ from src.config import (
     RAW_NDVI,
     STUDY_AREAS,
 )
+from src.error_utils import blank_exception_details, exception_details
 from src.load_cities import load_cities
 from src.stage_status import (
     STATUS_BLOCKED_MISSING_CREDENTIALS,
@@ -272,6 +273,7 @@ def _submission_decision(
 
 
 def _appeears_failure_details(exc: Exception) -> dict[str, Any]:
+    details = exception_details(exc)
     if isinstance(exc, AppEEARSRequestError):
         recoverable_hint = " rerun is safe/recommended once the transient issue clears." if exc.recoverable else ""
         return {
@@ -279,12 +281,14 @@ def _appeears_failure_details(exc: Exception) -> dict[str, Any]:
             "failure_reason": exc.reason,
             "recoverable": bool(exc.recoverable),
             "message": f"{exc}{recoverable_hint}",
+            **details,
         }
     return {
         "error": str(exc),
         "failure_reason": "unexpected_error",
         "recoverable": False,
         "message": str(exc),
+        **details,
     }
 
 
@@ -323,6 +327,7 @@ def _base_record(
         "submit_decision_reason": str(previous.get("submit_decision_reason", "")),
         "message": str(previous.get("message", "")),
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        **blank_exception_details(),
     }
 
 
@@ -729,6 +734,7 @@ def run_appeears_acquisition(
                 record["failure_reason"] = "aoi_load_error"
                 record["recoverable"] = False
                 record["message"] = str(exc)
+                record.update(exception_details(exc))
                 records_by_city[city_id] = record
                 continue
 
@@ -779,6 +785,9 @@ def run_appeears_acquisition(
                 record["failure_reason"] = str(failure["failure_reason"])
                 record["recoverable"] = bool(failure["recoverable"])
                 record["message"] = str(failure["message"])
+                record["exception_type"] = str(failure["exception_type"])
+                record["exception_message"] = str(failure["exception_message"])
+                record["traceback"] = str(failure["traceback"])
                 records_by_city[city_id] = record
                 continue
 
@@ -826,6 +835,9 @@ def run_appeears_acquisition(
                 record["failure_reason"] = f"poll_{failure['failure_reason']}"
                 record["recoverable"] = bool(failure["recoverable"])
                 record["message"] = str(failure["message"])
+                record["exception_type"] = str(failure["exception_type"])
+                record["exception_message"] = str(failure["exception_message"])
+                record["traceback"] = str(failure["traceback"])
                 records_by_city[city_id] = record
                 continue
 
@@ -894,6 +906,9 @@ def run_appeears_acquisition(
                 record["failure_reason"] = f"download_{failure['failure_reason']}"
                 record["recoverable"] = bool(failure["recoverable"])
                 record["message"] = str(failure["message"])
+                record["exception_type"] = str(failure["exception_type"])
+                record["exception_message"] = str(failure["exception_message"])
+                record["traceback"] = str(failure["traceback"])
 
         records_by_city[city_id] = record
 

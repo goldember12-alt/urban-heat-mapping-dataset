@@ -32,6 +32,7 @@ from src.config import (
 )
 from src.load_cities import load_cities
 from src.support_layers import discover_prepared_support_sources
+from src.vector_io import write_gpkg_atomic
 from src.raster_features import (
     RasterNormalizationSpec,
     align_and_extract_raster_values,
@@ -676,7 +677,7 @@ def assemble_city_features(
 
         city_features_unfiltered.drop(columns=["geometry"]).to_parquet(intermediate_unfiltered_path, index=False)
         city_features_filtered.drop(columns=["geometry"]).to_parquet(intermediate_filtered_path, index=False)
-        city_features_filtered.to_file(city_features_gpkg_path, driver="GPKG")
+        write_gpkg_atomic(city_features_filtered, city_features_gpkg_path)
         city_features_filtered.drop(columns=["geometry"]).to_parquet(city_features_parquet_path, index=False)
 
         logger.info("Saved city features GPKG: %s", city_features_gpkg_path)

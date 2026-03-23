@@ -11,6 +11,7 @@ import pandas as pd
 
 from src.appeears_acquisition import load_appeears_status_records, run_appeears_acquisition
 from src.config import CITY_FEATURES, INTERMEDIATE, ORCHESTRATION_STATUS
+from src.error_utils import blank_exception_details, exception_details
 from src.feature_assembly import (
     CELL_FILTER_STUDY_AREA,
     assemble_city_features,
@@ -60,7 +61,14 @@ def _write_summary_outputs(
 
 
 def _empty_stage_result(message: str = "") -> dict[str, Any]:
-    return {"status": STATUS_NOT_STARTED, "error": "", "failure_reason": "", "recoverable": False, "message": message}
+    return {
+        "status": STATUS_NOT_STARTED,
+        "error": "",
+        "failure_reason": "",
+        "recoverable": False,
+        "message": message,
+        **blank_exception_details(),
+    }
 
 
 def _failed_stage_result(
@@ -69,6 +77,9 @@ def _failed_stage_result(
     *,
     failure_reason: str = "",
     recoverable: bool = False,
+    exception_type: str = "",
+    exception_message: str = "",
+    traceback: str = "",
 ) -> dict[str, Any]:
     return {
         "status": STATUS_FAILED,
@@ -76,6 +87,9 @@ def _failed_stage_result(
         "failure_reason": failure_reason,
         "recoverable": recoverable,
         "message": message or error,
+        "exception_type": exception_type,
+        "exception_message": exception_message,
+        "traceback": traceback,
     }
 
 
@@ -86,6 +100,9 @@ def _normalize_stage_status(
     failure_reason: str = "",
     recoverable: bool = False,
     message: str = "",
+    exception_type: str = "",
+    exception_message: str = "",
+    traceback: str = "",
 ) -> dict[str, Any]:
     normalized = (status or "").strip().lower()
     if normalized in {STATUS_COMPLETED, STATUS_SKIPPED_EXISTING, STATUS_BLOCKED_MISSING_CREDENTIALS, STATUS_FAILED}:
@@ -95,6 +112,9 @@ def _normalize_stage_status(
             "failure_reason": failure_reason,
             "recoverable": recoverable,
             "message": message,
+            "exception_type": exception_type,
+            "exception_message": exception_message,
+            "traceback": traceback,
         }
     if normalized in {"submitted", "pending", STATUS_NOT_STARTED, ""}:
         final_message = message or "stage incomplete; rerun to continue"
@@ -104,6 +124,9 @@ def _normalize_stage_status(
             "failure_reason": failure_reason,
             "recoverable": recoverable,
             "message": final_message,
+            "exception_type": exception_type,
+            "exception_message": exception_message,
+            "traceback": traceback,
         }
     if normalized == "blocked":
         final_message = message or error or "stage blocked by missing prerequisites"
@@ -113,6 +136,9 @@ def _normalize_stage_status(
             "failure_reason": failure_reason or "stage_blocked",
             "recoverable": recoverable,
             "message": final_message,
+            "exception_type": exception_type,
+            "exception_message": exception_message,
+            "traceback": traceback,
         }
     final_message = message or error or f"unrecognized stage status: {normalized}"
     return {
@@ -121,7 +147,19 @@ def _normalize_stage_status(
         "failure_reason": failure_reason or f"unexpected_status:{normalized}",
         "recoverable": recoverable,
         "message": final_message,
+        "exception_type": exception_type,
+        "exception_message": exception_message,
+        "traceback": traceback,
     }
+
+
+def _join_non_empty(values: pd.Series | list[str]) -> str:
+    if isinstance(values, pd.Series):
+        items = values.fillna("").astype(str).tolist()
+    else:
+        items = [str(value) for value in values]
+    unique = [value.strip() for value in items if value and value.strip()]
+    return "\n\n".join(dict.fromkeys(unique))
 
 
 def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
@@ -136,6 +174,9 @@ def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
         for value in rows.get("failure_reason", pd.Series(dtype=str)).fillna("")
         if str(value).strip()
     ]
+    exception_type = _join_non_empty(rows.get("exception_type", pd.Series(dtype=str)))
+    exception_message = _join_non_empty(rows.get("exception_message", pd.Series(dtype=str)))
+    traceback = _join_non_empty(rows.get("traceback", pd.Series(dtype=str)))
     recoverable = bool(rows.get("recoverable", pd.Series(dtype=bool)).fillna(False).astype(bool).any())
     statuses = {str(value).strip().lower() for value in rows["status"].fillna("")}
 
@@ -145,6 +186,9 @@ def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
             "; ".join(dataset_parts),
             failure_reason="; ".join(failure_reasons),
             recoverable=recoverable,
+            exception_type=exception_type,
+            exception_message=exception_message,
+            traceback=traceback,
         )
     if "blocked" in statuses:
         return _failed_stage_result(
@@ -152,6 +196,9 @@ def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
             "; ".join(dataset_parts),
             failure_reason="; ".join(failure_reasons) or "stage_blocked",
             recoverable=recoverable,
+            exception_type=exception_type,
+            exception_message=exception_message,
+            traceback=traceback,
         )
     if statuses == {STATUS_SKIPPED_EXISTING}:
         return {
@@ -160,6 +207,7 @@ def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
             "failure_reason": "",
             "recoverable": False,
             "message": "; ".join(dataset_parts),
+            **blank_exception_details(),
         }
     if statuses.issubset({STATUS_COMPLETED, STATUS_SKIPPED_EXISTING}):
         final_status = STATUS_COMPLETED if STATUS_COMPLETED in statuses else STATUS_SKIPPED_EXISTING
@@ -169,6 +217,7 @@ def _aggregate_raw_stage(summary: pd.DataFrame, city_id: int) -> dict[str, Any]:
             "failure_reason": "",
             "recoverable": False,
             "message": "; ".join(dataset_parts),
+            **blank_exception_details(),
         }
 
     return _failed_stage_result(
@@ -191,6 +240,9 @@ def _single_row_stage(summary: pd.DataFrame, city_id: int, default_message: str)
         failure_reason=str(row.get("failure_reason", "") or ""),
         recoverable=bool(row.get("recoverable", False)),
         message=str(row.get("message", "") or ""),
+        exception_type=str(row.get("exception_type", "") or ""),
+        exception_message=str(row.get("exception_message", "") or ""),
+        traceback=str(row.get("traceback", "") or ""),
     )
 
 
@@ -242,6 +294,7 @@ def _feature_stage_result(
             "failure_reason": "",
             "recoverable": False,
             "message": "existing city feature outputs retained",
+            **blank_exception_details(),
         }
 
     try:
@@ -256,7 +309,14 @@ def _feature_stage_result(
         )
     except Exception as exc:  # pragma: no cover - exercised in integration/manual runs
         logger.exception("Feature assembly failed for city_id=%s", int(city["city_id"]))
-        return _failed_stage_result(str(exc), failure_reason="feature_assembly_error")
+        details = exception_details(exc)
+        return _failed_stage_result(
+            str(exc),
+            failure_reason="feature_assembly_error",
+            exception_type=details["exception_type"],
+            exception_message=details["exception_message"],
+            traceback=details["traceback"],
+        )
 
     if result.blocked_stages:
         blocked = ";".join(result.blocked_stages)
@@ -272,7 +332,27 @@ def _feature_stage_result(
         "failure_reason": "",
         "recoverable": False,
         "message": f"rows={result.n_rows}",
+        **blank_exception_details(),
     }
+
+
+def _primary_stage(stage_results: dict[str, dict[str, str]]) -> tuple[str, dict[str, str]] | None:
+    ordered_keys = [
+        "raw_support_acquisition",
+        "support_layer_prep",
+        "appeears_ndvi",
+        "appeears_ecostress",
+        "feature_assembly",
+    ]
+    for key in ordered_keys:
+        stage = stage_results[key]
+        if stage["status"] == STATUS_FAILED:
+            return key, stage
+    for key in ordered_keys:
+        stage = stage_results[key]
+        if not is_success_status(stage["status"]):
+            return key, stage
+    return None
 
 
 def _overall_status(stage_results: dict[str, dict[str, str]]) -> tuple[str, str]:
@@ -292,6 +372,18 @@ def _overall_status(stage_results: dict[str, dict[str, str]]) -> tuple[str, str]
     if any(item["status"] == STATUS_FAILED for item in ordered):
         return STATUS_FAILED, "one or more stages failed"
     return STATUS_NOT_STARTED, "one or more stages remain incomplete"
+
+
+def orchestration_exit_code(summary: pd.DataFrame) -> int:
+    if summary.empty or "overall_status" not in summary.columns:
+        return 0
+
+    statuses = {str(value).strip().lower() for value in summary["overall_status"].fillna("")}
+    if STATUS_FAILED in statuses:
+        return 1
+    if STATUS_NOT_STARTED in statuses or STATUS_BLOCKED_MISSING_CREDENTIALS in statuses:
+        return 2
+    return 0
 
 
 def city_ids_missing_full_stack_outputs(
@@ -470,37 +562,59 @@ def run_full_stack_orchestration(
             intermediate_dir=intermediate_dir,
         )
         overall_status, overall_message = _overall_status(stage_results)
+        primary_stage = _primary_stage(stage_results)
+        primary_stage_name = primary_stage[0] if primary_stage is not None else ""
+        primary_stage_result = primary_stage[1] if primary_stage is not None else blank_exception_details()
 
         record: dict[str, Any] = {
             "city_id": city_id,
             "city_name": city_name,
             "state": str(city["state"]),
             "selection_mode": selection_mode,
+            "stage": primary_stage_name,
+            "exception_type": str(primary_stage_result.get("exception_type", "")),
+            "exception_message": str(primary_stage_result.get("exception_message", "")),
+            "traceback": str(primary_stage_result.get("traceback", "")),
             "raw_support_acquisition_status": stage_results["raw_support_acquisition"]["status"],
             "raw_support_acquisition_error": stage_results["raw_support_acquisition"]["error"],
             "raw_support_acquisition_failure_reason": stage_results["raw_support_acquisition"]["failure_reason"],
             "raw_support_acquisition_recoverable": stage_results["raw_support_acquisition"]["recoverable"],
             "raw_support_acquisition_message": stage_results["raw_support_acquisition"]["message"],
+            "raw_support_acquisition_exception_type": stage_results["raw_support_acquisition"]["exception_type"],
+            "raw_support_acquisition_exception_message": stage_results["raw_support_acquisition"]["exception_message"],
+            "raw_support_acquisition_traceback": stage_results["raw_support_acquisition"]["traceback"],
             "support_layer_prep_status": stage_results["support_layer_prep"]["status"],
             "support_layer_prep_error": stage_results["support_layer_prep"]["error"],
             "support_layer_prep_failure_reason": stage_results["support_layer_prep"]["failure_reason"],
             "support_layer_prep_recoverable": stage_results["support_layer_prep"]["recoverable"],
             "support_layer_prep_message": stage_results["support_layer_prep"]["message"],
+            "support_layer_prep_exception_type": stage_results["support_layer_prep"]["exception_type"],
+            "support_layer_prep_exception_message": stage_results["support_layer_prep"]["exception_message"],
+            "support_layer_prep_traceback": stage_results["support_layer_prep"]["traceback"],
             "appeears_ndvi_status": stage_results["appeears_ndvi"]["status"],
             "appeears_ndvi_error": stage_results["appeears_ndvi"]["error"],
             "appeears_ndvi_failure_reason": stage_results["appeears_ndvi"]["failure_reason"],
             "appeears_ndvi_recoverable": stage_results["appeears_ndvi"]["recoverable"],
             "appeears_ndvi_message": stage_results["appeears_ndvi"]["message"],
+            "appeears_ndvi_exception_type": stage_results["appeears_ndvi"]["exception_type"],
+            "appeears_ndvi_exception_message": stage_results["appeears_ndvi"]["exception_message"],
+            "appeears_ndvi_traceback": stage_results["appeears_ndvi"]["traceback"],
             "appeears_ecostress_status": stage_results["appeears_ecostress"]["status"],
             "appeears_ecostress_error": stage_results["appeears_ecostress"]["error"],
             "appeears_ecostress_failure_reason": stage_results["appeears_ecostress"]["failure_reason"],
             "appeears_ecostress_recoverable": stage_results["appeears_ecostress"]["recoverable"],
             "appeears_ecostress_message": stage_results["appeears_ecostress"]["message"],
+            "appeears_ecostress_exception_type": stage_results["appeears_ecostress"]["exception_type"],
+            "appeears_ecostress_exception_message": stage_results["appeears_ecostress"]["exception_message"],
+            "appeears_ecostress_traceback": stage_results["appeears_ecostress"]["traceback"],
             "feature_assembly_status": stage_results["feature_assembly"]["status"],
             "feature_assembly_error": stage_results["feature_assembly"]["error"],
             "feature_assembly_failure_reason": stage_results["feature_assembly"]["failure_reason"],
             "feature_assembly_recoverable": stage_results["feature_assembly"]["recoverable"],
             "feature_assembly_message": stage_results["feature_assembly"]["message"],
+            "feature_assembly_exception_type": stage_results["feature_assembly"]["exception_type"],
+            "feature_assembly_exception_message": stage_results["feature_assembly"]["exception_message"],
+            "feature_assembly_traceback": stage_results["feature_assembly"]["traceback"],
             "city_features_gpkg_path": str(feature_paths.city_features_gpkg_path),
             "city_features_parquet_path": str(feature_paths.city_features_parquet_path),
             "overall_status": overall_status,

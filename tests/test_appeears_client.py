@@ -42,6 +42,44 @@ class _SequenceSession:
         return response
 
 
+class _StreamingResponse:
+    def __init__(self, status_code: int = 200, chunks=None, text: str = ""):
+        self.status_code = status_code
+        self._chunks = list(chunks or [])
+        self.text = text
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def json(self):
+        return {}
+
+    def iter_content(self, chunk_size=1024 * 1024):
+        for chunk in self._chunks:
+            if isinstance(chunk, Exception):
+                raise chunk
+            yield chunk
+
+
+class _DownloadSequenceSession:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = 0
+
+    def request(self, method, url, headers=None, json=None, timeout=None):
+        raise AssertionError("request() should not be used in these download tests")
+
+    def get(self, url, headers=None, stream=None, timeout=None):
+        self.calls += 1
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
 def test_read_auth_from_environment_prefers_earthdata_credentials_over_static_token(monkeypatch):
     monkeypatch.setenv("APPEEARS_API_TOKEN", "stale-token")
     monkeypatch.setenv("EARTHDATA_USERNAME", "user")
@@ -267,3 +305,43 @@ def test_submit_task_timeout_without_matching_task_raises_recoverable_error():
     assert err.reason == "request_timeout"
     assert err.recoverable is True
     assert "submission state remains unknown" in str(err)
+
+
+def test_download_bundle_file_retries_recoverable_connection_error(tmp_path):
+    session = _DownloadSequenceSession(
+        [
+            requests.ConnectionError("connection reset"),
+            _StreamingResponse(chunks=[b"abc", b"def"]),
+        ]
+    )
+    client = AppEEARSClient(
+        auth=AppEEARSAuthConfig(token="test-token", username=None, password=None),
+        session=session,
+    )
+
+    destination = tmp_path / "bundle.tif"
+    path = client.download_bundle_file(task_id="task-1", file_id="file-1", destination=destination)
+
+    assert session.calls == 2
+    assert path == destination
+    assert destination.read_bytes() == b"abcdef"
+
+
+def test_download_bundle_file_surfaces_recoverable_error_after_retry_exhaustion(tmp_path):
+    session = _DownloadSequenceSession([requests.ConnectionError("connection reset")] * 4)
+    client = AppEEARSClient(
+        auth=AppEEARSAuthConfig(token="test-token", username=None, password=None),
+        session=session,
+    )
+
+    with pytest.raises(AppEEARSRequestError) as exc_info:
+        client.download_bundle_file(
+            task_id="task-1",
+            file_id="file-1",
+            destination=tmp_path / "bundle.tif",
+        )
+
+    err = exc_info.value
+    assert session.calls == 4
+    assert err.reason == "connection_error"
+    assert err.recoverable is True

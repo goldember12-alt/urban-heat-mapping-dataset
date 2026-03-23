@@ -470,33 +470,81 @@ class AppEEARSClient:
 
     def download_bundle_file(self, task_id: str, file_id: str, destination: Path) -> Path:
         """Download one bundle file to disk (new files only)."""
+        if destination.exists():
+            return destination
+
         destination.parent.mkdir(parents=True, exist_ok=True)
         temp_path = destination.with_suffix(destination.suffix + ".part")
+        last_error: AppEEARSRequestError | None = None
 
-        try:
-            response = self._session.get(
-                self._api_url(f"/bundle/{task_id}/{file_id}"),
-                headers=self._headers(),
-                stream=True,
-                timeout=self._timeout,
-            )
-        except requests.RequestException as exc:
-            raise AppEEARSRequestError(f"File download failed for file_id={file_id}: {exc}") from exc
+        for attempt in range(1, _MAX_API_ATTEMPTS + 1):
+            if temp_path.exists():
+                temp_path.unlink()
+            try:
+                with self._session.get(
+                    self._api_url(f"/bundle/{task_id}/{file_id}"),
+                    headers=self._headers(),
+                    stream=True,
+                    timeout=self._timeout,
+                ) as response:
+                    if response.status_code >= 400:
+                        response_detail = _response_error_detail(response)
+                        recoverable = response.status_code in _RETRYABLE_STATUS_CODES
+                        last_error = AppEEARSRequestError(
+                            f"File download failed for file_id={file_id}",
+                            status_code=response.status_code,
+                            response_text=response_detail,
+                            reason="download_http_error",
+                            recoverable=recoverable,
+                        )
+                        if recoverable and attempt < _MAX_API_ATTEMPTS:
+                            logger.warning(
+                                "AppEEARS bundle download retrying task_id=%s file_id=%s attempt=%s/%s status=%s",
+                                task_id,
+                                file_id,
+                                attempt,
+                                _MAX_API_ATTEMPTS,
+                                response.status_code,
+                            )
+                            time.sleep(2 ** (attempt - 1))
+                            continue
+                        raise last_error
 
-        if response.status_code >= 400:
-            raise AppEEARSRequestError(
-                f"File download failed for file_id={file_id}",
-                status_code=response.status_code,
-                response_text=response.text[:500],
-            )
+                    with temp_path.open("wb") as handle:
+                        for chunk in response.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                handle.write(chunk)
 
-        with temp_path.open("wb") as handle:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    handle.write(chunk)
+                temp_path.replace(destination)
+                return destination
+            except requests.RequestException as exc:
+                reason, recoverable = _request_exception_reason(exc)
+                last_error = AppEEARSRequestError(
+                    f"File download failed for file_id={file_id}: {exc}",
+                    reason=reason,
+                    recoverable=recoverable,
+                )
+                if recoverable and attempt < _MAX_API_ATTEMPTS:
+                    logger.warning(
+                        "AppEEARS bundle download retrying task_id=%s file_id=%s attempt=%s/%s reason=%s error=%s",
+                        task_id,
+                        file_id,
+                        attempt,
+                        _MAX_API_ATTEMPTS,
+                        reason,
+                        exc,
+                    )
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+                raise last_error from exc
 
-        temp_path.replace(destination)
-        return destination
+        if last_error is not None:  # pragma: no cover
+            raise last_error
+        raise AppEEARSRequestError(  # pragma: no cover
+            f"File download failed for file_id={file_id}: retries exhausted",
+            reason="download_retries_exhausted",
+            recoverable=True,
+        )
 
     def _request_json(
         self,

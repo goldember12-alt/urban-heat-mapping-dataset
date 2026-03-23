@@ -429,6 +429,15 @@ class _ExistingTaskClient:
         return destination
 
 
+class _FailingDownloadClient(_ExistingTaskClient):
+    def download_bundle_file(self, task_id: str, file_id: str, destination: Path):
+        raise AppEEARSRequestError(
+            f"File download failed for file_id={file_id}: connection reset",
+            reason="connection_error",
+            recoverable=True,
+        )
+
+
 def test_run_appeears_acquisition_reuses_existing_task_id_and_downloads_done_bundle(tmp_path: Path, monkeypatch):
     cities = pd.DataFrame(
         {
@@ -672,3 +681,82 @@ def test_run_appeears_acquisition_marks_done_bundle_with_existing_files_as_skipp
     assert row["status"] == "skipped_existing"
     assert int(row["n_files_downloaded"]) == 0
     assert int(row["n_files_existing"]) == 2
+
+
+def test_run_appeears_acquisition_records_recoverable_download_failure_details(tmp_path: Path, monkeypatch):
+    cities = pd.DataFrame(
+        {
+            "city_id": [5],
+            "city_name": ["Denver"],
+            "state": ["CO"],
+            "climate_group": ["cold"],
+            "lat": [39.74],
+            "lon": [-104.99],
+        }
+    )
+    preflight_summary = pd.DataFrame(
+        {
+            "city_id": [5],
+            "expected_study_area_path": [str(tmp_path / "study_areas" / "denver.gpkg")],
+            "expected_aoi_path": [str(tmp_path / "appeears_aoi" / "denver.geojson")],
+        }
+    )
+    aoi_summary = pd.DataFrame(
+        {
+            "city_id": [5],
+            "status": ["completed"],
+            "study_area_path": [str(tmp_path / "study_areas" / "denver.gpkg")],
+            "aoi_path": [str(tmp_path / "appeears_aoi" / "denver.geojson")],
+        }
+    )
+    existing = {
+        5: {
+            "city_id": 5,
+            "city_name": "Denver",
+            "status": "pending",
+            "task_id": "task-5",
+            "remote_task_status": "pending",
+            "product": "MOD13A1.061",
+            "layer": "_500m_16_days_NDVI",
+        }
+    }
+    client = _FailingDownloadClient(
+        remote_status="done",
+        bundle_files=[{"file_id": "1", "file_name": "ndvi_1.tif"}],
+    )
+
+    monkeypatch.setenv("EARTHDATA_USERNAME", "user")
+    monkeypatch.setenv("EARTHDATA_PASSWORD", "pass")
+    monkeypatch.setattr("src.appeears_acquisition.load_cities", lambda: cities)
+    monkeypatch.setattr("src.appeears_acquisition._load_existing_records", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.audit_appeears_acquisition_readiness",
+        lambda **kwargs: AcquisitionPreflightResult(
+            summary=preflight_summary,
+            summary_json_path=tmp_path / "appeears_status" / "preflight.json",
+            summary_csv_path=tmp_path / "appeears_status" / "preflight.csv",
+        ),
+    )
+    monkeypatch.setattr("src.appeears_acquisition.export_appeears_aois", lambda **kwargs: aoi_summary)
+    monkeypatch.setattr("src.appeears_acquisition.AppEEARSClient.from_environment", lambda: client)
+    monkeypatch.setattr(
+        "src.appeears_acquisition.resolve_city_download_dir",
+        lambda **kwargs: tmp_path / "raw" / "ndvi" / "denver",
+    )
+
+    result = run_appeears_acquisition(
+        product_type="ndvi",
+        start_date="2023-05-01",
+        end_date="2023-08-31",
+        city_ids=[5],
+        retry_incomplete=True,
+        status_dir=tmp_path / "appeears_status",
+    )
+
+    row = result.summary.iloc[0]
+    assert row["status"] == "failed"
+    assert row["failure_reason"] == "download_connection_error"
+    assert bool(row["recoverable"]) is True
+    assert row["exception_type"] == "AppEEARSRequestError"
+    assert "connection reset" in row["exception_message"]
+    assert "AppEEARSRequestError" in row["traceback"]

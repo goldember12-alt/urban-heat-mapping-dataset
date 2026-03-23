@@ -39,8 +39,10 @@ from src.config import (
     TNM_ACCESS_BASE_URL,
     TNM_NHDPLUS_HR_DATASET,
 )
+from src.error_utils import blank_exception_details, exception_details
 from src.load_cities import load_cities
 from src.support_layers import audit_support_layer_readiness, expected_support_layer_raw_paths
+from src.vector_io import normalize_vector_geometry_dimensions, write_gpkg_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -754,15 +756,8 @@ def _zip_member_name(zip_path: Path, pattern: re.Pattern[str]) -> str:
 
 
 def _write_vector_output(gdf: gpd.GeoDataFrame, output_path: Path, layer: str = "water") -> Path:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    if temp_path.exists():
-        temp_path.unlink()
-    if output_path.exists():
-        output_path.unlink()
-    gdf.to_file(temp_path, layer=layer, driver="GPKG")
-    temp_path.replace(output_path)
-    return output_path
+    normalized = normalize_vector_geometry_dimensions(gdf, context=f"GeoPackage write {output_path.name}")
+    return write_gpkg_atomic(normalized, output_path, layer=layer)
 
 
 def _filter_water_layer(gdf: gpd.GeoDataFrame, layer_name: str) -> gpd.GeoDataFrame:
@@ -780,7 +775,7 @@ def _filter_water_layer(gdf: gpd.GeoDataFrame, layer_name: str) -> gpd.GeoDataFr
 
 def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Load and clip the NHDPlus HR water layers needed by downstream distance-to-water logic."""
-    import pyogrio
+    import fiona
 
     if study_area_gdf.empty:
         raise ValueError("study_area_gdf must not be empty")
@@ -789,8 +784,7 @@ def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDa
 
     study_geometry = _union_geometry(study_area_gdf.geometry)
     available_layers: dict[str, str] = {}
-    for layer_info in pyogrio.list_layers(package_path):
-        layer_name = str(layer_info[0])
+    for layer_name in fiona.listlayers(package_path):
         available_layers[layer_name.lower()] = layer_name
     frames: list[gpd.GeoDataFrame] = []
 
@@ -800,7 +794,13 @@ def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDa
         if layer_name is None:
             continue
 
-        study_in_layer_crs = study_area_gdf.to_crs(pyogrio.read_info(package_path, layer=layer_name)["crs"])
+        with fiona.open(package_path, layer=layer_name) as source:
+            layer_crs = source.crs_wkt or source.crs
+        if not layer_crs:
+            logger.warning("Skipping hydro layer %s from %s because CRS metadata is missing", layer_name, package_path.name)
+            continue
+
+        study_in_layer_crs = study_area_gdf.to_crs(layer_crs)
         layer_geometry = _union_geometry(study_in_layer_crs.geometry)
         layer_bbox = tuple(float(value) for value in study_in_layer_crs.total_bounds)
         logger.info(
@@ -810,7 +810,7 @@ def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDa
             ",".join(f"{value:.2f}" for value in layer_bbox),
         )
         started = time.perf_counter()
-        water = gpd.read_file(package_path, layer=layer_name, bbox=layer_bbox)
+        water = gpd.read_file(package_path, layer=layer_name, bbox=layer_bbox, engine="fiona")
         logger.info(
             "Loaded hydro layer %s from %s in %.1f s (%s rows before filtering)",
             layer_name,
@@ -820,6 +820,11 @@ def collect_nhdplus_water_features(package_path: Path, study_area_gdf: gpd.GeoDa
         )
         if water.empty or water.crs is None:
             continue
+
+        water = normalize_vector_geometry_dimensions(
+            water,
+            context=f"NHDPlus layer {layer_name} from {package_path.name}",
+        )
 
         water = water[water.geometry.notna() & ~water.geometry.is_empty].copy()
         if water.empty:
@@ -1208,6 +1213,7 @@ def run_raw_data_acquisition(
                     "warnings": "",
                     "warning_count": 0,
                     "updated_at_utc": generated_at_utc,
+                    **blank_exception_details(),
                 }
 
                 if not study_area_path.exists():
@@ -1269,6 +1275,7 @@ def run_raw_data_acquisition(
                     record["failure_reason"] = str(failure["failure_reason"])
                     record["failure_category"] = str(failure["failure_category"])
                     record["recoverable"] = bool(failure["recoverable"])
+                    record.update(exception_details(exc))
 
                 records.append(record)
 

@@ -64,10 +64,11 @@ def _write_raster(path: Path, values: np.ndarray, dtype: str) -> None:
         dst.write(values, 1)
 
 
-def _write_hydro(path: Path) -> None:
+def _write_hydro(path: Path, *, with_z: bool = False) -> None:
+    geometry = LineString([(45, 45, 5), (165, 165, 9)]) if with_z else LineString([(45, 45), (165, 165)])
     hydro = gpd.GeoDataFrame(
         {"name": ["canal"]},
-        geometry=[LineString([(45, 45), (165, 165)])],
+        geometry=[geometry],
         crs="EPSG:3857",
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -251,3 +252,40 @@ def test_discover_prepared_support_sources_and_feature_assembly_prefer_prepared_
     assert sources.nlcd_land_cover_raster == prepared.nlcd_land_cover_raster
     assert sources.nlcd_impervious_raster == prepared.nlcd_impervious_raster
     assert sources.hydro_vector == prepared.hydro_vector
+
+
+def test_prepare_support_layers_normalizes_hydro_to_2d(tmp_path: Path):
+    city = load_cities().iloc[0]
+    study_area_path, grid_path = city_output_paths(
+        city,
+        resolution=30,
+        study_areas_dir=tmp_path / "study_areas",
+        city_grids_dir=tmp_path / "city_grids",
+    )
+    _write_city_study_area(city, study_area_path)
+    _write_city_grid(city, grid_path)
+
+    expected_raw = expected_support_layer_raw_paths(
+        city,
+        raw_dem_dir=tmp_path / "raw" / "dem",
+        raw_nlcd_dir=tmp_path / "raw" / "nlcd",
+        raw_hydro_dir=tmp_path / "raw" / "hydro",
+    )
+    _write_raster(expected_raw.dem_raster, np.arange(100, dtype=np.float32).reshape(10, 10), "float32")
+    _write_raster(expected_raw.nlcd_land_cover_raster, np.full((10, 10), 21, dtype=np.uint8), "uint8")
+    _write_raster(expected_raw.nlcd_impervious_raster, np.full((10, 10), 35, dtype=np.uint8), "uint8")
+    _write_hydro(expected_raw.hydro_vector, with_z=True)
+
+    prepare_support_layers(
+        city_ids=[1],
+        study_areas_dir=tmp_path / "study_areas",
+        city_grids_dir=tmp_path / "city_grids",
+        raw_dem_dir=tmp_path / "raw" / "dem",
+        raw_nlcd_dir=tmp_path / "raw" / "nlcd",
+        raw_hydro_dir=tmp_path / "raw" / "hydro",
+        support_layers_dir=tmp_path / "support_layers",
+    )
+
+    prepared = expected_support_layer_prepared_paths(city, support_layers_dir=tmp_path / "support_layers")
+    hydro = gpd.read_file(prepared.hydro_vector)
+    assert bool(hydro.geometry.iloc[0].has_z) is False

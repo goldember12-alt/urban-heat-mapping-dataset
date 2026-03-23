@@ -19,12 +19,16 @@ Implemented in code:
 - AppEEARS-related CLIs now load `PROJECT_ROOT/.env.local` before credential lookup, without overriding already-exported environment variables.
 - Thin acquisition orchestration runner that sequences raw support acquisition, support-layer prep, NDVI AppEEARS, ECOSTRESS AppEEARS, and writes a restart-safe status summary.
 - Full-stack city orchestration runner that extends raw/support/AppEEARS stages through feature assembly and writes one per-city stage summary row.
+- Full-stack orchestration summaries now carry explicit per-stage exception metadata (`exception_type`, `exception_message`, `traceback`) plus a city-level `stage` pointer to the primary failed or incomplete stage.
+- Full-stack CLI exit behavior is now explicit: `0` when all requested cities complete, `1` when any city fails, and `2` when cities remain incomplete or credential-blocked.
 - Deterministic AppEEARS preflight/audit path that computes expected per-city study area, AOI, raw download, and status-summary paths; validates AOI CRS; and writes machine-readable preflight outputs.
 - Deterministic support-layer preflight/audit path for DEM, NLCD land cover, NLCD impervious, and hydro inputs.
 - Restartable raw support-layer acquisition runner for official USGS 3DEP 1 arc-second DEM, MRLC Annual NLCD 2021 land cover + impervious, and USGS NHDPlus HR hydro packages.
 - Raw support downloads now preserve `.part` files, resume interrupted large hydro ZIP transfers when the host supports byte ranges, and record structured `failure_reason` / `failure_category` / `recoverable` metadata plus hydro warning details.
+- AppEEARS bundle downloads now retry transient connection and retryable HTTP failures instead of failing a city on the first dropped connection, and those failures now serialize as recoverable download-specific reasons.
 - TNM malformed pseudo-JSON wrappers that embed ScienceBase/TNM upstream failures, including `RemoteDisconnected`, `Connection aborted`, `Remote end closed connection`, `Response ended prematurely`, and `get_products.py`, now classify as recoverable `sciencebase_upstream_error` events with a 6-attempt retry/backoff policy; retry-exhausted TNM `/products` `502/503/504` errors now classify as recoverable `tnm_upstream_http_error`, `dem_tiles_not_found` is now a recoverable `data_unavailable` failure, and raw-acquisition TLS classification now imports `requests.exceptions.SSLError` correctly.
 - Deterministic support-layer prep runner that clips standardized city-specific raw support files into `data_processed/support_layers/<city_stem>/`.
+- GeoPackage writers now use `.tmp.gpkg` temp targets plus atomic replace, and hydro vectors are normalized to 2D before write so measured/M-or-Z geometries do not rely on silent pyogrio conversion.
 - Cache audit/cleanup utility now inventories `data_raw/cache/`, classifies artifacts by retention tier, writes JSON metadata outside the cache tree, and supports dry-run targeted prune plans for safe regenerable artifacts.
 - Feature-source discovery now prefers prepared support-layer outputs and otherwise preserves the prior raw-folder fallback behavior.
 - AppEEARS feature-source discovery now recognizes native value-layer filenames and excludes QA/cloud/error sidecars with explicit logging.
@@ -45,7 +49,12 @@ Standardization status:
 
 ## Testing Status
 
-As of 2026-03-21:
+As of 2026-03-23:
+
+- Orchestration/AppEEARS/vector hardening subset: `36 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py tests/test_support_layers.py -q"`
+
+Previously recorded:
 
 - Focused raw/AppEEARS/full-stack hardening subset: `35 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_raw_data_acquisition.py tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py -q"`
@@ -123,6 +132,7 @@ Test-verified:
 - Full-stack city orchestration coverage is included in `tests/test_full_stack_orchestration.py`.
 - Raster stack validation and stale-legacy AppEEARS handoff coverage are included in `tests/test_feature_assembly.py` and `tests/test_raster_features.py`.
 - Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
+- The latest targeted regression result is `36 passed` for AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization hardening.
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
 - The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
 - The latest `.env.local` bootstrap regression results are `27 passed` for env bootstrap plus AppEEARS/full-stack compatibility.
@@ -163,6 +173,7 @@ Manually verified:
   - ECOSTRESS summary rows show Tucson=`skipped_existing`, Las Vegas=`completed`, Albuquerque=`completed`, all with `remote_task_status=done`.
 - No fresh live orchestration rerun was executed in the 2026-03-19 checkpoint; readiness assessment is based on current on-disk outputs plus the new focused regression pass.
 - No fresh live rerun of the affected cities (`5,6,7,21,27`) has been executed after the 2026-03-20 network-recovery hardening and follow-up TNM wrapper / DEM-tile / `SSLError` fixes; these checkpoints are test-verified only.
+- No fresh live rerun of the 2026-03-22 ECOSTRESS-affected cities (`16,17,18,19,28`) has been executed after the 2026-03-23 AppEEARS download retry, summary-schema, and GeoPackage/vector hardening changes; this checkpoint is test-verified only.
 - 2026-03-21 rerun log review from `rerun_affected.log`:
   - Confirmed the earlier `sciencebase_upstream_error` fix is now active in real orchestration output, with `6` retry attempts and no full-pipeline abort.
   - Confirmed the remaining gaps were a retry-exhausted TNM `/products` `504` that still summarized as `unexpected_error` and a malformed wrapper containing `Response ended prematurely` plus `get_products.py` that still summarized as `invalid_json_response`.
@@ -311,19 +322,15 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Before the next multi-city batch, keep the current cache policy conservative and avoid live deletion during active downloads. When the current batch finishes, rerun the dry-run plan without the recent-file gate and review the JSON manifest:
+Rerun the concrete ECOSTRESS/download cohort from the 2026-03-22 full-stack log and inspect the updated orchestration and AppEEARS summary fields:
 
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run.json"`
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate.json"`
-
-After that, rerun the concrete failure cohort from the 2026-03-20 orchestration log and inspect the new structured summary fields:
-
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 5,6,7,21,27 --start-date 2023-05-01 --end-date 2023-08-31"`
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 16,17,18,19,28 --start-date 2023-05-01 --end-date 2023-08-31 --cell-filter-mode core_city"`
 
 Recommended operator setup before that run:
 
 - Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell.
 - Unset any stale `APPEEARS_API_TOKEN` if one is still present.
+- Confirm the rerun finishes with `exit_code=0` or `exit_code=2` only if Minneapolis is still remotely processing; `exit_code=1` should disappear once the four download failures are resolved.
 
 ## Current Output Structure
 
@@ -362,9 +369,43 @@ Recommended operator setup before that run:
 - Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 - Raw support acquisition still depends on very large official NLCD and NHDPlus source downloads; long wall-clock times are expected even when the code is behaving correctly.
 - `data_processed/city_grids/` is now a separate major storage hotspot at about `25.09 GB` and will need its own retention/compression review after cache cleanup.
-- The new TNM/AppEEARS recovery paths still need a real rerun against the affected cities from the 2026-03-20 failure log for manual confirmation.
+- The new AppEEARS download-retry and full-stack exception-summary paths still need a real rerun against cities `16,17,18,19,28` for manual confirmation.
 
 ## Checkpoint Log
+
+### 2026-03-23 - Checkpoint: ECOSTRESS Download Retry, Exception Summary, And GeoPackage Hardening
+
+- Date / checkpoint:
+  - 2026-03-23 follow-up after reviewing `full_run_v2.txt` and the saved full-stack/AppEEARS summaries.
+- Change made:
+  - Confirmed cities `16=Miami`, `17=Jacksonville`, `18=Atlanta`, and `19=Charlotte` failed at AppEEARS ECOSTRESS bundle download after `remote_task_status=done` because a single `ConnectionResetError(10054)` was treated as a terminal city failure.
+  - Confirmed city `28=Minneapolis` was not truly unstarted; its saved ECOSTRESS task remained remote `processing`, so the city was still incomplete rather than crashed.
+  - Added AppEEARS bundle-download retry handling for recoverable connection and retryable HTTP failures, preserving resumable/idempotent download behavior.
+  - Expanded raw/support/AppEEARS/full-stack summary rows to serialize `exception_type`, `exception_message`, and `traceback`, and added a full-stack `stage` field pointing at the primary failed or incomplete stage.
+  - Made the full-stack CLI route logs/warnings to stdout and return explicit exit codes instead of relying on PowerShell-native stderr behavior.
+  - Normalized hydro vector geometries to 2D before write and switched GeoPackage temp writes to `.tmp.gpkg` atomic outputs.
+- Files touched:
+  - `src/appeears_client.py`
+  - `src/appeears_acquisition.py`
+  - `src/full_stack_orchestration.py`
+  - `src/run_full_stack_orchestration.py`
+  - `src/raw_data_acquisition.py`
+  - `src/support_layers.py`
+  - `src/feature_assembly.py`
+  - `src/error_utils.py`
+  - `src/vector_io.py`
+  - `tests/test_appeears_client.py`
+  - `tests/test_appeears_acquisition.py`
+  - `tests/test_full_stack_orchestration.py`
+  - `tests/test_support_layers.py`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 16,17,18,19,28 --start-date 2023-05-01 --end-date 2023-08-31 --cell-filter-mode core_city"`
+- Test status:
+  - Verified by `36 passed` from the targeted pytest subset covering AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization.
+- Manual verification status:
+  - No live rerun executed yet after the patch set; the saved 2026-03-22 summary/log artifacts remain the source for the root-cause diagnosis.
+- Next recommended step:
+  - Run the five-city rerun above, then confirm the full-stack summary counts move from `completed=25, failed=4, not_started=1` to either all completed or only Minneapolis remaining incomplete if its remote task is still processing.
 
 ### 2026-03-21 - Checkpoint: TNM 504 Classification And Premature-Response Wrapper Fixed
 
