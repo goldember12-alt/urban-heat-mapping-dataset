@@ -16,6 +16,7 @@ TESTS = PROJECT_ROOT / "tests"
 # Common processed subfolders
 CITY_FEATURES = DATA_PROCESSED / "city_features"
 FINAL = DATA_PROCESSED / "final"
+MODELING = DATA_PROCESSED / "modeling"
 STUDY_AREAS = DATA_PROCESSED / "study_areas"
 CITY_GRIDS = DATA_PROCESSED / "city_grids"
 INTERMEDIATE = DATA_PROCESSED / "intermediate"

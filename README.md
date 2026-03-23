@@ -26,6 +26,8 @@ Target analytic unit: one row per 30 m grid cell per city.
 16. Hydrography distance-to-water raster generation and extraction.
 17. Per-city feature assembly outputs (`.gpkg` + `.parquet`) with intermediate saves.
 18. Final merged dataset assembly (`.parquet` + `.csv`) with row rules and `hotspot_10pct`.
+19. Final-dataset audit and deterministic city-level fold generation for modeling handoff.
+20. Leak-safe city-held-out baseline modeling with streaming logistic regression, decision-stump comparison, fold metrics, and saved validation predictions.
 
 Latest verified workspace checkpoint on 2026-03-19:
 
@@ -302,6 +304,30 @@ Final merge only:
 .venv\Scripts\python.exe -m src.run_final_dataset_assembly
 ```
 
+Final-dataset audit:
+
+```powershell
+.venv\Scripts\python.exe -m src.audit_final_dataset
+```
+
+Deterministic city-level folds:
+
+```powershell
+.venv\Scripts\python.exe -m src.make_model_folds --n-splits 5
+```
+
+Baseline modeling:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_model_baselines
+```
+
+Run a subset of folds or models during smoke checks:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_model_baselines --outer-folds 0 --models logistic_regression
+```
+
 End-to-end pipeline orchestrator:
 
 ```powershell
@@ -333,5 +359,70 @@ For stage-1 regeneration with no buffer:
 - `data_processed/intermediate/` aligned rasters + unfiltered/filtered city feature tables
 - `data_processed/city_features/` per-city feature outputs + batch summary
 - `data_processed/final/` merged dataset outputs
+- `data_processed/modeling/` final-dataset audit artifacts, deterministic city-level folds, and baseline-model outputs
 - `docs/` workflow and data dictionary
 - `tests/` automated tests
+
+## Modeling Handoff
+
+Canonical training dataset:
+
+- `data_processed/final/final_dataset.parquet`
+
+Initial modeling contract:
+
+- Target column: `hotspot_10pct`
+- Grouping column: `city_id`
+- Use city-held-out evaluation only: no cells from a held-out city may appear in training or training-only preprocessing.
+- Start with baseline models before main models.
+
+Initial safe feature candidates for the first hotspot models:
+
+- `impervious_pct`
+- `land_cover_class`
+- `elevation_m`
+- `dist_to_water_m`
+- `ndvi_median_may_aug`
+- `climate_group`
+
+Exclude from the first predictive feature set to avoid leakage or non-portable identifiers:
+
+- `hotspot_10pct`
+- `lst_median_may_aug`
+- `n_valid_ecostress_passes`
+- `cell_id`
+- `city_id`
+- `city_name`
+- `centroid_lon`
+- `centroid_lat`
+
+Fold artifact for collaboration:
+
+- `data_processed/modeling/city_outer_folds.parquet`
+- `data_processed/modeling/city_outer_folds.csv`
+
+Implemented baseline modeling outputs:
+
+- `data_processed/modeling/baselines/baseline_metrics_by_fold.csv`
+- `data_processed/modeling/baselines/baseline_metrics_overall.csv`
+- `data_processed/modeling/baselines/baseline_leakage_checks.csv`
+- `data_processed/modeling/baselines/baseline_assumptions.md`
+- `data_processed/modeling/baselines/baseline_run_summary.json`
+- `data_processed/modeling/baselines/validation_predictions/`
+- `data_processed/modeling/baselines/model_artifacts/logistic_regression_coefficients.csv`
+- `data_processed/modeling/baselines/model_artifacts/decision_stump_rules.csv`
+
+Current baseline stage assumptions:
+
+- The baseline runner loads only the required parquet columns for training or validation passes.
+- Rows are assigned to folds by joining the city-level fold table back on `city_id`.
+- Numeric features use train-fold-only mean imputation plus z-scoring and missing indicators.
+- Categorical features use train-fold-only vocabularies plus explicit missing/unseen buckets.
+- Overall metrics are fold aggregates; exact pooled out-of-fold ROC-AUC / PR-AUC is not computed in this first memory-safe baseline stage.
+
+Recommended next modeling steps:
+
+- Run `src.run_model_baselines` from the verified canonical `final_dataset.parquet` plus `city_outer_folds.*`.
+- Inspect `data_processed/modeling/baselines/baseline_metrics_by_fold.csv`, `baseline_metrics_overall.csv`, and `baseline_leakage_checks.csv`.
+- Review the saved validation predictions and the logistic coefficients / stump rules before moving to heavier tree ensembles or more flexible models.
+- If the merged final dataset changes upstream, rerun `src.run_final_dataset_assembly`, `src.audit_final_dataset`, `src.make_model_folds --n-splits 5`, and then rerun `src.run_model_baselines`.

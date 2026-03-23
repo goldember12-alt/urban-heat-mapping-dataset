@@ -354,6 +354,70 @@ CLI:
 .venv\Scripts\python.exe -m src.run_final_dataset_assembly
 ```
 
+## Stage 14: Modeling-Prep Audit And Fixed City Folds
+
+- Audit the canonical merged parquet at `data_processed/final/final_dataset.parquet`.
+- Validate the required final columns and confirm `hotspot_10pct` is binary.
+- Write concise modeling handoff artifacts under `data_processed/modeling/`:
+  - `final_dataset_audit_summary.json`
+  - `final_dataset_audit.md`
+  - `final_dataset_city_summary.csv`
+  - `final_dataset_feature_missingness.csv`
+  - `final_dataset_feature_missingness_by_city.csv`
+- Generate deterministic city-level outer folds for held-out-city modeling:
+  - `city_outer_folds.parquet`
+  - `city_outer_folds.csv`
+- Keep the fold artifact city-level rather than cell-level so collaborators can join on `city_id` without duplicating the full cell table.
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.audit_final_dataset
+```
+
+```powershell
+.venv\Scripts\python.exe -m src.make_model_folds --n-splits 5
+```
+
+## Stage 15: Baseline Modeling
+
+1. Load only the required modeling columns from `data_processed/final/final_dataset.parquet`.
+2. Join each parquet batch to the city-level outer folds on `city_id`.
+3. Use `hotspot_10pct` as the binary target.
+4. Fit train-fold-only preprocessing:
+   - numeric mean imputation + z-scoring + missing indicators
+   - categorical train-fold vocabularies + missing/unseen buckets
+5. Train a streaming logistic regression on each city-held-out fold.
+6. Optionally fit the lightweight decision-stump comparison on a bounded per-city training sample.
+7. Save validation predictions plus fold-level and overall metrics under `data_processed/modeling/baselines/`.
+
+Outputs:
+
+- `baseline_metrics_by_fold.csv`
+- `baseline_metrics_overall.csv`
+- `baseline_leakage_checks.csv`
+- `baseline_assumptions.md`
+- `baseline_run_summary.json`
+- `validation_predictions/`
+- `model_artifacts/logistic_regression_coefficients.csv`
+- `model_artifacts/decision_stump_rules.csv`
+
+CLI:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_model_baselines
+```
+
+Optional mode flags:
+
+- `--outer-folds`
+- `--models`
+- `--batch-size`
+- `--max-logistic-iterations`
+- `--logistic-l2-penalty`
+- `--tree-sample-per-city`
+- `--decision-stump-min-leaf-rows`
+
 ## Full Pipeline CLI
 
 ```powershell

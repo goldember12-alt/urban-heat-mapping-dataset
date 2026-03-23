@@ -12,6 +12,8 @@ Implemented in code:
 - Study-area outputs now persist the original urban-core geometry alongside the buffered acquisition geometry.
 - Batch city-processing runner for one city or all configured cities.
 - Raster alignment, DEM, NLCD, hydro distance, city feature assembly, and final dataset assembly.
+- Final-dataset audit CLI plus deterministic city-level fold generation for modeling handoff.
+- Baseline modeling CLI for city-held-out logistic regression plus decision-stump comparison, with fold metrics, saved validation predictions, leakage checks, and assumptions reporting.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
@@ -51,6 +53,10 @@ Standardization status:
 
 As of 2026-03-23:
 
+- Baseline-modeling + modeling-prep subset: `8 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_model_baselines.py tests/test_modeling_prep.py -q"`
+- Modeling-prep subset: `4 passed` via:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_modeling_prep.py -q"`
 - Orchestration/AppEEARS/vector hardening subset: `36 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_appeears_client.py tests/test_appeears_acquisition.py tests/test_full_stack_orchestration.py tests/test_support_layers.py -q"`
 
@@ -121,6 +127,9 @@ Implemented:
 - `src.run_support_layers` performs deterministic support-layer prep once raw support inputs exist.
 - `src.run_acquisition_orchestration` sequences raw support acquisition, support-layer prep, NDVI AppEEARS, and ECOSTRESS AppEEARS into one restart-safe CLI.
 - `src.run_full_stack_orchestration` extends the same flow through feature assembly and writes one per-city stage-status summary row.
+- `src.audit_final_dataset` validates the canonical final parquet and writes modeling handoff summaries under `data_processed/modeling/`.
+- `src.make_model_folds` writes deterministic city-level outer folds under `data_processed/modeling/`.
+- `src.run_model_baselines` trains city-held-out baseline models from the canonical final parquet plus `city_outer_folds.*` and writes metrics, predictions, leakage checks, and model artifacts under `data_processed/modeling/baselines/`.
 - `src.summarize_phoenix_dataset` generates a Phoenix-only markdown summary plus deterministic supporting CSV tables and PNG figures under `outputs/`.
 
 Test-verified:
@@ -132,7 +141,9 @@ Test-verified:
 - Full-stack city orchestration coverage is included in `tests/test_full_stack_orchestration.py`.
 - Raster stack validation and stale-legacy AppEEARS handoff coverage are included in `tests/test_feature_assembly.py` and `tests/test_raster_features.py`.
 - Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
+- Baseline-modeling coverage is included in `tests/test_model_baselines.py`.
 - The latest targeted regression result is `36 passed` for AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization hardening.
+- The latest modeling-focused regression result is `8 passed` for the new baseline-modeling subset plus the existing modeling-prep subset.
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
 - The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
 - The latest `.env.local` bootstrap regression results are `27 passed` for env bootstrap plus AppEEARS/full-stack compatibility.
@@ -140,6 +151,20 @@ Test-verified:
 
 Manually verified:
 
+- 2026-03-23 real canonical modeling-prep verification:
+  - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_modeling_prep.py -q"` and confirmed `4 passed`.
+  - The first live `src.audit_final_dataset` run on the canonical parquet failed with `MemoryError`, which exposed that the original implementation was trying to materialize the full final dataset.
+  - Updated `src.modeling_prep` to validate required columns from parquet schema metadata and load only the columns needed for audit/fold generation.
+  - Reran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.audit_final_dataset"` successfully.
+  - Reran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.make_model_folds --n-splits 5"` successfully, then reran the same fold command a second time and confirmed the `data_processed/modeling/city_outer_folds.csv` SHA-256 hash stayed `4A5EE01AFC6D192A88509E62C80ED73E85B83E4913CEBEEF943CC1ACA1CE9467`.
+  - Confirmed the canonical dataset path `data_processed/final/final_dataset.parquet` exists and the audit reported `71,394,894` rows across `30` cities with `hotspot_10pct` binary validation passing.
+  - Confirmed modeling artifacts now exist under `data_processed/modeling/`: `final_dataset_audit_summary.json`, `final_dataset_audit.md`, `final_dataset_city_summary.csv`, `final_dataset_feature_missingness.csv`, `final_dataset_feature_missingness_by_city.csv`, `city_outer_folds.parquet`, and `city_outer_folds.csv`.
+  - Confirmed the fold artifact is city-level and deterministic in the real workspace: `30` rows, `30` unique `city_id` values, `0` duplicate city assignments, `5` folds, and an even `6` cities per fold in the current greedy row-count balance.
+- 2026-03-23 baseline-modeling implementation checkpoint:
+  - Added `src.model_baselines` and `src.run_model_baselines` for memory-aware city-held-out baseline modeling that loads only required parquet columns, joins batches to city-level folds by `city_id`, fits train-fold-only preprocessing, trains a streaming logistic regression, and optionally fits a decision-stump comparison.
+  - Added regression coverage in `tests/test_model_baselines.py` for leakage-column rejection, fold joins, fold-table validation, and end-to-end artifact writing on a synthetic parquet fixture.
+  - Updated `README.md`, `docs/workflow.md`, and `docs/data_dictionary.md` to document the new baseline stage, outputs, and CLI usage.
+  - No fresh end-to-end run of `src.run_model_baselines` has been executed yet on the canonical `71,394,894`-row parquet; this checkpoint is test-verified only.
 - 2026-03-19 real workspace cache/storage audit:
   - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run_20260319.json"` in dry-run mode.
   - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate_20260319.json"` in dry-run mode.
@@ -322,15 +347,16 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Rerun the concrete ECOSTRESS/download cohort from the 2026-03-22 full-stack log and inspect the updated orchestration and AppEEARS summary fields:
+Run the first real baseline-modeling pass from the verified canonical dataset:
 
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 16,17,18,19,28 --start-date 2023-05-01 --end-date 2023-08-31 --cell-filter-mode core_city"`
-
-Recommended operator setup before that run:
-
-- Load `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` into the active shell.
-- Unset any stale `APPEEARS_API_TOKEN` if one is still present.
-- Confirm the rerun finishes with `exit_code=0` or `exit_code=2` only if Minneapolis is still remotely processing; `exit_code=1` should disappear once the four download failures are resolved.
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_model_baselines"`
+- Inspect `data_processed/modeling/baselines/baseline_metrics_by_fold.csv`, `baseline_metrics_overall.csv`, and `baseline_leakage_checks.csv`.
+- Review the saved validation predictions plus `model_artifacts/logistic_regression_coefficients.csv` and `decision_stump_rules.csv`.
+- If any per-city feature outputs or the merged final dataset are regenerated later, rerun:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_final_dataset_assembly"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.audit_final_dataset"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.make_model_folds --n-splits 5"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_model_baselines"`
 
 ## Current Output Structure
 
@@ -344,6 +370,8 @@ Recommended operator setup before that run:
 - `data_processed/intermediate/city_features/`
 - `data_processed/city_features/`
 - `data_processed/final/`
+- `data_processed/modeling/`
+- `data_processed/modeling/baselines/`
 - `outputs/phoenix_data_summary.md`
 - `outputs/phoenix_data_summary/`
 - `outputs/storage/`
@@ -369,9 +397,65 @@ Recommended operator setup before that run:
 - Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 - Raw support acquisition still depends on very large official NLCD and NHDPlus source downloads; long wall-clock times are expected even when the code is behaving correctly.
 - `data_processed/city_grids/` is now a separate major storage hotspot at about `25.09 GB` and will need its own retention/compression review after cache cleanup.
-- The new AppEEARS download-retry and full-stack exception-summary paths still need a real rerun against cities `16,17,18,19,28` for manual confirmation.
+- Minneapolis still depends on the fresh AppEEARS ECOSTRESS task submitted on 2026-03-23 finishing remotely before city-level feature assembly can complete.
+- The current `city_outer_folds` logic balances cities by row count and city count, not by hotspot prevalence; revisit if stricter target-stratified folds are needed for later modeling experiments.
+- The new baseline-modeling stage has not yet been run end to end on the canonical `final_dataset.parquet`; current verification is synthetic-fixture testing plus the already-completed canonical modeling-prep verification.
 
 ## Checkpoint Log
+
+### 2026-03-23 - Checkpoint: Baseline Modeling Stage Implemented
+
+- Date / checkpoint:
+  - 2026-03-23 first baseline-modeling stage added on top of the verified canonical modeling-prep artifacts.
+- Change made:
+  - Added `src.model_baselines` with streaming parquet batch readers, fold joins on `city_id`, train-fold-only preprocessing, a full-data logistic regression baseline, and a lightweight decision-stump comparison.
+  - Added `src.run_model_baselines` as the reproducible CLI entrypoint for fold-by-fold city-held-out baseline training/evaluation.
+  - Added artifact writing for fold metrics, overall metrics, leakage checks, assumptions, validation predictions, logistic coefficients, and stump rules under `data_processed/modeling/baselines/`.
+  - Added focused regression tests and updated README/workflow/data-dictionary docs to document the new stage.
+- Files touched:
+  - `src/model_baselines.py`
+  - `src/run_model_baselines.py`
+  - `tests/test_model_baselines.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_model_baselines.py tests/test_modeling_prep.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_model_baselines"`
+- Test status:
+  - `8 passed` for `tests/test_model_baselines.py` plus `tests/test_modeling_prep.py`.
+- Manual verification status:
+  - Synthetic-fixture end-to-end artifact writing is covered by tests.
+  - No full canonical run of `src.run_model_baselines` has been executed yet in this checkpoint because the canonical dataset is very large and the new stage is expected to be a long-running job.
+- Next recommended step:
+  - Run `src.run_model_baselines` on the real canonical parquet/fold artifacts, then inspect the fold metrics, leakage checks, and saved validation predictions before expanding to richer model classes.
+
+### 2026-03-23 - Checkpoint: Modeling Handoff Verified On Canonical Final Dataset
+
+- Date / checkpoint:
+  - 2026-03-23 continuation focused on finishing the modeling-prep verification and handoff.
+- Change made:
+  - Confirmed the new modeling-prep modules, tests, and docs were already present in the working tree and treated them as the source of truth.
+  - Found a real-data `MemoryError` in the first canonical `src.audit_final_dataset` run because the implementation loaded the full final parquet into memory.
+  - Tightened `src.modeling_prep` so required-column validation uses parquet schema metadata and both the audit and fold paths load only the columns they actually need.
+  - Added a small regression test covering subset-column parquet loading.
+  - Verified the docs already matched the implemented modeling CLI names and output paths, so no README/workflow/data-dictionary wording changes were needed in this continuation.
+- Files touched:
+  - `src/modeling_prep.py`
+  - `tests/test_modeling_prep.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_modeling_prep.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.audit_final_dataset"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.make_model_folds --n-splits 5"`
+- Test status:
+  - `4 passed` for `tests/test_modeling_prep.py`.
+- Manual verification status:
+  - Verified on the real canonical dataset after the column-selective fix: audit completed for `71,394,894` rows across `30` cities and fold generation completed with `5` folds.
+  - Verified deterministic output by rerunning `src.make_model_folds --n-splits 5` and confirming the CSV SHA-256 hash stayed unchanged.
+- Next recommended step:
+  - Start city-held-out baseline modeling from the verified current `final_dataset.parquet` plus `city_outer_folds.*`, and rerun assembly/audit/folds whenever upstream feature outputs materially change.
 
 ### 2026-03-23 - Checkpoint: ECOSTRESS Download Retry, Exception Summary, And GeoPackage Hardening
 
@@ -406,6 +490,27 @@ Recommended operator setup before that run:
   - No live rerun executed yet after the patch set; the saved 2026-03-22 summary/log artifacts remain the source for the root-cause diagnosis.
 - Next recommended step:
   - Run the five-city rerun above, then confirm the full-stack summary counts move from `completed=25, failed=4, not_started=1` to either all completed or only Minneapolis remaining incomplete if its remote task is still processing.
+
+### 2026-03-23 - Checkpoint: Fresh Minneapolis ECOSTRESS Submission Requested
+
+- Date / checkpoint:
+  - 2026-03-23 manual intervention after confirming the reused Minneapolis task continued to report `remote_task_status=processing`.
+- Change made:
+  - Backed up the prior ECOSTRESS acquisition summaries before intervention.
+  - Reset only the saved Minneapolis ECOSTRESS task state so orchestration would stop reusing the old task id.
+  - Submitted a fresh AppEEARS ECOSTRESS request for city `28`.
+- Files touched:
+  - `data_processed/appeears_status/appeears_ecostress_acquisition_summary.json`
+  - `data_processed/appeears_status/appeears_ecostress_acquisition_summary.csv`
+  - backup snapshots `data_processed/appeears_status/appeears_ecostress_acquisition_summary.20260323_151049.bak.json|csv`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 28 --start-date 2023-05-01 --end-date 2023-08-31 --cell-filter-mode core_city"`
+- Test status:
+  - No code changes in this checkpoint; no additional pytest run was needed.
+- Manual verification status:
+  - Verified a fresh AppEEARS row for Minneapolis with `status=submitted`, `task_name=ecostress_minneapolis_2023-05-01_2023-08-31`, and new `task_id=31c8a14a-8869-44ef-a105-a6ec6688efeb`.
+- Next recommended step:
+  - Poll/download via the Minneapolis-only full-stack command above until the new task turns `done` and feature outputs materialize.
 
 ### 2026-03-21 - Checkpoint: TNM 504 Classification And Premature-Response Wrapper Fixed
 
