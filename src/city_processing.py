@@ -30,8 +30,14 @@ class CityProcessingResult:
     grid_path: Path | None
 
 
-def _city_slug(city_name: str) -> str:
+def city_slug(city_name: str) -> str:
+    """Return the canonical filesystem-safe city slug."""
     return re.sub(r"[^a-z0-9]+", "_", city_name.strip().lower()).strip("_")
+
+
+def city_stem(city: pd.Series) -> str:
+    """Return the canonical `<city_id>_<city_slug>_<state>` stem used across outputs."""
+    return f"{int(city['city_id']):02d}_{city_slug(str(city['city_name']))}_{str(city['state']).lower()}"
 
 
 def load_city_record(
@@ -113,7 +119,7 @@ def city_output_paths(
     city_grids_dir: Path = CITY_GRIDS,
 ) -> tuple[Path, Path]:
     """Return output paths for one city study area and grid files."""
-    stem = f"{int(city['city_id']):02d}_{_city_slug(str(city['city_name']))}_{str(city['state']).lower()}"
+    stem = city_stem(city)
     study_path = study_areas_dir / f"{stem}_study_area.gpkg"
     grid_path = city_grids_dir / f"{stem}_grid_{int(resolution)}m.gpkg"
     return study_path, grid_path

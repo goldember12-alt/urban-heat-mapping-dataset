@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -14,6 +13,8 @@ from shapely import wkt
 from src.city_processing import (
     CORE_GEOMETRY_CRS_COLUMN,
     CORE_GEOMETRY_WKT_COLUMN,
+    city_slug,
+    city_stem,
     city_output_paths,
     load_city_record,
 )
@@ -47,7 +48,6 @@ from src.water_features import compute_dist_to_water_m
 
 logger = logging.getLogger(__name__)
 
-_TOKEN_BOUNDARY = re.compile(r"[^a-z0-9]+")
 CELL_FILTER_STUDY_AREA = "study_area"
 CELL_FILTER_CORE_CITY = "core_city"
 CELL_CONTEXT_COLUMNS = ["is_core_city_cell", "is_buffer_ring_cell"]
@@ -125,18 +125,9 @@ class FinalDatasetResult:
     parquet_path: Path
     csv_path: Path
 
-
-def _city_slug(city_name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", city_name.strip().lower()).strip("_")
-
-
-def _city_stem(city: pd.Series) -> str:
-    return f"{int(city['city_id']):02d}_{_city_slug(str(city['city_name']))}_{str(city['state']).lower()}"
-
-
 def _normalized_name_tokens(path: Path) -> set[str]:
     stem = path.stem.lower()
-    tokens = {token for token in _TOKEN_BOUNDARY.split(stem) if token}
+    tokens = {token for token in re.split(r"[^a-z0-9]+", stem) if token}
     return tokens
 
 
@@ -170,7 +161,7 @@ def _discover_city_product_rasters(
     native_layer_name: str | None = None,
 ) -> list[Path]:
     """Discover AppEEARS rasters for one city/product by scanning the city slug subfolder recursively."""
-    city_dir = product_root / _city_slug(city_name)
+    city_dir = product_root / city_slug(city_name)
     if not city_dir.exists():
         logger.info("Feature discovery skipped missing city folder: %s", city_dir)
         return []
@@ -217,7 +208,7 @@ def _discover_city_vectors(
     city_name: str,
 ) -> list[Path]:
     """Discover city-specific hydro vectors recursively from the city slug subfolder."""
-    city_dir = vector_root / _city_slug(city_name)
+    city_dir = vector_root / city_slug(city_name)
     if not city_dir.exists():
         return []
 
@@ -362,7 +353,7 @@ def expected_city_feature_output_paths(
     city_features_dir: Path = CITY_FEATURES,
     intermediate_dir: Path = INTERMEDIATE,
 ) -> CityFeatureOutputPaths:
-    stem = _city_stem(city)
+    stem = city_stem(city)
     return CityFeatureOutputPaths(
         city_features_gpkg_path=city_features_dir / f"{stem}_features.gpkg",
         city_features_parquet_path=city_features_dir / f"{stem}_features.parquet",
@@ -528,7 +519,7 @@ def assemble_city_features(
 ) -> CityFeatureResult:
     """Assemble one city's cell-level feature table from available source layers."""
     city = load_city_record(city_name=city_name, city_id=city_id)
-    stem = _city_stem(city)
+    stem = city_stem(city)
 
     grid_path = _resolve_city_grid_path(city=city, resolution=resolution, city_grids_dir=city_grids_dir)
     if not grid_path.exists():

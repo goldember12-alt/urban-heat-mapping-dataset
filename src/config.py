@@ -9,9 +9,15 @@ DATA_RAW = PROJECT_ROOT / "data_raw"
 DATA_PROCESSED = PROJECT_ROOT / "data_processed"
 DOCS = PROJECT_ROOT / "docs"
 FIGURES = PROJECT_ROOT / "figures"
-NOTEBOOKS = PROJECT_ROOT / "notebooks"
+OUTPUTS = PROJECT_ROOT / "outputs"
 SRC = PROJECT_ROOT / "src"
 TESTS = PROJECT_ROOT / "tests"
+
+# Stage-specific report/figure roots
+DATA_PROCESSING_OUTPUTS = OUTPUTS / "data_processing"
+MODELING_OUTPUTS = OUTPUTS / "modeling"
+DATA_PROCESSING_FIGURES = FIGURES / "data_processing"
+MODELING_FIGURES = FIGURES / "modeling"
 
 # Common processed subfolders
 CITY_FEATURES = DATA_PROCESSED / "city_features"

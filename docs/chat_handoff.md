@@ -41,6 +41,7 @@ Implemented in code:
 - Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
 - Phoenix-only summary CLI now profiles the materialized Phoenix analysis dataset and writes a research-style markdown deliverable with supporting tables and figures.
 - Documentation architecture was redesigned on 2026-03-23 so the repo now reads as the full urban-heat ML project, not only as a preprocessing pipeline. `README.md` is now the landing page, `docs/workflow.md` is lifecycle-oriented, `docs/data_dictionary.md` is artifact-focused, and `docs/modeling_plan.md` was added as the concise grouped-city modeling-methods reference.
+- The obsolete exploratory `notebooks/` workspace was removed on 2026-03-23, and the unused `NOTEBOOKS` path constant plus README mention were deleted so the documented repo layout matches the actual production tree.
 
 Standardization status:
 
@@ -54,6 +55,7 @@ Standardization status:
 
 As of 2026-03-23:
 
+- Repository housekeeping checkpoint: no tests were run because this change only removed obsolete exploratory notebooks and cleaned stale references.
 - Documentation redesign checkpoint: no tests were run because this change updated docs only and did not modify pipeline code.
 - Baseline-modeling + modeling-prep subset: `8 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_model_baselines.py tests/test_modeling_prep.py -q"`
@@ -153,6 +155,10 @@ Test-verified:
 
 Manually verified:
 
+- 2026-03-23 repository housekeeping verification:
+  - Confirmed the only live `notebooks` references were the README repo-layout bullet and the unused `src.config.NOTEBOOKS` constant.
+  - Removed the exploratory notebook files and their `.ipynb_checkpoints` artifacts because they were not part of any runnable pipeline, test, or documented output.
+  - Reran a repo-wide text search after cleanup and confirmed no remaining production/runtime `notebooks` references outside the historical notes recorded in this handoff file.
 - 2026-03-23 documentation redesign verification:
   - Reviewed the top-level repo structure, existing `src/`, `tests/`, `data_processed/`, `outputs/`, and `figures/` layout before rewriting docs.
   - Verified that the redesigned docs match the implemented code boundaries: baseline modeling exists, grouped-city fold generation exists, and the planned `solver="saga"` logistic-regression and random-forest stages are documented as planned rather than implemented.
@@ -410,6 +416,32 @@ Run the first real baseline-modeling pass from the verified canonical dataset:
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-23 - Checkpoint: Remove Obsolete Exploratory Notebooks
+
+- Date / checkpoint:
+  - 2026-03-23 repository housekeeping for obsolete exploratory notebooks.
+- Change made:
+  - Removed the untracked production-irrelevant `notebooks/` workspace, including the old city-point and boundary-check inspection notebooks plus `.ipynb_checkpoints/`.
+  - Deleted the unused `NOTEBOOKS` path constant from `src/config.py`.
+  - Removed the stale `notebooks/` repo-layout reference from `README.md`.
+- Files touched:
+  - `src/config.py`
+  - `README.md`
+  - `docs/chat_handoff.md`
+  - removed `notebooks/01_city_points_check.ipynb`
+  - removed `notebooks/02_boundary_check.ipynb`
+  - removed `notebooks/.ipynb_checkpoints/*`
+- How to run:
+  - No runtime entrypoint changed.
+  - Verification command used: `rg -n "notebooks|/notebooks|\\notebooks|NOTEBOOKS" .`
+- Test status:
+  - No tests run; this was a docs/config/tree cleanup only.
+- Manual verification status:
+  - Verified before deletion that no production code imported or used `src.config.NOTEBOOKS`.
+  - Verified after deletion that the repo-wide search returned only the historical notebook-removal notes in `docs/chat_handoff.md`, with no remaining production/runtime references.
+- Next recommended step:
+  - Continue with the existing next milestone: run the first real canonical baseline-modeling pass from the verified final dataset.
 
 ### 2026-03-23 - Checkpoint: Documentation Architecture Redesign
 

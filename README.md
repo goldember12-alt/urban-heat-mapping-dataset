@@ -108,7 +108,6 @@ Planned next, not yet implemented as full production code:
 - `data_processed/`: processed artifacts organized by project phase
 - `figures/`: figure outputs used for reports and inspection
 - `outputs/`: report-style deliverables and storage-management outputs
-- `notebooks/`: lightweight exploratory checks only, not the production workflow
 
 Important `data_processed/` subdirectories:
 
