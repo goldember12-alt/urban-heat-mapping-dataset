@@ -1,0 +1,13 @@
+land_cover_class,n_rows,land_cover_label,share_pct
+23,1328050,"Developed, Medium Intensity",41.508826544645316
+22,895269,"Developed, Low Intensity",27.982053109294128
+21,411874,"Developed, Open Space",12.873315330182782
+52,305504,Shrub/Scrub,9.54867101742805
+24,205396,"Developed, High Intensity",6.419748455979796
+82,49979,Cultivated Crops,1.5621171204960869
+90,1919,Woody Wetlands,0.05997924636811442
+81,772,Pasture/Hay,0.024129222613957443
+95,272,Emergent Herbaceous Wetlands,0.008501487760358063
+31,203,Barren Land,0.006344860350561348
+71,201,Grassland/Herbaceous,0.006282349411146951
+42,1,Evergreen Forest,3.125546970719876e-05

@@ -39,7 +39,8 @@ Implemented in code:
 - Raster-stack sampling now validates TIFF readability before use and skips unreadable stale files with warnings as long as enough valid rasters remain for the city.
 - Feature assembly now supports `cell_filter_mode=study_area` (current behavior) and `cell_filter_mode=core_city` (buffered acquisition, core-city-only training cells).
 - Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
-- Phoenix-only summary CLI now profiles the materialized Phoenix analysis dataset and writes a research-style markdown deliverable with supporting tables and figures.
+- Data-processing reporting is now generalized for all configured cities: the former Phoenix-only summary logic was refactored into a shared per-city reporting module plus a batch CLI, with Phoenix retained as a compatibility wrapper.
+- Data-processing report outputs now write to `outputs/data_processing/<city_stem>/` and `figures/data_processing/<city_stem>/`, while `outputs/modeling/` and `figures/modeling/` are reserved for later ML/evaluation artifacts.
 - Documentation architecture was redesigned on 2026-03-23 so the repo now reads as the full urban-heat ML project, not only as a preprocessing pipeline. `README.md` is now the landing page, `docs/workflow.md` is lifecycle-oriented, `docs/data_dictionary.md` is artifact-focused, and `docs/modeling_plan.md` was added as the concise grouped-city modeling-methods reference.
 - The obsolete exploratory `notebooks/` workspace was removed on 2026-03-23, and the unused `NOTEBOOKS` path constant plus README mention were deleted so the documented repo layout matches the actual production tree.
 
@@ -48,6 +49,7 @@ Standardization status:
 - Study-area and 30 m grid generation are standardized for one-city and all-city execution.
 - AppEEARS acquisition is standardized in code for all 30 cities.
 - Support-layer acquisition/prep is standardized in code around deterministic per-city raw-input paths plus deterministic prepared outputs.
+- Data-processing reporting is standardized in code for all configured cities and no longer treats Phoenix as a special one-off output path.
 - Reusable upstream caches for support-layer acquisition now live under `data_raw/cache/`.
 - The current remaining blocker for broader scaling is data volume, long wall-clock runtime, and remaining city-specific source variability across the unfinished cities, not missing orchestration code paths.
 
@@ -55,6 +57,11 @@ Standardization status:
 
 As of 2026-03-23:
 
+- Data-processing reporting generalization checkpoint:
+  - `4 passed` via:
+    - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_summarize_phoenix_dataset.py tests/test_data_processing_reporting.py -q"`
+  - `16 passed` via:
+    - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_city_processing.py tests/test_feature_assembly.py -q"`
 - Repository housekeeping checkpoint: no tests were run because this change only removed obsolete exploratory notebooks and cleaned stale references.
 - Documentation redesign checkpoint: no tests were run because this change updated docs only and did not modify pipeline code.
 - Baseline-modeling + modeling-prep subset: `8 passed` via:
@@ -134,7 +141,8 @@ Implemented:
 - `src.audit_final_dataset` validates the canonical final parquet and writes modeling handoff summaries under `data_processed/modeling/`.
 - `src.make_model_folds` writes deterministic city-level outer folds under `data_processed/modeling/`.
 - `src.run_model_baselines` trains city-held-out baseline models from the canonical final parquet plus `city_outer_folds.*` and writes metrics, predictions, leakage checks, and model artifacts under `data_processed/modeling/baselines/`.
-- `src.summarize_phoenix_dataset` generates a Phoenix-only markdown summary plus deterministic supporting CSV tables and PNG figures under `outputs/`.
+- `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
+- `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
 Test-verified:
 
@@ -146,6 +154,7 @@ Test-verified:
 - Raster stack validation and stale-legacy AppEEARS handoff coverage are included in `tests/test_feature_assembly.py` and `tests/test_raster_features.py`.
 - Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
 - Baseline-modeling coverage is included in `tests/test_model_baselines.py`.
+- Data-processing report path generation and batch city iteration coverage are included in `tests/test_data_processing_reporting.py`.
 - The latest targeted regression result is `36 passed` for AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization hardening.
 - The latest modeling-focused regression result is `8 passed` for the new baseline-modeling subset plus the existing modeling-prep subset.
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
@@ -159,6 +168,12 @@ Manually verified:
   - Confirmed the only live `notebooks` references were the README repo-layout bullet and the unused `src.config.NOTEBOOKS` constant.
   - Removed the exploratory notebook files and their `.ipynb_checkpoints` artifacts because they were not part of any runnable pipeline, test, or documented output.
   - Reran a repo-wide text search after cleanup and confirmed no remaining production/runtime `notebooks` references outside the historical notes recorded in this handoff file.
+- 2026-03-23 data-processing reporting verification:
+  - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_data_processing_reports --city-ids 1"` successfully.
+  - Confirmed the new Phoenix report now writes to `outputs/data_processing/01_phoenix_az/phoenix_data_summary.md`, `outputs/data_processing/01_phoenix_az/tables/*.csv`, and `figures/data_processing/01_phoenix_az/*.png`.
+  - Confirmed the batch CLI also writes `outputs/data_processing/data_processing_report_summary.csv` and creates the reserved stage roots `outputs/modeling/` and `figures/modeling/`.
+  - Verified that the generated Phoenix markdown links to figures across the split `outputs/` and `figures/` roots instead of assuming a bundled single-folder asset layout.
+  - Full all-city live report generation has not been run yet in this checkpoint; only Phoenix was manually smoke-tested on real data.
 - 2026-03-23 documentation redesign verification:
   - Reviewed the top-level repo structure, existing `src/`, `tests/`, `data_processed/`, `outputs/`, and `figures/` layout before rewriting docs.
   - Verified that the redesigned docs match the implemented code boundaries: baseline modeling exists, grouped-city fold generation exists, and the planned `solver="saga"` logistic-regression and random-forest stages are documented as planned rather than implemented.
@@ -359,16 +374,12 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Run the first real baseline-modeling pass from the verified canonical dataset:
+Use the new shared reporting CLI against whichever cities currently have materialized per-city feature outputs, then rerun it as more cities finish feature assembly:
 
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_model_baselines"`
-- Inspect `data_processed/modeling/baselines/baseline_metrics_by_fold.csv`, `baseline_metrics_overall.csv`, and `baseline_leakage_checks.csv`.
-- Review the saved validation predictions plus `model_artifacts/logistic_regression_coefficients.csv` and `decision_stump_rules.csv`.
-- If any per-city feature outputs or the merged final dataset are regenerated later, rerun:
-  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_final_dataset_assembly"`
-  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.audit_final_dataset"`
-  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.make_model_folds --n-splits 5"`
-  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_model_baselines"`
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_data_processing_reports"`
+- Inspect `outputs/data_processing/data_processing_report_summary.csv` for any `error` rows.
+- Review each city’s markdown, tables, and figures under `outputs/data_processing/<city_stem>/` and `figures/data_processing/<city_stem>/`.
+- After broader per-city feature generation completes for the remaining unfinished cities, rerun the same reporting command so all 30 cities receive the same report artifacts.
 
 ## Current Output Structure
 
@@ -384,9 +395,12 @@ Run the first real baseline-modeling pass from the verified canonical dataset:
 - `data_processed/final/`
 - `data_processed/modeling/`
 - `data_processed/modeling/baselines/`
-- `outputs/phoenix_data_summary.md`
-- `outputs/phoenix_data_summary/`
+- `outputs/data_processing/<city_stem>/`
+- `outputs/data_processing/data_processing_report_summary.csv`
+- `outputs/modeling/`
 - `outputs/storage/`
+- `figures/data_processing/<city_stem>/`
+- `figures/modeling/`
 - `data_raw/cache/`
 - `data_raw/dem/<city_slug>/`
 - `data_raw/nlcd/<city_slug>/`
@@ -412,10 +426,47 @@ Run the first real baseline-modeling pass from the verified canonical dataset:
 - Minneapolis still depends on the fresh AppEEARS ECOSTRESS task submitted on 2026-03-23 finishing remotely before city-level feature assembly can complete.
 - The current `city_outer_folds` logic balances cities by row count and city count, not by hotspot prevalence; revisit if stricter target-stratified folds are needed for later modeling experiments.
 - The new baseline-modeling stage has not yet been run end to end on the canonical `final_dataset.parquet`; current verification is synthetic-fixture testing plus the already-completed canonical modeling-prep verification.
+- Legacy Phoenix-only root-level report artifacts under `outputs/phoenix_data_summary*` still exist from pre-refactor runs; the new code writes only to the split stage-specific structure, but the old generated files were not deleted automatically in this checkpoint.
 - The planned first main models are still documentation-only at this point: grouped-city logistic regression with `solver="saga"` and grouped-city random forest are not yet implemented as production CLIs.
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-23 - Checkpoint: All-City Data-Processing Reporting Generalized
+
+- Date / checkpoint:
+  - 2026-03-23 generalized Phoenix-only reporting into a shared all-city data-processing reporting stage.
+- Change made:
+  - Added `src.data_processing_reporting` to generate the existing Phoenix-style markdown summary, supporting tables, and four figures for any city with materialized feature outputs.
+  - Added `src.run_data_processing_reports` so the same reporting stage can be run explicitly for all configured cities or a selected subset.
+  - Converted `src.summarize_phoenix_dataset` into a Phoenix compatibility wrapper over the shared reporting implementation.
+  - Added stage-specific output roots in `src.config` so data-processing reports now write under `outputs/data_processing/<city_stem>/` and `figures/data_processing/<city_stem>/`, with parallel `outputs/modeling/` and `figures/modeling/` roots reserved for future ML/evaluation artifacts.
+  - Reused the existing Phoenix report artifact pattern rather than inventing new metrics or figure classes, and updated docs to explain the split output structure.
+- Files touched:
+  - `src/config.py`
+  - `src/city_processing.py`
+  - `src/feature_assembly.py`
+  - `src/data_processing_reporting.py`
+  - `src/summarize_phoenix_dataset.py`
+  - `src/run_data_processing_reports.py`
+  - `tests/test_data_processing_reporting.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_data_processing_reports"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_data_processing_reports --city-ids 1,2,3,4"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.summarize_phoenix_dataset"`
+- Test status:
+  - Focused reporting subset passed: `4 passed`.
+  - Focused city-processing/feature-assembly regression subset passed: `16 passed`.
+- Manual verification status:
+  - Phoenix smoke run completed successfully through `src.run_data_processing_reports --city-ids 1`.
+  - Verified real outputs at `outputs/data_processing/01_phoenix_az/phoenix_data_summary.md`, `outputs/data_processing/01_phoenix_az/tables/*.csv`, `figures/data_processing/01_phoenix_az/*.png`, and `outputs/data_processing/data_processing_report_summary.csv`.
+  - Full all-city live reporting was not run in this checkpoint.
+- Next recommended step:
+  - Run `src.run_data_processing_reports` against all currently completed cities, then rerun it after the remaining cities finish feature assembly so the full 30-city reporting set is materialized in the new staged layout.
 
 ### 2026-03-23 - Checkpoint: Remove Obsolete Exploratory Notebooks
 

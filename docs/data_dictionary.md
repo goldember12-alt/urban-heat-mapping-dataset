@@ -267,9 +267,20 @@ Honest status note:
 
 ### Figures
 
-- `figures/` contains project figures such as city-point and grid-sample plots
+- `figures/data_processing/<city_stem>/` contains per-city data-processing report figures
+- Current per-city data-processing figure set includes:
+  - `<city_slug>_key_distributions.png`
+  - `<city_slug>_land_cover_composition.png`
+  - `<city_slug>_key_correlations.png`
+  - `<city_slug>_hotspot_map.png`
+- `figures/modeling/` is reserved for future modeling/evaluation figures
+- A small number of legacy/global inspection figures may still exist directly under `figures/` from earlier checkpoints
 
 ### Report-style outputs
 
-- `outputs/` contains generated summaries and storage-management artifacts
-- Current examples include `outputs/phoenix_data_summary.md`, `outputs/phoenix_data_summary/`, and `outputs/storage/`
+- `outputs/data_processing/<city_stem>/<city_slug>_data_summary.md` stores the markdown summary for one city
+- `outputs/data_processing/<city_stem>/tables/` stores supporting CSV tables for that city summary
+- `outputs/data_processing/data_processing_report_summary.csv` stores the latest batch run status across requested cities
+- `outputs/modeling/` is reserved for future modeling/evaluation report-style outputs
+- `outputs/storage/` continues to hold storage-management and cache-audit artifacts
+- Legacy Phoenix-only root-level outputs may still exist from pre-refactor runs, but the reporting code now writes new data-processing summaries only to the split stage-specific structure above

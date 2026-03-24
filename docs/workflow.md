@@ -98,7 +98,7 @@ Main entrypoint:
 
 - `src.run_raw_data_acquisition`
 
-## 4. Support-Layer Prep And Feature Assembly
+## 4. Support-Layer Prep, Feature Assembly, And Data-Processing Reporting
 
 Implemented now:
 
@@ -106,6 +106,7 @@ Implemented now:
 - Align source rasters to the city grid
 - Compute cell-level elevation, land cover, imperviousness, distance to water, NDVI, and ECOSTRESS-derived LST
 - Support `study_area` and `core_city` cell filtering modes
+- Generate report-style per-city data-processing summaries, tables, and figures using the same pattern previously used only for Phoenix
 
 Key outputs:
 
@@ -114,17 +115,24 @@ Key outputs:
 - `data_processed/intermediate/city_features/`
 - `data_processed/city_features/*.gpkg`
 - `data_processed/city_features/*.parquet`
+- `outputs/data_processing/<city_stem>/<city_slug>_data_summary.md`
+- `outputs/data_processing/<city_stem>/tables/*.csv`
+- `figures/data_processing/<city_stem>/*.png`
+- `outputs/data_processing/data_processing_report_summary.csv`
 
 Main entrypoints:
 
 - `src.run_support_layers`
 - `src.run_city_features`
 - `src.run_city_features_batch`
+- `src.run_data_processing_reports`
+- `src.summarize_phoenix_dataset` as a Phoenix compatibility wrapper over the shared reporting path
 
 Operational status:
 
 - Full-stack orchestration has been manually verified for Phoenix, Tucson, Las Vegas, and Albuquerque
 - Full 30-city completion is still limited by acquisition/runtime rather than missing code paths
+- Report-style city summaries now use split roots by stage: data-processing artifacts under `outputs/data_processing/` and `figures/data_processing/`, with `outputs/modeling/` and `figures/modeling/` reserved for later ML/evaluation deliverables
 
 ## 5. Final Dataset Assembly
 

@@ -19,8 +19,9 @@ Canonical outputs:
 - `data_processed/final/final_dataset.csv`
 - one per-city feature GeoPackage and parquet in `data_processed/city_features/`
 - modeling handoff artifacts in `data_processed/modeling/`
-- figures in `figures/`
-- report-style outputs in `outputs/`
+- data-processing report outputs in `outputs/data_processing/<city_stem>/`
+- data-processing figures in `figures/data_processing/<city_stem>/`
+- reserved modeling/evaluation report roots in `outputs/modeling/` and `figures/modeling/`
 
 Final dataset columns:
 
@@ -48,6 +49,7 @@ Implemented now:
 - Raw support-layer acquisition for DEM, NLCD land cover, NLCD impervious, and hydrography
 - Deterministic support-layer prep outputs
 - Per-city feature assembly and merged final dataset generation
+- Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - Initial baseline modeling with city-held-out evaluation artifacts
 
@@ -106,8 +108,8 @@ Planned next, not yet implemented as full production code:
 - `docs/`: project-facing documentation
 - `data_raw/`: immutable downloaded source data
 - `data_processed/`: processed artifacts organized by project phase
-- `figures/`: figure outputs used for reports and inspection
-- `outputs/`: report-style deliverables and storage-management outputs
+- `figures/`: figure outputs split into `figures/data_processing/` for preprocessing-era reports, `figures/modeling/` for future ML/evaluation deliverables, plus a small number of legacy/global inspection plots
+- `outputs/`: report-style deliverables split into `outputs/data_processing/` for preprocessing-era city summaries, `outputs/modeling/` for future ML/evaluation reports, plus storage-management outputs
 
 Important `data_processed/` subdirectories:
 
@@ -130,6 +132,7 @@ These are the most important current entrypoints. The workflow doc lists how the
 .venv\Scripts\python.exe -m src.run_city_batch_processing --resolution 30
 .venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
 .venv\Scripts\python.exe -m src.run_final_dataset_assembly
+.venv\Scripts\python.exe -m src.run_data_processing_reports
 .venv\Scripts\python.exe -m src.audit_final_dataset
 .venv\Scripts\python.exe -m src.make_model_folds --n-splits 5
 .venv\Scripts\python.exe -m src.run_model_baselines
