@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
@@ -63,9 +64,25 @@ DEFAULT_PR_SCORING = "average_precision"
 DEFAULT_TOP_FRACTION = 0.10
 DEFAULT_RANDOM_STATE = 42
 DEFAULT_INNER_CV_SPLITS = 4
+SMOKE_INNER_CV_SPLITS = 3
 DEFAULT_CALIBRATION_BINS = 10
+TUNING_PRESET_SMOKE = "smoke"
+TUNING_PRESET_FULL = "full"
+DEFAULT_TUNING_PRESET = TUNING_PRESET_SMOKE
+VALID_TUNING_PRESETS = (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
 
-LOGISTIC_PARAM_GRID = [
+LOGISTIC_SMOKE_PARAM_GRID = [
+    {
+        "model__penalty": ["l2"],
+        "model__C": [0.1, 1.0],
+    },
+    {
+        "model__penalty": ["elasticnet"],
+        "model__C": [0.1, 1.0],
+        "model__l1_ratio": [0.5],
+    },
+]
+LOGISTIC_FULL_PARAM_GRID = [
     {
         "model__penalty": ["l2"],
         "model__C": [0.01, 0.1, 1.0, 10.0],
@@ -80,8 +97,17 @@ LOGISTIC_PARAM_GRID = [
         "model__l1_ratio": [0.2, 0.5, 0.8],
     },
 ]
+LOGISTIC_PARAM_GRID = LOGISTIC_SMOKE_PARAM_GRID
 
-RANDOM_FOREST_PARAM_GRID = [
+RANDOM_FOREST_SMOKE_PARAM_GRID = [
+    {
+        "model__n_estimators": [200],
+        "model__max_depth": [10, None],
+        "model__max_features": ["sqrt"],
+        "model__min_samples_leaf": [1, 5],
+    }
+]
+RANDOM_FOREST_FULL_PARAM_GRID = [
     {
         "model__n_estimators": [100, 300, 500],
         "model__max_depth": [10, 20, None],
@@ -89,6 +115,14 @@ RANDOM_FOREST_PARAM_GRID = [
         "model__min_samples_leaf": [1, 5, 10],
     }
 ]
+RANDOM_FOREST_PARAM_GRID = RANDOM_FOREST_SMOKE_PARAM_GRID
+
+
+@dataclass(frozen=True)
+class ModelTuningSpec:
+    preset_name: str
+    inner_cv_splits: int
+    param_grid: list[dict[str, object]]
 
 
 def get_first_pass_feature_columns() -> list[str]:
@@ -116,6 +150,43 @@ def split_model_feature_columns(feature_columns: Sequence[str]) -> tuple[list[st
         if feature_type_map[column_name] == FEATURE_TYPE_CATEGORICAL
     ]
     return numeric_columns, categorical_columns
+
+
+def get_model_tuning_spec(model_name: str, preset_name: str = DEFAULT_TUNING_PRESET) -> ModelTuningSpec:
+    """Return the tuning search-space preset for a supported model."""
+    normalized_model_name = model_name.strip().lower()
+    normalized_preset = preset_name.strip().lower()
+    if normalized_preset not in VALID_TUNING_PRESETS:
+        valid_text = ", ".join(VALID_TUNING_PRESETS)
+        raise ValueError(f"Unsupported tuning preset '{preset_name}'. Expected one of: {valid_text}")
+
+    if normalized_model_name == "logistic_saga":
+        if normalized_preset == TUNING_PRESET_SMOKE:
+            return ModelTuningSpec(
+                preset_name=normalized_preset,
+                inner_cv_splits=SMOKE_INNER_CV_SPLITS,
+                param_grid=list(LOGISTIC_SMOKE_PARAM_GRID),
+            )
+        return ModelTuningSpec(
+            preset_name=normalized_preset,
+            inner_cv_splits=DEFAULT_INNER_CV_SPLITS,
+            param_grid=list(LOGISTIC_FULL_PARAM_GRID),
+        )
+
+    if normalized_model_name == "random_forest":
+        if normalized_preset == TUNING_PRESET_SMOKE:
+            return ModelTuningSpec(
+                preset_name=normalized_preset,
+                inner_cv_splits=SMOKE_INNER_CV_SPLITS,
+                param_grid=list(RANDOM_FOREST_SMOKE_PARAM_GRID),
+            )
+        return ModelTuningSpec(
+            preset_name=normalized_preset,
+            inner_cv_splits=DEFAULT_INNER_CV_SPLITS,
+            param_grid=list(RANDOM_FOREST_FULL_PARAM_GRID),
+        )
+
+    raise ValueError(f"Unsupported model tuning spec request: {model_name}")
 
 
 def get_prediction_output_columns() -> list[str]:

@@ -32,6 +32,7 @@ Implemented in code:
   - logistic regression using `solver="saga"` in an sklearn `Pipeline`
   - random forest in an sklearn `Pipeline`
 - The tuned sklearn runners now share an explicit feature-type contract and coerce categorical columns before categorical imputation/encoding, which fixes the mixed `land_cover_class` / `climate_group` preprocessing failure that previously surfaced as `could not convert string to float: 'hot_arid'`.
+- The tuned sklearn runners now also expose explicit `smoke` and `full` tuning presets, preload sampled city rows once per run, enable safe per-fold sklearn pipeline caching, and emit concise timing/search-space diagnostics in logs plus `run_metadata.json`.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
@@ -74,7 +75,25 @@ Standardization status:
 
 ## Testing Status
 
-As of 2026-03-23:
+As of 2026-03-24:
+
+- Tuned-runtime checkpoint:
+  - Syntax compilation passed via:
+    - `cmd /c call "C:\Users\golde\anaconda3\python.exe" -m py_compile src\modeling_config.py src\modeling_runner.py src\run_logistic_saga.py src\run_random_forest.py tests\test_modeling_runner.py`
+  - Search-space probe confirmed the new preset sizes via:
+    - `cmd /c call "C:\Users\golde\anaconda3\python.exe" -c "from sklearn.model_selection import ParameterGrid; from src.modeling_config import get_model_tuning_spec; ..."`
+    - Observed counts:
+      - `logistic_smoke=4`
+      - `logistic_full=20`
+      - `rf_smoke=4`
+      - `rf_full=81`
+  - Focused modeling pytest collection did not complete in the accessible interpreter:
+    - `cmd /c call "C:\Users\golde\anaconda3\python.exe" -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q"`
+    - Result: collection blocked with `ModuleNotFoundError: No module named 'geopandas'`
+  - Direct repo-venv execution was blocked in this Codex session:
+    - `.venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke`
+    - `.venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke`
+    - Result for both: `Access is denied`
 
 - Tuned-modeling preprocessing regression checkpoint:
   - `10 passed` via:
@@ -176,6 +195,7 @@ Implemented:
 - `src.run_logistic_saga` trains the grouped logistic SAGA model with training-city-only preprocessing/tuning and writes outputs under `outputs/modeling/logistic_saga/`.
 - `src.run_random_forest` trains the grouped random-forest model with the same held-out-city discipline and writes outputs under `outputs/modeling/random_forest/`.
 - `src.run_logistic_saga` and `src.run_random_forest` now use the same explicit shared feature-type contract for tuned preprocessing, with categorical columns coerced safely ahead of `SimpleImputer` / encoder steps.
+- `src.run_logistic_saga` and `src.run_random_forest` now default to `--tuning-preset smoke`, preserve `--tuning-preset full`, record per-fold timing/search-space metadata, and reuse sampled city rows across folds instead of reloading them fold by fold.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -192,12 +212,10 @@ Test-verified:
 - First-pass grouped sklearn modeling coverage is included in `tests/test_modeling_contract.py` and `tests/test_modeling_runner.py`.
 - Data-processing report path generation and batch city iteration coverage are included in `tests/test_data_processing_reporting.py`.
 - The latest targeted regression result is `36 passed` for AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization hardening.
-- The latest modeling-focused regression result is `8 passed` for the new baseline-modeling subset plus the existing modeling-prep subset.
-- The latest first-pass sklearn modeling regression result is `9 passed` for `tests/test_modeling_prep.py`, `tests/test_modeling_contract.py`, and `tests/test_modeling_runner.py`.
-- The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
-- The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
-- The latest `.env.local` bootstrap regression results are `27 passed` for env bootstrap plus AppEEARS/full-stack compatibility.
-- The latest ScienceBase/TNM-specialization regression results are `22 passed` for raw acquisition plus full-stack summary propagation.
+
+Not manually verified in the latest checkpoint:
+
+- The 2026-03-24 tuned-runtime patch was not run end to end on the real parquet in this session because the accessible `C:\Users\golde\anaconda3\python.exe` lacks `geopandas` and direct `.venv\Scripts\python.exe` execution returned `Access is denied`.
 
 Manually verified:
 
@@ -462,12 +480,17 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Superseding the older reporting-only next step, the current recommended next step is to lock in a practical smoke-mode runtime strategy for the tuned models on the canonical parquet, because the categorical preprocessing bug is fixed but the current exact tuned smoke commands still run longer than an interactive verification window:
+Superseding the older runtime-diagnosis note, the current recommended next step is to rerun the tuned sampled commands inside a Python environment that can actually import the full project stack and execute the repo venv:
 
 - Keep `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000"` as the quick canonical baseline smoke test.
-- Rerun `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"` and `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"` in an unattended window, or introduce a deliberately smaller smoke-mode tuning grid / sampled modeling dataset for iterative checks.
-- Review `feature_contract.json`, `metrics_summary.csv`, `metrics_by_fold.csv`, `metrics_by_city.csv`, `best_params_by_fold.csv`, and `heldout_predictions.parquet` under each `outputs/modeling/<stage>/` directory once a full tuned smoke run completes.
-- Decide whether the long tuned runtime should be addressed by a dedicated smoke-mode config, reduced tuning grid, lower `inner_cv_splits`, or a separate sampled parquet artifact before attempting full canonical tuning.
+- Run `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke"` and `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke"` first, then scale to all outer folds if the new timing metadata looks acceptable.
+- Inspect `run_metadata.json` and `metrics_by_fold.csv` under `outputs/modeling/logistic_saga/` and `outputs/modeling/random_forest/` for:
+  - `data_loading_strategy`
+  - `search_space.param_candidate_count`
+  - `search_space.estimated_total_inner_fits`
+  - `timing_seconds.total_wall_clock`
+  - per-fold `grid_search_seconds` and `preprocess_probe_fit_transform_seconds`
+- Use `--tuning-preset full` only after the smoke preset completes cleanly and the recorded wall-clock is acceptable.
 
 Use the new shared reporting CLI against whichever cities currently have materialized per-city feature outputs, then rerun it as more cities finish feature assembly:
 
@@ -514,7 +537,8 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - Full support-layer prep has not yet been materialized beyond the first four completed cities.
 - Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
 - No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset.
-- The tuned canonical smoke commands no longer reproduce the old `climate_group='hot_arid'` preprocessing crash, but they still exceed 30-60 minute verification windows on the sampled `5000` rows-per-city setting.
+- The old tuned preprocessing failure is fixed, but the new 2026-03-24 smoke preset has not yet been completed on the real parquet in a working full-dependency environment, so the actual wall-clock improvement is still unverified.
+- The accessible fallback interpreter in this Codex session is missing `geopandas`, while direct repo-venv execution returned `Access is denied`, so fresh end-to-end tuned verification is currently environment-blocked rather than correctness-blocked.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
 - The current sklearn-based first-pass runners may still need a scaling strategy or dedicated sampled dataset if full-canonical runtime or memory is too heavy on a workstation.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
@@ -532,6 +556,38 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-24 - Checkpoint: Tuned Runtime Smoke Preset And Timing Instrumentation
+
+- Date / checkpoint:
+  - 2026-03-24 tuned modeling runtime reduction and observability pass after the categorical preprocessing fix.
+- Change made:
+  - Traced the remaining tuned workload from the existing config and fold artifact: `5` outer folds with `6` cities per fold, so the old defaults implied `20 x up to 4 = 80` inner fits per outer fold for logistic (`400` total) and `81 x up to 4 = 324` per outer fold for random forest (`1620` total).
+  - Added explicit `smoke` and `full` tuning presets in `src.modeling_config`; the new smoke defaults are `4` candidate combinations for logistic, `4` for random forest, and `3` requested inner CV splits.
+  - Updated `src.modeling_runner` to preload sampled city rows once per run, split folds in memory for sampled runs, enable safe per-fold sklearn pipeline caching, and log/write concise timing diagnostics for contract enforcement, data loading, preprocessing build/probe, grid search, and total wall-clock.
+  - Updated `src.run_logistic_saga` and `src.run_random_forest` to default to `--tuning-preset smoke` while preserving `--tuning-preset full` for the heavier historical search.
+  - Added tests for tuning-preset size differences, runtime metadata fields, sampled preload behavior, and the new CLI default preset.
+- Files touched:
+  - `src/modeling_config.py`
+  - `src/modeling_runner.py`
+  - `src/run_logistic_saga.py`
+  - `src/run_random_forest.py`
+  - `tests/test_modeling_runner.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000 --tuning-preset full"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000 --tuning-preset full"`
+- Test status:
+  - Syntax compilation passed for the edited files via `cmd /c call "C:\Users\golde\anaconda3\python.exe" -m py_compile ...`.
+  - Grid-size probe passed and confirmed `logistic_smoke=4`, `logistic_full=20`, `rf_smoke=4`, `rf_full=81`.
+  - Focused pytest collection under the accessible fallback interpreter failed with `ModuleNotFoundError: No module named 'geopandas'`.
+- Manual verification status:
+  - Not manually verified on the canonical parquet in this checkpoint.
+  - Direct `.venv\Scripts\python.exe` execution returned `Access is denied` in this Codex session, and the accessible Anaconda interpreter could not import the full geospatial dependency stack.
+- Next recommended step:
+  - Re-run the new smoke commands inside a working full-dependency venv, then record the resulting `run_metadata.json` wall-clock timings before deciding whether additional scaling changes are still needed.
 
 ### 2026-03-23 - Checkpoint: Tuned Modeling Preprocessing Contract Fixed
 

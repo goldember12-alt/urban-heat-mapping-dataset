@@ -1,16 +1,21 @@
+import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
+from sklearn.model_selection import ParameterGrid
 
 from src.modeling_baselines import run_modeling_baselines
-from src.modeling_config import DEFAULT_FEATURE_COLUMNS
+from src.modeling_config import DEFAULT_FEATURE_COLUMNS, get_model_tuning_spec
+from src.modeling_data import load_modeling_rows as load_modeling_rows_from_disk
 from src.modeling_runner import (
     build_logistic_saga_pipeline,
     build_random_forest_pipeline,
     run_logistic_saga_model,
     run_random_forest_model,
 )
+from src.run_logistic_saga import _build_arg_parser as build_logistic_arg_parser
+from src.run_random_forest import _build_arg_parser as build_random_forest_arg_parser
 
 
 def _build_modeling_fixture() -> pd.DataFrame:
@@ -185,3 +190,92 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(tmp_path: Path)
 
         predictions = pd.read_parquet(result.predictions_path)
         assert {"predicted_probability", "centroid_lon", "centroid_lat"}.issubset(predictions.columns)
+
+
+def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
+    logistic_smoke = get_model_tuning_spec("logistic_saga", "smoke")
+    logistic_full = get_model_tuning_spec("logistic_saga", "full")
+    forest_smoke = get_model_tuning_spec("random_forest", "smoke")
+    forest_full = get_model_tuning_spec("random_forest", "full")
+
+    assert len(list(ParameterGrid(logistic_smoke.param_grid))) < len(list(ParameterGrid(logistic_full.param_grid)))
+    assert len(list(ParameterGrid(forest_smoke.param_grid))) < len(list(ParameterGrid(forest_full.param_grid)))
+    assert logistic_smoke.inner_cv_splits < logistic_full.inner_cv_splits
+    assert forest_smoke.inner_cv_splits < forest_full.inner_cv_splits
+
+
+def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(tmp_path: Path):
+    dataset_path = tmp_path / "final_dataset.parquet"
+    folds_path = tmp_path / "city_outer_folds.parquet"
+    output_dir = tmp_path / "outputs" / "modeling" / "logistic_saga"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+    )
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    expected_candidates = len(list(ParameterGrid(get_model_tuning_spec("logistic_saga", "smoke").param_grid)))
+
+    assert metadata["tuning_preset"] == "smoke"
+    assert metadata["inner_cv_splits_requested"] == get_model_tuning_spec("logistic_saga", "smoke").inner_cv_splits
+    assert metadata["pipeline_cache_enabled"] is True
+    assert metadata["data_loading_strategy"] == "per_outer_fold_load"
+    assert metadata["search_space"]["param_candidate_count"] == expected_candidates
+    assert metadata["search_space"]["estimated_total_inner_fits"] == expected_candidates * 2
+    assert len(metadata["fold_runtime"]) == 1
+    assert metadata["fold_runtime"][0]["inner_cv_splits"] == 2
+    assert metadata["fold_runtime"][0]["preprocess_output_feature_count"] >= len(DEFAULT_FEATURE_COLUMNS)
+    assert metadata["fold_runtime"][0]["grid_search_seconds"] >= 0.0
+
+
+def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    dataset_path = tmp_path / "final_dataset.parquet"
+    folds_path = tmp_path / "city_outer_folds.parquet"
+    output_dir = tmp_path / "outputs" / "modeling" / "logistic_saga"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    load_calls: list[list[int]] = []
+
+    def counting_load_modeling_rows(*args, **kwargs):
+        load_calls.append(list(kwargs["city_ids"]))
+        return load_modeling_rows_from_disk(*args, **kwargs)
+
+    def fail_load_outer_fold_data(*args, **kwargs):
+        raise AssertionError("sampled runs should reuse a preloaded city sample instead of loading each fold separately")
+
+    monkeypatch.setattr("src.modeling_runner.load_modeling_rows", counting_load_modeling_rows)
+    monkeypatch.setattr("src.modeling_runner.load_outer_fold_data", fail_load_outer_fold_data)
+
+    result = run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        sample_rows_per_city=5,
+        param_grid=[{"model__penalty": ["l2"], "model__C": [0.1]}],
+    )
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+
+    assert len(load_calls) == 1
+    assert sorted(load_calls[0]) == [1, 2, 3, 4]
+    assert metadata["data_loading_strategy"] == "sampled_city_preload"
+    assert metadata["timing_seconds"]["sampled_city_preload"] is not None
+
+
+def test_tuned_runner_clis_default_to_explicit_smoke_preset():
+    logistic_args = build_logistic_arg_parser().parse_args([])
+    forest_args = build_random_forest_arg_parser().parse_args([])
+
+    assert logistic_args.tuning_preset == "smoke"
+    assert forest_args.tuning_preset == "smoke"
+    assert logistic_args.inner_cv_splits is None
+    assert forest_args.inner_cv_splits is None

@@ -4,7 +4,13 @@ import argparse
 import logging
 from pathlib import Path
 
-from src.modeling_config import DEFAULT_FEATURE_COLUMNS, DEFAULT_FINAL_DATASET_PATH, LOGISTIC_OUTPUT_DIR
+from src.modeling_config import (
+    DEFAULT_FEATURE_COLUMNS,
+    DEFAULT_FINAL_DATASET_PATH,
+    DEFAULT_TUNING_PRESET,
+    LOGISTIC_OUTPUT_DIR,
+    VALID_TUNING_PRESETS,
+)
 from src.modeling_runner import run_logistic_saga_model
 
 
@@ -27,8 +33,14 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--outer-folds", default=None, help="Optional comma-delimited subset of outer folds")
     parser.add_argument("--sample-rows-per-city", type=int, default=None)
     parser.add_argument("--random-state", type=int, default=42)
-    parser.add_argument("--inner-cv-splits", type=int, default=4)
+    parser.add_argument("--inner-cv-splits", type=int, default=None)
     parser.add_argument("--grid-search-n-jobs", type=int, default=-1)
+    parser.add_argument(
+        "--tuning-preset",
+        choices=VALID_TUNING_PRESETS,
+        default=DEFAULT_TUNING_PRESET,
+        help="Use 'smoke' for faster sampled verification defaults or 'full' for the heavier historical search.",
+    )
     return parser
 
 
@@ -45,6 +57,7 @@ def main() -> None:
         random_state=args.random_state,
         inner_cv_splits=args.inner_cv_splits,
         grid_search_n_jobs=args.grid_search_n_jobs,
+        tuning_preset=args.tuning_preset,
     )
     print(result.fold_metrics_path)
     print(result.city_metrics_path)
