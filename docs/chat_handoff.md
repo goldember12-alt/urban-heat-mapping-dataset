@@ -2,7 +2,7 @@
 
 ## Project Goal
 
-Build a reproducible Python geospatial workflow to create a 30 m cell-level urban heat dataset for 30 U.S. cities across climate groups.
+Maintain a reproducible cross-city urban heat project that covers study design, geospatial data assembly, modeling-ready handoff, and city-held-out machine-learning evaluation for 30 U.S. cities.
 
 ## What Is Completed
 
@@ -40,6 +40,7 @@ Implemented in code:
 - Feature assembly now supports `cell_filter_mode=study_area` (current behavior) and `cell_filter_mode=core_city` (buffered acquisition, core-city-only training cells).
 - Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
 - Phoenix-only summary CLI now profiles the materialized Phoenix analysis dataset and writes a research-style markdown deliverable with supporting tables and figures.
+- Documentation architecture was redesigned on 2026-03-23 so the repo now reads as the full urban-heat ML project, not only as a preprocessing pipeline. `README.md` is now the landing page, `docs/workflow.md` is lifecycle-oriented, `docs/data_dictionary.md` is artifact-focused, and `docs/modeling_plan.md` was added as the concise grouped-city modeling-methods reference.
 
 Standardization status:
 
@@ -53,6 +54,7 @@ Standardization status:
 
 As of 2026-03-23:
 
+- Documentation redesign checkpoint: no tests were run because this change updated docs only and did not modify pipeline code.
 - Baseline-modeling + modeling-prep subset: `8 passed` via:
   - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_model_baselines.py tests/test_modeling_prep.py -q"`
 - Modeling-prep subset: `4 passed` via:
@@ -151,6 +153,10 @@ Test-verified:
 
 Manually verified:
 
+- 2026-03-23 documentation redesign verification:
+  - Reviewed the top-level repo structure, existing `src/`, `tests/`, `data_processed/`, `outputs/`, and `figures/` layout before rewriting docs.
+  - Verified that the redesigned docs match the implemented code boundaries: baseline modeling exists, grouped-city fold generation exists, and the planned `solver="saga"` logistic-regression and random-forest stages are documented as planned rather than implemented.
+  - Verified that no code modules, import paths, or output directories were moved in this checkpoint; the repo-structure change is conceptual/documentary rather than a risky physical refactor.
 - 2026-03-23 real canonical modeling-prep verification:
   - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m pytest tests/test_modeling_prep.py -q"` and confirmed `4 passed`.
   - The first live `src.audit_final_dataset` run on the canonical parquet failed with `MemoryError`, which exposed that the original implementation was trying to materialize the full final dataset.
@@ -400,8 +406,36 @@ Run the first real baseline-modeling pass from the verified canonical dataset:
 - Minneapolis still depends on the fresh AppEEARS ECOSTRESS task submitted on 2026-03-23 finishing remotely before city-level feature assembly can complete.
 - The current `city_outer_folds` logic balances cities by row count and city count, not by hotspot prevalence; revisit if stricter target-stratified folds are needed for later modeling experiments.
 - The new baseline-modeling stage has not yet been run end to end on the canonical `final_dataset.parquet`; current verification is synthetic-fixture testing plus the already-completed canonical modeling-prep verification.
+- The planned first main models are still documentation-only at this point: grouped-city logistic regression with `solver="saga"` and grouped-city random forest are not yet implemented as production CLIs.
+- Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-23 - Checkpoint: Documentation Architecture Redesign
+
+- Date / checkpoint:
+  - 2026-03-23 documentation and repo-navigation redesign.
+- Change made:
+  - Rewrote `README.md` as the project landing page for the full urban-heat ML workflow instead of a long stage inventory.
+  - Reworked `docs/workflow.md` into an end-to-end lifecycle document covering study design, acquisition, feature assembly, modeling prep, baselines, planned main models, evaluation, and deliverables.
+  - Refocused `docs/data_dictionary.md` on canonical columns, artifact families, and dataset locations rather than repeating pipeline narration.
+  - Added `docs/modeling_plan.md` to document the grouped-city modeling contract, baseline stage, planned `solver="saga"` logistic-regression and random-forest setups, and evaluation roadmap.
+  - Kept the physical repo structure stable in this checkpoint to avoid breaking working code; the structure change is primarily a clearer documentation scheme.
+- Files touched:
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - Open `README.md`, then follow the links to `docs/workflow.md`, `docs/data_dictionary.md`, `docs/modeling_plan.md`, and `docs/chat_handoff.md`.
+- Test status:
+  - No tests run in this checkpoint because the change was documentation-only.
+- Manual verification status:
+  - Verified doc accuracy against the current top-level repo layout and existing implemented CLI stages.
+  - Confirmed the docs now clearly separate implemented, test-verified, manually verified, and planned-next work.
+- Next recommended step:
+  - Run the first real canonical baseline-modeling pass, then use the new docs as the project-facing reference for the next modeling implementation stage.
 
 ### 2026-03-23 - Checkpoint: Baseline Modeling Stage Implemented
 
