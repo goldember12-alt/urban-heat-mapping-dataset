@@ -1,0 +1,23 @@
+{
+  "target_column": "hotspot_10pct",
+  "group_column": "city_id",
+  "identifier_columns": [
+    "city_id",
+    "city_name",
+    "climate_group",
+    "cell_id",
+    "centroid_lon",
+    "centroid_lat"
+  ],
+  "excluded_feature_columns": [
+    "hotspot_10pct",
+    "lst_median_may_aug",
+    "n_valid_ecostress_passes",
+    "cell_id",
+    "city_id",
+    "city_name",
+    "centroid_lon",
+    "centroid_lat"
+  ],
+  "selected_feature_columns": []
+}

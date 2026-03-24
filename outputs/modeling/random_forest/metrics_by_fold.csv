@@ -1,0 +1,2 @@
+model_name,outer_fold,train_city_count,test_city_count,train_row_count,test_row_count,test_positive_count,test_prevalence,pr_auc,recall_at_top_10pct,inner_cv_splits,best_inner_cv_average_precision
+random_forest,0,24,6,120000,30000,2925,0.0975,0.18120066525901674,0.23931623931623933,4,0.1561522196266537

@@ -28,7 +28,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sample-rows-per-city", type=int, default=None)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--inner-cv-splits", type=int, default=4)
-    parser.add_argument("--grid-search-n-jobs", type=int, default=None)
+    parser.add_argument("--grid-search-n-jobs", type=int, default=-1)
     parser.add_argument("--model-n-jobs", type=int, default=None)
     return parser
 

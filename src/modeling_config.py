@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Sequence
 
 from src.config import FINAL, MODELING, MODELING_FIGURES, MODELING_OUTPUTS
 
@@ -9,20 +10,25 @@ GROUP_COLUMN = "city_id"
 CITY_NAME_COLUMN = "city_name"
 FOLD_COLUMN = "outer_fold"
 
+FEATURE_TYPE_NUMERIC = "numeric"
+FEATURE_TYPE_CATEGORICAL = "categorical"
+
+MODEL_FEATURE_TYPES = {
+    "impervious_pct": FEATURE_TYPE_NUMERIC,
+    "elevation_m": FEATURE_TYPE_NUMERIC,
+    "dist_to_water_m": FEATURE_TYPE_NUMERIC,
+    "ndvi_median_may_aug": FEATURE_TYPE_NUMERIC,
+    "land_cover_class": FEATURE_TYPE_CATEGORICAL,
+    "climate_group": FEATURE_TYPE_CATEGORICAL,
+}
+
 NUMERIC_FEATURE_COLUMNS = [
-    "impervious_pct",
-    "elevation_m",
-    "dist_to_water_m",
-    "ndvi_median_may_aug",
+    column_name for column_name, feature_type in MODEL_FEATURE_TYPES.items() if feature_type == FEATURE_TYPE_NUMERIC
 ]
 CATEGORICAL_FEATURE_COLUMNS = [
-    "land_cover_class",
-    "climate_group",
+    column_name for column_name, feature_type in MODEL_FEATURE_TYPES.items() if feature_type == FEATURE_TYPE_CATEGORICAL
 ]
-DEFAULT_FEATURE_COLUMNS = [
-    *NUMERIC_FEATURE_COLUMNS,
-    *CATEGORICAL_FEATURE_COLUMNS,
-]
+DEFAULT_FEATURE_COLUMNS = list(MODEL_FEATURE_TYPES)
 
 EXCLUDED_FEATURE_COLUMNS = [
     TARGET_COLUMN,
@@ -88,6 +94,28 @@ RANDOM_FOREST_PARAM_GRID = [
 def get_first_pass_feature_columns() -> list[str]:
     """Return the initial leakage-safe modeling feature set."""
     return list(DEFAULT_FEATURE_COLUMNS)
+
+
+def get_feature_type_map(feature_columns: Sequence[str] | None = None) -> dict[str, str]:
+    """Return the explicit modeling feature-type contract for the selected columns."""
+    selected_columns = DEFAULT_FEATURE_COLUMNS if feature_columns is None else list(feature_columns)
+    return {column_name: MODEL_FEATURE_TYPES[column_name] for column_name in selected_columns}
+
+
+def split_model_feature_columns(feature_columns: Sequence[str]) -> tuple[list[str], list[str]]:
+    """Split selected modeling features into numeric and categorical groups from the shared contract."""
+    feature_type_map = get_feature_type_map(feature_columns)
+    numeric_columns = [
+        column_name
+        for column_name in feature_columns
+        if feature_type_map[column_name] == FEATURE_TYPE_NUMERIC
+    ]
+    categorical_columns = [
+        column_name
+        for column_name in feature_columns
+        if feature_type_map[column_name] == FEATURE_TYPE_CATEGORICAL
+    ]
+    return numeric_columns, categorical_columns
 
 
 def get_prediction_output_columns() -> list[str]:

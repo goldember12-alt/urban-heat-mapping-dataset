@@ -17,7 +17,9 @@ from src.modeling_config import (
     FOLD_COLUMN,
     GROUP_COLUMN,
     IDENTIFIER_COLUMNS,
+    MODEL_FEATURE_TYPES,
     TARGET_COLUMN,
+    get_feature_type_map,
 )
 from src.modeling_prep import get_final_dataset_columns, validate_binary_target, validate_required_final_columns
 
@@ -89,6 +91,13 @@ def validate_model_feature_columns(
     leaked_columns = sorted(set(requested) & set(excluded_columns))
     if leaked_columns:
         raise ValueError(f"Feature columns include leakage-prone fields: {', '.join(leaked_columns)}")
+
+    missing_type_contract = sorted(set(requested) - set(MODEL_FEATURE_TYPES))
+    if missing_type_contract:
+        raise ValueError(
+            "Feature columns missing an explicit modeling type contract: "
+            + ", ".join(missing_type_contract)
+        )
 
     return requested
 
@@ -260,11 +269,17 @@ def load_outer_fold_data(
 
 def write_feature_contract(output_path: Path, feature_columns: Sequence[str]) -> None:
     """Write the explicit modeling feature contract for a run."""
+    feature_type_map = get_feature_type_map(feature_columns)
     payload = {
         "target_column": TARGET_COLUMN,
         "group_column": GROUP_COLUMN,
         "identifier_columns": IDENTIFIER_COLUMNS,
         "excluded_feature_columns": EXCLUDED_FEATURE_COLUMNS,
         "selected_feature_columns": list(feature_columns),
+        "feature_type_map": feature_type_map,
+        "numeric_feature_columns": [column for column, feature_type in feature_type_map.items() if feature_type == "numeric"],
+        "categorical_feature_columns": [
+            column for column, feature_type in feature_type_map.items() if feature_type == "categorical"
+        ],
     }
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

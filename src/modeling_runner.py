@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
+import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
@@ -12,11 +13,10 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV, GroupKFold
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, OrdinalEncoder, StandardScaler
 
 from src.modeling_config import (
     CITY_NAME_COLUMN,
-    CATEGORICAL_FEATURE_COLUMNS,
     DEFAULT_CALIBRATION_BINS,
     DEFAULT_FINAL_DATASET_PATH,
     DEFAULT_INNER_CV_SPLITS,
@@ -26,12 +26,12 @@ from src.modeling_config import (
     GROUP_COLUMN,
     LOGISTIC_OUTPUT_DIR,
     LOGISTIC_PARAM_GRID,
-    NUMERIC_FEATURE_COLUMNS,
     RANDOM_FOREST_OUTPUT_DIR,
     RANDOM_FOREST_PARAM_GRID,
     TARGET_COLUMN,
     get_first_pass_feature_columns,
     get_prediction_output_columns,
+    split_model_feature_columns,
 )
 from src.modeling_data import (
     get_requested_outer_folds,
@@ -61,9 +61,24 @@ class GridSearchRunResult:
 
 
 def _split_feature_types(feature_columns: Sequence[str]) -> tuple[list[str], list[str]]:
-    numeric_columns = [column for column in feature_columns if column in NUMERIC_FEATURE_COLUMNS]
-    categorical_columns = [column for column in feature_columns if column in CATEGORICAL_FEATURE_COLUMNS]
-    return numeric_columns, categorical_columns
+    return split_model_feature_columns(feature_columns)
+
+
+def _coerce_numeric_frame(X: pd.DataFrame) -> pd.DataFrame:
+    numeric_df = pd.DataFrame(X).copy()
+    for column_name in numeric_df.columns:
+        numeric_df[column_name] = pd.to_numeric(numeric_df[column_name], errors="coerce")
+    return numeric_df
+
+
+def _coerce_categorical_frame(X: pd.DataFrame) -> pd.DataFrame:
+    categorical_df = pd.DataFrame(X).copy()
+    for column_name in categorical_df.columns:
+        values = categorical_df[column_name].astype("string").str.strip()
+        missing_mask = values.isna() | values.eq("")
+        categorical_df[column_name] = values.astype(object)
+        categorical_df.loc[missing_mask, column_name] = np.nan
+    return categorical_df
 
 
 def build_logistic_saga_pipeline(
@@ -81,6 +96,7 @@ def build_logistic_saga_pipeline(
                 "numeric",
                 Pipeline(
                     steps=[
+                        ("cast", FunctionTransformer(_coerce_numeric_frame, validate=False)),
                         ("imputer", SimpleImputer(strategy="median")),
                         ("scaler", StandardScaler()),
                     ]
@@ -91,6 +107,7 @@ def build_logistic_saga_pipeline(
                 "categorical",
                 Pipeline(
                     steps=[
+                        ("cast", FunctionTransformer(_coerce_categorical_frame, validate=False)),
                         ("imputer", SimpleImputer(strategy="most_frequent")),
                         ("encoder", OneHotEncoder(handle_unknown="ignore")),
                     ]
@@ -124,11 +141,21 @@ def build_random_forest_pipeline(
     numeric_columns, categorical_columns = _split_feature_types(feature_columns)
     preprocessor = ColumnTransformer(
         transformers=[
-            ("numeric", SimpleImputer(strategy="median"), numeric_columns),
+            (
+                "numeric",
+                Pipeline(
+                    steps=[
+                        ("cast", FunctionTransformer(_coerce_numeric_frame, validate=False)),
+                        ("imputer", SimpleImputer(strategy="median")),
+                    ]
+                ),
+                numeric_columns,
+            ),
             (
                 "categorical",
                 Pipeline(
                     steps=[
+                        ("cast", FunctionTransformer(_coerce_categorical_frame, validate=False)),
                         ("imputer", SimpleImputer(strategy="most_frequent")),
                         (
                             "encoder",
@@ -187,7 +214,7 @@ def run_grouped_grid_search_model(
     inner_cv_splits: int = DEFAULT_INNER_CV_SPLITS,
     top_fraction: float = DEFAULT_TOP_FRACTION,
     calibration_bins: int = DEFAULT_CALIBRATION_BINS,
-    grid_search_n_jobs: int | None = None,
+    grid_search_n_jobs: int | None = -1,
     model_n_jobs: int | None = None,
 ) -> GridSearchRunResult:
     """Run held-out-city evaluation with inner grouped tuning for one sklearn model."""
@@ -393,7 +420,7 @@ def run_logistic_saga_model(
     top_fraction: float = DEFAULT_TOP_FRACTION,
     calibration_bins: int = DEFAULT_CALIBRATION_BINS,
     param_grid: Sequence[dict[str, object]] = LOGISTIC_PARAM_GRID,
-    grid_search_n_jobs: int | None = None,
+    grid_search_n_jobs: int | None = -1,
 ) -> GridSearchRunResult:
     """Run the grouped logistic SAGA experiment."""
     return run_grouped_grid_search_model(
@@ -426,7 +453,7 @@ def run_random_forest_model(
     top_fraction: float = DEFAULT_TOP_FRACTION,
     calibration_bins: int = DEFAULT_CALIBRATION_BINS,
     param_grid: Sequence[dict[str, object]] = RANDOM_FOREST_PARAM_GRID,
-    grid_search_n_jobs: int | None = None,
+    grid_search_n_jobs: int | None = -1,
     model_n_jobs: int | None = None,
 ) -> GridSearchRunResult:
     """Run the grouped random-forest experiment."""

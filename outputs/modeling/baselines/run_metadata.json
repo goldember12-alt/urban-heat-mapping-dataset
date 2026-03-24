@@ -1,0 +1,27 @@
+{
+  "dataset_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\data_processed\\final\\final_dataset.parquet",
+  "folds_path": null,
+  "output_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\baselines",
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "sample_rows_per_city": 5000,
+  "top_fraction": 0.1,
+  "baselines": {
+    "global_mean_baseline": "Predicts the training-city hotspot prevalence for every held-out row.",
+    "land_cover_only_baseline": "Predicts held-out probabilities from training-city land-cover prevalence.",
+    "impervious_only_baseline": "Predicts held-out probabilities from training-city impervious quantile prevalence.",
+    "climate_only_baseline": "Predicts held-out probabilities from training-city climate-group prevalence."
+  },
+  "output_files": {
+    "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\baselines\\heldout_predictions.parquet",
+    "metrics_by_fold": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\baselines\\metrics_by_fold.csv",
+    "metrics_by_city": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\baselines\\metrics_by_city.csv",
+    "metrics_summary": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\baselines\\metrics_summary.csv",
+    "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\baselines\\calibration_curve.csv"
+  }
+}

@@ -1,10 +1,16 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.modeling_baselines import run_modeling_baselines
 from src.modeling_config import DEFAULT_FEATURE_COLUMNS
-from src.modeling_runner import run_logistic_saga_model, run_random_forest_model
+from src.modeling_runner import (
+    build_logistic_saga_pipeline,
+    build_random_forest_pipeline,
+    run_logistic_saga_model,
+    run_random_forest_model,
+)
 
 
 def _build_modeling_fixture() -> pd.DataFrame:
@@ -56,6 +62,21 @@ def _build_fold_fixture() -> pd.DataFrame:
     )
 
 
+def _build_mixed_type_feature_fixture() -> tuple[pd.DataFrame, pd.Series]:
+    X = pd.DataFrame(
+        {
+            "impervious_pct": [10.0, 20.0, None, 35.0, 42.0, 55.0],
+            "elevation_m": [100.0, None, 110.0, 115.0, 120.0, 125.0],
+            "dist_to_water_m": [300.0, 280.0, 260.0, None, 220.0, 200.0],
+            "ndvi_median_may_aug": [0.20, 0.22, 0.24, 0.26, None, 0.30],
+            "land_cover_class": [21, None, 24, 24, 31, 31],
+            "climate_group": ["hot_arid", None, "hot_arid", "humid_subtropical", "marine", "marine"],
+        }
+    )
+    y = pd.Series([0, 0, 0, 1, 1, 1], dtype="int8")
+    return X, y
+
+
 def test_run_modeling_baselines_writes_expected_artifacts(tmp_path: Path):
     dataset_path = tmp_path / "final_dataset.parquet"
     folds_path = tmp_path / "city_outer_folds.parquet"
@@ -86,6 +107,34 @@ def test_run_modeling_baselines_writes_expected_artifacts(tmp_path: Path):
 
     predictions = pd.read_parquet(result.predictions_path)
     assert {"predicted_probability", "hotspot_10pct", "centroid_lon", "centroid_lat"}.issubset(predictions.columns)
+
+
+def test_logistic_preprocessor_routes_contract_categoricals_away_from_numeric_branch():
+    pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS)
+    preprocessor = pipeline.named_steps["preprocess"]
+    transformer_columns = {name: columns for name, _, columns in preprocessor.transformers}
+
+    assert "climate_group" in transformer_columns["categorical"]
+    assert "climate_group" not in transformer_columns["numeric"]
+    assert "land_cover_class" in transformer_columns["categorical"]
+    assert "land_cover_class" not in transformer_columns["numeric"]
+
+
+@pytest.mark.parametrize(
+    ("builder", "builder_kwargs"),
+    [
+        (build_logistic_saga_pipeline, {"max_iter": 200}),
+        (build_random_forest_pipeline, {"n_jobs": 1}),
+    ],
+)
+def test_tuned_pipelines_fit_with_mixed_type_categorical_missing_values(builder, builder_kwargs):
+    X, y = _build_mixed_type_feature_fixture()
+    pipeline = builder(DEFAULT_FEATURE_COLUMNS, **builder_kwargs)
+
+    pipeline.fit(X, y)
+    probabilities = pipeline.predict_proba(X)
+
+    assert probabilities.shape == (len(X), 2)
 
 
 def test_run_logistic_and_random_forest_write_expected_artifacts(tmp_path: Path):

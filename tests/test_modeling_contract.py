@@ -3,7 +3,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.modeling_config import DEFAULT_FEATURE_COLUMNS
+from src.modeling_config import (
+    DEFAULT_FEATURE_COLUMNS,
+    FEATURE_TYPE_CATEGORICAL,
+    FEATURE_TYPE_NUMERIC,
+    get_feature_type_map,
+)
 from src.modeling_data import (
     get_requested_outer_folds,
     load_city_outer_folds,
@@ -74,6 +79,24 @@ def test_validate_model_feature_columns_rejects_leakage_columns():
         available_columns=available_columns,
     )
     assert selected == DEFAULT_FEATURE_COLUMNS
+
+
+def test_validate_model_feature_columns_requires_explicit_type_contract():
+    available_columns = [*_build_modeling_fixture().columns.tolist(), "custom_feature"]
+
+    with pytest.raises(ValueError, match="explicit modeling type contract"):
+        validate_model_feature_columns(
+            feature_columns=["impervious_pct", "custom_feature"],
+            available_columns=available_columns,
+        )
+
+
+def test_feature_type_contract_keeps_climate_group_categorical():
+    feature_type_map = get_feature_type_map(DEFAULT_FEATURE_COLUMNS)
+
+    assert feature_type_map["impervious_pct"] == FEATURE_TYPE_NUMERIC
+    assert feature_type_map["climate_group"] == FEATURE_TYPE_CATEGORICAL
+    assert feature_type_map["land_cover_class"] == FEATURE_TYPE_CATEGORICAL
 
 
 def test_recall_at_top_fraction_matches_expected_example():

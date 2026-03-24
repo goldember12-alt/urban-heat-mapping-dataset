@@ -31,6 +31,7 @@ Implemented in code:
 - First-pass held-out-city main models with:
   - logistic regression using `solver="saga"` in an sklearn `Pipeline`
   - random forest in an sklearn `Pipeline`
+- The tuned sklearn runners now share an explicit feature-type contract and coerce categorical columns before categorical imputation/encoding, which fixes the mixed `land_cover_class` / `climate_group` preprocessing failure that previously surfaced as `could not convert string to float: 'hot_arid'`.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
@@ -75,6 +76,14 @@ Standardization status:
 
 As of 2026-03-23:
 
+- Tuned-modeling preprocessing regression checkpoint:
+  - `10 passed` via:
+    - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q"`
+  - Added regression coverage for:
+    - explicit feature-type contract enforcement
+    - categorical string values like `hot_arid` plus missing values
+    - tuned logistic / random-forest pipeline fit on tiny mixed-type data
+    - categorical contract columns staying out of the numeric transformer
 - First-pass sklearn modeling layer checkpoint:
   - `9 passed` via:
     - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_modeling_prep.py tests/test_modeling_contract.py tests/test_modeling_runner.py -q"`
@@ -166,6 +175,7 @@ Implemented:
 - `src.run_modeling_baselines` trains the first-pass held-out-city baseline suite and writes outputs under `outputs/modeling/baselines/`.
 - `src.run_logistic_saga` trains the grouped logistic SAGA model with training-city-only preprocessing/tuning and writes outputs under `outputs/modeling/logistic_saga/`.
 - `src.run_random_forest` trains the grouped random-forest model with the same held-out-city discipline and writes outputs under `outputs/modeling/random_forest/`.
+- `src.run_logistic_saga` and `src.run_random_forest` now use the same explicit shared feature-type contract for tuned preprocessing, with categorical columns coerced safely ahead of `SimpleImputer` / encoder steps.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -219,6 +229,12 @@ Manually verified:
   - Added regression coverage in `tests/test_model_baselines.py` for leakage-column rejection, fold joins, fold-table validation, and end-to-end artifact writing on a synthetic parquet fixture.
   - Updated `README.md`, `docs/workflow.md`, and `docs/data_dictionary.md` to document the new baseline stage, outputs, and CLI usage.
   - No fresh end-to-end run of `src.run_model_baselines` has been executed yet on the canonical `71,394,894`-row parquet; this checkpoint is test-verified only.
+- 2026-03-23 tuned-modeling preprocessing regression verification:
+  - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q"` and confirmed `10 passed`.
+  - Reran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"` twice on the canonical parquet; the command no longer failed immediately in sklearn preprocessing, but it exceeded both a `20` minute and a `60` minute interactive verification window before writing fold outputs.
+  - Reran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"` on the canonical parquet; it also exceeded a `20` minute interactive verification window without reproducing the old preprocessing error.
+  - Reran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000 --outer-folds 0"` and `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000 --outer-folds 0"`; both also exceeded a `30` minute verification window on the canonical parquet without reproducing the old `hot_arid` preprocessing error.
+  - The tuned output roots currently show refreshed `feature_contract.json` manifests, but no completed fold-level artifacts were produced during these timed verification windows.
 - 2026-03-19 real workspace cache/storage audit:
   - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 24 --report-json outputs\storage\cache_cleanup_dry_run_20260319.json"` in dry-run mode.
   - Ran `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "& '.\.venv\Scripts\python.exe' -m src.run_cache_cleanup --prune-modes regenerable --protect-recent-hours 0 --report-json outputs\storage\cache_cleanup_dry_run_no_age_gate_20260319.json"` in dry-run mode.
@@ -446,13 +462,12 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Superseding the older reporting-only next step, the current recommended next step is to run the new first-pass ML commands against the canonical final dataset with a bounded smoke-test sample, then review the outputs under `outputs/modeling/` before scaling up:
+Superseding the older reporting-only next step, the current recommended next step is to lock in a practical smoke-mode runtime strategy for the tuned models on the canonical parquet, because the categorical preprocessing bug is fixed but the current exact tuned smoke commands still run longer than an interactive verification window:
 
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000"`
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"`
-- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"`
-- Inspect `metrics_summary.csv`, `metrics_by_fold.csv`, `metrics_by_city.csv`, `best_params_by_fold.csv`, and `heldout_predictions.parquet` under each `outputs/modeling/<stage>/` directory.
-- After reviewing those smoke-run artifacts, decide whether to scale the same runners directly on the full canonical parquet or introduce a dedicated sampled modeling dataset for faster iteration.
+- Keep `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000"` as the quick canonical baseline smoke test.
+- Rerun `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"` and `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"` in an unattended window, or introduce a deliberately smaller smoke-mode tuning grid / sampled modeling dataset for iterative checks.
+- Review `feature_contract.json`, `metrics_summary.csv`, `metrics_by_fold.csv`, `metrics_by_city.csv`, `best_params_by_fold.csv`, and `heldout_predictions.parquet` under each `outputs/modeling/<stage>/` directory once a full tuned smoke run completes.
+- Decide whether the long tuned runtime should be addressed by a dedicated smoke-mode config, reduced tuning grid, lower `inner_cv_splits`, or a separate sampled parquet artifact before attempting full canonical tuning.
 
 Use the new shared reporting CLI against whichever cities currently have materialized per-city feature outputs, then rerun it as more cities finish feature assembly:
 
@@ -499,6 +514,7 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - Full support-layer prep has not yet been materialized beyond the first four completed cities.
 - Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
 - No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset.
+- The tuned canonical smoke commands no longer reproduce the old `climate_group='hot_arid'` preprocessing crash, but they still exceed 30-60 minute verification windows on the sampled `5000` rows-per-city setting.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
 - The current sklearn-based first-pass runners may still need a scaling strategy or dedicated sampled dataset if full-canonical runtime or memory is too heavy on a workstation.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
@@ -513,10 +529,40 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - The current `city_outer_folds` logic balances cities by row count and city count, not by hotspot prevalence; revisit if stricter target-stratified folds are needed for later modeling experiments.
 - The new baseline-modeling stage has not yet been run end to end on the canonical `final_dataset.parquet`; current verification is synthetic-fixture testing plus the already-completed canonical modeling-prep verification.
 - Legacy Phoenix-only root-level report artifacts under `outputs/phoenix_data_summary*` still exist from pre-refactor runs; the new code writes only to the split stage-specific structure, but the old generated files were not deleted automatically in this checkpoint.
-- The planned first main models are still documentation-only at this point: grouped-city logistic regression with `solver="saga"` and grouped-city random forest are not yet implemented as production CLIs.
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-23 - Checkpoint: Tuned Modeling Preprocessing Contract Fixed
+
+- Date / checkpoint:
+  - 2026-03-23 tuned modeling preprocessing regression fix on top of the canonical modeling handoff.
+- Change made:
+  - Replaced the loose split-by-membership logic with a single shared feature-type contract in `src.modeling_config`.
+  - Updated `src.modeling_data` to reject requested features that are missing an explicit modeling type contract and to write the resolved type map into `feature_contract.json`.
+  - Updated `src.modeling_runner` so numeric columns are coerced with `pd.to_numeric(...)` before numeric imputation, while categorical columns are coerced to plain object/string values with `np.nan` missing markers before categorical imputation and encoding.
+  - Set tuned `GridSearchCV` defaults to use `n_jobs=-1` so the exact CLI smoke-test commands no longer default to single-core grid search.
+  - Added targeted regression tests for `hot_arid`-style categorical values with missing data and for accidental routing of categorical features into the numeric transformer.
+- Files touched:
+  - `src/modeling_config.py`
+  - `src/modeling_data.py`
+  - `src/modeling_runner.py`
+  - `src/run_logistic_saga.py`
+  - `src/run_random_forest.py`
+  - `tests/test_modeling_contract.py`
+  - `tests/test_modeling_runner.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"`
+- Test status:
+  - Focused tuned-modeling regression subset passed: `10 passed`.
+- Manual verification status:
+  - The exact tuned smoke commands now progress past the previous sklearn preprocessing failure and refresh `feature_contract.json`, but they did not finish within the available 20-60 minute verification windows on the canonical parquet.
+  - Full tuned artifact generation on the real canonical parquet is therefore not yet manually verified complete in this checkpoint.
+- Next recommended step:
+  - Choose an explicit smoke-mode runtime strategy for tuned modeling so canonical verification can finish in a bounded unattended run.
 
 ### 2026-03-23 - Checkpoint: All-City Data-Processing Reporting Generalized
 
