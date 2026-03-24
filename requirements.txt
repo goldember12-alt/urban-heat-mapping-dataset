@@ -9,5 +9,6 @@ numpy
 matplotlib
 requests
 scipy
+scikit-learn
 pyogrio
 pyarrow

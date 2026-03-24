@@ -1,6 +1,6 @@
 # Urban Heat Mapping Dataset and Cross-City Modeling Framework
 
-This repository supports a cross-city urban heat project that combines geospatial data engineering with city-held-out machine learning. The current codebase builds a reproducible 30 m cell-level dataset for 30 U.S. cities, prepares modeling handoff artifacts, and includes an initial baseline-modeling stage.
+This repository supports a cross-city urban heat project that combines geospatial data engineering with city-held-out machine learning. The current codebase builds a reproducible 30 m cell-level dataset for 30 U.S. cities, prepares modeling handoff artifacts, and now includes the first reusable sklearn-based modeling layer.
 
 The project is broader than a preprocessing pipeline. It is organized around the full lifecycle:
 
@@ -21,7 +21,8 @@ Canonical outputs:
 - modeling handoff artifacts in `data_processed/modeling/`
 - data-processing report outputs in `outputs/data_processing/<city_stem>/`
 - data-processing figures in `figures/data_processing/<city_stem>/`
-- reserved modeling/evaluation report roots in `outputs/modeling/` and `figures/modeling/`
+- first-pass ML outputs in `outputs/modeling/`
+- reserved modeling figures in `figures/modeling/`
 
 Final dataset columns:
 
@@ -51,21 +52,20 @@ Implemented now:
 - Per-city feature assembly and merged final dataset generation
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
-- Initial baseline modeling with city-held-out evaluation artifacts
+- First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
 
 Verified status:
 
 - Full-stack orchestration has been manually verified for Phoenix, Tucson, Las Vegas, and Albuquerque
 - The canonical modeling-prep stage has been manually verified on the real `final_dataset.parquet`
-- Baseline-modeling code is implemented and test-verified, but a full end-to-end canonical baseline run has not yet been recorded in the handoff log
+- The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
+- A full end-to-end canonical modeling run on the real `71,394,894`-row dataset has not yet been recorded in the handoff log
 
 Planned next, not yet implemented as full production code:
 
-- Main city-held-out model training with logistic regression using `solver="saga"` in a `Pipeline` plus grouped CV
-- Main city-held-out random forest training in a `Pipeline` plus grouped CV
-- Nested tuning that stays fully inside the training cities
-- Evaluation extensions such as recall at top 10%, calibration review, and held-out-city prediction/error maps
-- Application workflow for scoring new cities after the first modeling stack is stable
+- Held-out-city spatial sanity figures and residual/error maps under `figures/modeling/`
+- Final train-on-all-cities packaging for apply-to-new-cities workflows
+- Scaling strategy for full canonical runs if workstation memory/runtime becomes the bottleneck
 
 ## Project Lifecycle
 
@@ -98,18 +98,18 @@ Planned next, not yet implemented as full production code:
 
 ### 5. Modeling And Evaluation
 
-- Current implemented stage: baseline modeling
-- Documented next stage: grouped city CV, training-city-only tuning, held-out-city evaluation, and map deliverables
+- Implemented now: first-pass baselines plus grouped logistic SAGA and random forest runners
+- Next stage: richer evaluation figures, map deliverables, and final-train packaging
 
 ## Repo Layout
 
-- `src/`: Python modules and CLI entrypoints for acquisition, preprocessing, feature assembly, orchestration, modeling prep, and baseline modeling
+- `src/`: Python modules and CLI entrypoints for acquisition, preprocessing, feature assembly, orchestration, modeling prep, baselines, and grouped sklearn modeling
 - `tests/`: regression and unit tests for geometry, acquisition, orchestration, feature assembly, and modeling-prep logic
 - `docs/`: project-facing documentation
 - `data_raw/`: immutable downloaded source data
 - `data_processed/`: processed artifacts organized by project phase
-- `figures/`: figure outputs split into `figures/data_processing/` for preprocessing-era reports, `figures/modeling/` for future ML/evaluation deliverables, plus a small number of legacy/global inspection plots
-- `outputs/`: report-style deliverables split into `outputs/data_processing/` for preprocessing-era city summaries, `outputs/modeling/` for future ML/evaluation reports, plus storage-management outputs
+- `figures/`: figure outputs split into `figures/data_processing/` for preprocessing-era reports and `figures/modeling/` for ML/evaluation deliverables, plus a small number of legacy/global inspection plots
+- `outputs/`: report-style deliverables split into `outputs/data_processing/` for preprocessing-era city summaries, `outputs/modeling/` for ML/evaluation tables and prediction artifacts, plus storage-management outputs
 
 Important `data_processed/` subdirectories:
 
@@ -135,10 +135,22 @@ These are the most important current entrypoints. The workflow doc lists how the
 .venv\Scripts\python.exe -m src.run_data_processing_reports
 .venv\Scripts\python.exe -m src.audit_final_dataset
 .venv\Scripts\python.exe -m src.make_model_folds --n-splits 5
-.venv\Scripts\python.exe -m src.run_model_baselines
+.venv\Scripts\python.exe -m src.run_modeling_baselines
+.venv\Scripts\python.exe -m src.run_logistic_saga
+.venv\Scripts\python.exe -m src.run_random_forest
 ```
 
 AppEEARS-dependent commands read credentials from environment variables only. See the workflow doc for the acquisition contract and expected raw-output locations.
+
+Recommended first ML smoke run on the canonical dataset:
+
+```powershell
+.venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000
+.venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000
+.venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000
+```
+
+These runners treat `data_processed/final/final_dataset.parquet` as the canonical row-level input and `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
 
 ## How To Navigate The Docs
 

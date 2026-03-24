@@ -1,6 +1,6 @@
 # End-to-End Workflow
 
-This project is best understood as an end-to-end urban heat study, not only as a geospatial preprocessing pipeline. The workflow below separates what is already implemented in code from what is documented as the next modeling and deliverable stages.
+This project is best understood as an end-to-end urban heat study, not only as a geospatial preprocessing pipeline. The workflow below separates what is already implemented in code from what remains the next modeling and deliverable stage.
 
 ## Workflow At A Glance
 
@@ -10,8 +10,8 @@ This project is best understood as an end-to-end urban heat study, not only as a
 4. Prepare support layers and assemble per-city features
 5. Merge the final modeling dataset
 6. Audit the final dataset and create city-held-out folds
-7. Run baseline models
-8. Expand to main models, evaluation, and map deliverables
+7. Run first-pass held-out-city models
+8. Expand to figures, map deliverables, and final-train packaging
 
 ## 1. Study Design And Target Definition
 
@@ -36,7 +36,7 @@ Status:
 
 - Design is documented and reflected in the final dataset schema
 - The grouped-city modeling plan is documented
-- Only the baseline-modeling stage is currently implemented in code
+- The first-pass grouped modeling layer is now implemented in code
 
 ## 2. City Selection, Study Areas, And Grid Generation
 
@@ -180,67 +180,67 @@ Verification status:
 - The canonical modeling-prep stage has been manually verified on the real `final_dataset.parquet`
 - Fold generation has been rerun to confirm deterministic output
 
-## 7. Baseline Modeling
+## 7. First-Pass Modeling
 
 Implemented now:
 
-- Train a city-held-out baseline stage from the canonical final dataset plus `city_outer_folds`
-- Use leakage-safe preprocessing fitted only on training cities
-- Write fold metrics, overall metrics, saved validation predictions, and model artifacts
+- Train city-held-out baseline models from the canonical final dataset plus `city_outer_folds`
+- Train grouped logistic regression with `solver="saga"` using training-city-only preprocessing and tuning
+- Train grouped random forest with the same held-out-city discipline
+- Save held-out prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`
 
 Current implemented baseline models:
 
-- Logistic regression baseline
-- Lightweight decision-stump comparison
+- Global mean baseline
+- Land-cover-only baseline
+- Impervious-only baseline
+- Climate-only baseline
+
+Current implemented main models:
+
+- Logistic regression with `solver="saga"` in an sklearn `Pipeline`
+- Random forest in an sklearn `Pipeline`
 
 Key outputs:
 
-- `data_processed/modeling/baselines/baseline_metrics_by_fold.csv`
-- `data_processed/modeling/baselines/baseline_metrics_overall.csv`
-- `data_processed/modeling/baselines/baseline_leakage_checks.csv`
-- `data_processed/modeling/baselines/baseline_assumptions.md`
-- `data_processed/modeling/baselines/baseline_run_summary.json`
-- `data_processed/modeling/baselines/validation_predictions/`
-- `data_processed/modeling/baselines/model_artifacts/`
+- `outputs/modeling/baselines/metrics_by_fold.csv`
+- `outputs/modeling/baselines/metrics_by_city.csv`
+- `outputs/modeling/baselines/metrics_summary.csv`
+- `outputs/modeling/baselines/heldout_predictions.parquet`
+- `outputs/modeling/logistic_saga/metrics_by_fold.csv`
+- `outputs/modeling/logistic_saga/metrics_by_city.csv`
+- `outputs/modeling/logistic_saga/metrics_summary.csv`
+- `outputs/modeling/logistic_saga/best_params_by_fold.csv`
+- `outputs/modeling/logistic_saga/heldout_predictions.parquet`
+- `outputs/modeling/random_forest/metrics_by_fold.csv`
+- `outputs/modeling/random_forest/metrics_by_city.csv`
+- `outputs/modeling/random_forest/metrics_summary.csv`
+- `outputs/modeling/random_forest/best_params_by_fold.csv`
+- `outputs/modeling/random_forest/heldout_predictions.parquet`
 
-Main entrypoint:
+Main entrypoints:
 
-- `src.run_model_baselines`
+- `src.run_modeling_baselines`
+- `src.run_logistic_saga`
+- `src.run_random_forest`
 
 Honest status line:
 
-- The baseline-modeling code and tests exist, but a full canonical run on the real 30-city dataset has not yet been recorded in `docs/chat_handoff.md`
+- The new first-pass modeling layer is test-verified on synthetic grouped-city fixtures, but a full canonical run on the real 30-city dataset has not yet been recorded in `docs/chat_handoff.md`
 
-## 8. Main Modeling Roadmap
+## 8. Evaluation And Deliverables
 
-Planned next, not yet implemented as full production code:
+Implemented now:
 
-- Logistic regression with `solver="saga"` inside an sklearn `Pipeline`
-- Random forest inside an sklearn `Pipeline`
-- `GroupKFold` or equivalent grouped city CV for training-city-only model selection
-- `GridSearchCV` or equivalent tuning restricted to the training cities in each outer split
-
-Design rules for those stages:
-
-- Group by `city_id`
-- Never tune on held-out cities
-- Start with baselines before richer models
-- Treat `final_dataset.parquet` as the canonical modeling input
-
-The detailed modeling contract lives in [`docs/modeling_plan.md`](modeling_plan.md).
-
-## 9. Evaluation And Deliverables
+- Primary metric: PR AUC
+- Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, and calibration-curve tables
+- Held-out prediction tables include `city_id`, `city_name`, `climate_group`, `cell_id`, `centroid_lon`, and `centroid_lat` so later map export code can build on the saved outputs directly
 
 Planned next:
 
-- Primary metric: PR AUC
-- Additional evaluation: recall at top 10% predicted risk, calibration review, and held-out-city comparison tables
-- Deliverables: predicted hotspot maps, true hotspot maps, residual/error maps, and eventually transfer to new cities
-
-Current status:
-
-- Evaluation artifacts currently exist only for the baseline-modeling stage
-- The map-deliverable stage for held-out predictions is planned but not yet implemented
+- Predicted hotspot maps, true hotspot maps, and residual/error maps under `figures/modeling/`
+- Final-train-on-all-cities packaging for transfer to new cities
+- Scaling strategy for full-canonical runs if workstation memory/runtime becomes the main blocker
 
 ## 10. Orchestration
 

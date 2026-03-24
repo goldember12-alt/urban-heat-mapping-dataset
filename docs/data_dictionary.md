@@ -228,40 +228,84 @@ Purpose:
 
 - Define city-held-out outer splits without duplicating the full cell-level dataset
 
-## Baseline Modeling Outputs
+## First-Pass Modeling Outputs
 
 Location:
 
-- `data_processed/modeling/baselines/`
+- `outputs/modeling/baselines/`
+- `outputs/modeling/logistic_saga/`
+- `outputs/modeling/random_forest/`
 
-Primary artifacts:
+Shared artifact pattern:
 
-- `baseline_metrics_by_fold.csv`
-- `baseline_metrics_overall.csv`
-- `baseline_leakage_checks.csv`
-- `baseline_assumptions.md`
-- `baseline_run_summary.json`
-- `validation_predictions/`
-- `model_artifacts/`
+- `metrics_by_fold.csv`
+- `metrics_by_city.csv`
+- `metrics_summary.csv`
+- `heldout_predictions.parquet`
+- `calibration_curve.csv`
+- `run_metadata.json`
+- `feature_contract.json`
 
-Validation prediction files contain:
+Model-specific extras:
+
+- `outputs/modeling/logistic_saga/best_params_by_fold.csv`
+- `outputs/modeling/random_forest/best_params_by_fold.csv`
+
+Current baseline runner:
+
+- `src.run_modeling_baselines`
+
+Current baseline models:
+
+- `global_mean_baseline`
+- `land_cover_only_baseline`
+- `impervious_only_baseline`
+- `climate_only_baseline`
+
+Current main-model runners:
+
+- `src.run_logistic_saga`
+- `src.run_random_forest`
+
+Held-out prediction table columns:
 
 - `model_name`
 - `outer_fold`
 - `city_id`
 - `city_name`
+- `climate_group`
 - `cell_id`
+- `centroid_lon`
+- `centroid_lat`
 - `hotspot_10pct`
 - `predicted_probability`
 
-Model artifact examples:
+`metrics_by_fold.csv` contains:
 
-- `model_artifacts/logistic_regression_coefficients.csv`
-- `model_artifacts/decision_stump_rules.csv`
+- held-out fold id
+- train/test city counts
+- train/test row counts
+- held-out PR AUC
+- held-out recall at top 10%
+- for tuned models, the best inner-CV PR AUC
+
+`metrics_by_city.csv` contains:
+
+- one row per held-out city per model
+- held-out PR AUC
+- held-out recall at top 10%
+- held-out row count and positive count
+
+`best_params_by_fold.csv` contains:
+
+- `model_name`
+- `outer_fold`
+- `best_inner_cv_average_precision`
+- `best_params_json`
 
 Honest status note:
 
-- These baseline outputs are produced by implemented code, but the project handoff still records the full canonical baseline run as pending
+- These outputs are produced by implemented code and test-verified on synthetic grouped-city fixtures; a full canonical run on the real 30-city dataset is still pending
 
 ## Figures And Report Outputs
 
@@ -273,7 +317,7 @@ Honest status note:
   - `<city_slug>_land_cover_composition.png`
   - `<city_slug>_key_correlations.png`
   - `<city_slug>_hotspot_map.png`
-- `figures/modeling/` is reserved for future modeling/evaluation figures
+- `figures/modeling/` is the intended root for held-out prediction, calibration, and map-oriented modeling figures as that stage expands
 - A small number of legacy/global inspection figures may still exist directly under `figures/` from earlier checkpoints
 
 ### Report-style outputs
@@ -281,6 +325,6 @@ Honest status note:
 - `outputs/data_processing/<city_stem>/<city_slug>_data_summary.md` stores the markdown summary for one city
 - `outputs/data_processing/<city_stem>/tables/` stores supporting CSV tables for that city summary
 - `outputs/data_processing/data_processing_report_summary.csv` stores the latest batch run status across requested cities
-- `outputs/modeling/` is reserved for future modeling/evaluation report-style outputs
+- `outputs/modeling/` stores the current first-pass modeling metrics tables, held-out predictions, calibration tables, and run metadata
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - Legacy Phoenix-only root-level outputs may still exist from pre-refactor runs, but the reporting code now writes new data-processing summaries only to the split stage-specific structure above

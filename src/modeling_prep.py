@@ -11,29 +11,18 @@ import pyarrow.parquet as pq
 
 from src.config import FINAL, MODELING
 from src.feature_assembly import FINAL_COLUMNS
+from src.modeling_config import (
+    DEFAULT_FEATURE_COLUMNS,
+    EXCLUDED_FEATURE_COLUMNS,
+    GROUP_COLUMN,
+    TARGET_COLUMN,
+)
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TARGET_COLUMN = "hotspot_10pct"
-DEFAULT_GROUP_COLUMN = "city_id"
-DEFAULT_FEATURE_COLUMNS = [
-    "impervious_pct",
-    "land_cover_class",
-    "elevation_m",
-    "dist_to_water_m",
-    "ndvi_median_may_aug",
-    "climate_group",
-]
-DEFAULT_EXCLUDED_COLUMNS = [
-    "hotspot_10pct",
-    "lst_median_may_aug",
-    "cell_id",
-    "city_id",
-    "city_name",
-    "centroid_lon",
-    "centroid_lat",
-    "n_valid_ecostress_passes",
-]
+DEFAULT_TARGET_COLUMN = TARGET_COLUMN
+DEFAULT_GROUP_COLUMN = GROUP_COLUMN
+DEFAULT_EXCLUDED_COLUMNS = EXCLUDED_FEATURE_COLUMNS
 
 
 @dataclass(frozen=True)

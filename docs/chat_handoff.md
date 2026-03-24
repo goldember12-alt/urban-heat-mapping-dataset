@@ -14,6 +14,24 @@ Implemented in code:
 - Raster alignment, DEM, NLCD, hydro distance, city feature assembly, and final dataset assembly.
 - Final-dataset audit CLI plus deterministic city-level fold generation for modeling handoff.
 - Baseline modeling CLI for city-held-out logistic regression plus decision-stump comparison, with fold metrics, saved validation predictions, leakage checks, and assumptions reporting.
+- Shared first-pass modeling contract plus reusable sklearn-based ML layer:
+  - `src.modeling_config`
+  - `src.modeling_data`
+  - `src.modeling_metrics`
+  - `src.modeling_baselines`
+  - `src.modeling_runner`
+  - `src.run_modeling_baselines`
+  - `src.run_logistic_saga`
+  - `src.run_random_forest`
+- First-pass held-out-city baseline suite with:
+  - global mean baseline
+  - land-cover-only baseline
+  - impervious-only baseline
+  - climate-only baseline
+- First-pass held-out-city main models with:
+  - logistic regression using `solver="saga"` in an sklearn `Pipeline`
+  - random forest in an sklearn `Pipeline`
+- First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
@@ -40,7 +58,7 @@ Implemented in code:
 - Feature assembly now supports `cell_filter_mode=study_area` (current behavior) and `cell_filter_mode=core_city` (buffered acquisition, core-city-only training cells).
 - Documentation now makes the workflow from an empty city to a support-layer-ready city explicit, including the automated raw acquisition stage.
 - Data-processing reporting is now generalized for all configured cities: the former Phoenix-only summary logic was refactored into a shared per-city reporting module plus a batch CLI, with Phoenix retained as a compatibility wrapper.
-- Data-processing report outputs now write to `outputs/data_processing/<city_stem>/` and `figures/data_processing/<city_stem>/`, while `outputs/modeling/` and `figures/modeling/` are reserved for later ML/evaluation artifacts.
+- Data-processing report outputs now write to `outputs/data_processing/<city_stem>/` and `figures/data_processing/<city_stem>/`, while first-pass ML tables and prediction artifacts now write under `outputs/modeling/` and later figures will live under `figures/modeling/`.
 - Documentation architecture was redesigned on 2026-03-23 so the repo now reads as the full urban-heat ML project, not only as a preprocessing pipeline. `README.md` is now the landing page, `docs/workflow.md` is lifecycle-oriented, `docs/data_dictionary.md` is artifact-focused, and `docs/modeling_plan.md` was added as the concise grouped-city modeling-methods reference.
 - The obsolete exploratory `notebooks/` workspace was removed on 2026-03-23, and the unused `NOTEBOOKS` path constant plus README mention were deleted so the documented repo layout matches the actual production tree.
 
@@ -57,6 +75,10 @@ Standardization status:
 
 As of 2026-03-23:
 
+- First-pass sklearn modeling layer checkpoint:
+  - `9 passed` via:
+    - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_modeling_prep.py tests/test_modeling_contract.py tests/test_modeling_runner.py -q"`
+  - `scikit-learn`, `joblib`, and `threadpoolctl` were installed into `.venv` during this checkpoint because the repo already required sklearn-style modeling code but the dependency was missing from the environment and `requirements.txt`.
 - Data-processing reporting generalization checkpoint:
   - `4 passed` via:
     - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_summarize_phoenix_dataset.py tests/test_data_processing_reporting.py -q"`
@@ -141,6 +163,9 @@ Implemented:
 - `src.audit_final_dataset` validates the canonical final parquet and writes modeling handoff summaries under `data_processed/modeling/`.
 - `src.make_model_folds` writes deterministic city-level outer folds under `data_processed/modeling/`.
 - `src.run_model_baselines` trains city-held-out baseline models from the canonical final parquet plus `city_outer_folds.*` and writes metrics, predictions, leakage checks, and model artifacts under `data_processed/modeling/baselines/`.
+- `src.run_modeling_baselines` trains the first-pass held-out-city baseline suite and writes outputs under `outputs/modeling/baselines/`.
+- `src.run_logistic_saga` trains the grouped logistic SAGA model with training-city-only preprocessing/tuning and writes outputs under `outputs/modeling/logistic_saga/`.
+- `src.run_random_forest` trains the grouped random-forest model with the same held-out-city discipline and writes outputs under `outputs/modeling/random_forest/`.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -154,9 +179,11 @@ Test-verified:
 - Raster stack validation and stale-legacy AppEEARS handoff coverage are included in `tests/test_feature_assembly.py` and `tests/test_raster_features.py`.
 - Buffered-vs-core study-area metadata and feature filtering coverage are included in `tests/test_city_processing.py` and `tests/test_feature_assembly.py`.
 - Baseline-modeling coverage is included in `tests/test_model_baselines.py`.
+- First-pass grouped sklearn modeling coverage is included in `tests/test_modeling_contract.py` and `tests/test_modeling_runner.py`.
 - Data-processing report path generation and batch city iteration coverage are included in `tests/test_data_processing_reporting.py`.
 - The latest targeted regression result is `36 passed` for AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization hardening.
 - The latest modeling-focused regression result is `8 passed` for the new baseline-modeling subset plus the existing modeling-prep subset.
+- The latest first-pass sklearn modeling regression result is `9 passed` for `tests/test_modeling_prep.py`, `tests/test_modeling_contract.py`, and `tests/test_modeling_runner.py`.
 - The latest focused regression results are `23 passed` for the raster/AppEEARS subset and `21 passed` for the new buffer-policy subset; the last recorded full-suite result remains `69 passed`.
 - The latest targeted network-recovery regression results are `35 passed` for raw/AppEEARS/full-stack hardening plus `2 passed` for acquisition orchestration compatibility.
 - The latest `.env.local` bootstrap regression results are `27 passed` for env bootstrap plus AppEEARS/full-stack compatibility.
@@ -326,6 +353,51 @@ Manually verified:
   - The old acquisition state machine still stored those active rows as `status=not_started`, so orchestration with `retry_incomplete=True` treated them as candidates for a fresh submission
   - The rerun logic now treats an existing nonterminal `task_id` as reusable work: poll first, download if done, and submit only when no usable saved task exists
 
+### 2026-03-23 - Checkpoint: First-Pass Grouped Sklearn Modeling Layer Added
+
+- Date / checkpoint:
+  - 2026-03-23 first-pass ML layer built on top of the canonical final dataset and modeling-prep stage.
+- Change made:
+  - Added a shared modeling contract in `src/modeling_config.py` so the target column, grouping column, leakage exclusions, and first-pass safe feature set have one source of truth.
+  - Added reusable data-loading/fold helpers in `src/modeling_data.py`, including fold-table validation, held-out-city split loading, deterministic optional per-city sampling, and explicit feature-contract export.
+  - Added evaluation utilities in `src/modeling_metrics.py` for PR AUC, recall at top 10%, grouped metric tables, and calibration-curve tables.
+  - Added `src/modeling_baselines.py` plus `src/run_modeling_baselines.py` for the first baseline suite: global mean, land-cover-only, impervious-only, and climate-only.
+  - Added `src/modeling_runner.py`, `src/run_logistic_saga.py`, and `src/run_random_forest.py` for grouped held-out-city tuning/evaluation with sklearn `Pipeline`, `GroupKFold`, and `GridSearchCV`.
+  - Added regression tests in `tests/test_modeling_contract.py` and `tests/test_modeling_runner.py`.
+  - Updated `requirements.txt` to include `scikit-learn` and installed it into `.venv` so the new modeling layer can import and run.
+  - Updated `README.md`, `docs/workflow.md`, `docs/data_dictionary.md`, and `docs/modeling_plan.md` to document the new ML stage and output structure.
+- Files touched:
+  - `src/modeling_config.py`
+  - `src/modeling_data.py`
+  - `src/modeling_metrics.py`
+  - `src/modeling_baselines.py`
+  - `src/modeling_runner.py`
+  - `src/run_modeling_baselines.py`
+  - `src/run_logistic_saga.py`
+  - `src/run_random_forest.py`
+  - `src/modeling_prep.py`
+  - `tests/test_modeling_contract.py`
+  - `tests/test_modeling_runner.py`
+  - `requirements.txt`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"`
+  - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m pytest tests/test_modeling_prep.py tests/test_modeling_contract.py tests/test_modeling_runner.py -q"`
+- Test status:
+  - `9 passed` for the targeted modeling subset above.
+  - The run emitted sklearn 1.8 `FutureWarning` messages about the explicit `penalty` hyperparameter names in the logistic grid, but the tests passed.
+- Manual verification status:
+  - No fresh full canonical modeling run was executed in this checkpoint.
+  - Manual verification remains limited to repo inspection, artifact-path checks, and the successful targeted test run after installing `scikit-learn`.
+- Next recommended step:
+  - Run the three new CLIs on the canonical dataset with a bounded `--sample-rows-per-city` smoke configuration, review the outputs under `outputs/modeling/`, then decide whether to scale up directly or introduce a dedicated sampled modeling dataset artifact.
+
 Currently materialized on disk:
 
 - `data_processed/study_areas/`: all 30 cities
@@ -374,6 +446,14 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
+Superseding the older reporting-only next step, the current recommended next step is to run the new first-pass ML commands against the canonical final dataset with a bounded smoke-test sample, then review the outputs under `outputs/modeling/` before scaling up:
+
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000"`
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000"`
+- `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000"`
+- Inspect `metrics_summary.csv`, `metrics_by_fold.csv`, `metrics_by_city.csv`, `best_params_by_fold.csv`, and `heldout_predictions.parquet` under each `outputs/modeling/<stage>/` directory.
+- After reviewing those smoke-run artifacts, decide whether to scale the same runners directly on the full canonical parquet or introduce a dedicated sampled modeling dataset for faster iteration.
+
 Use the new shared reporting CLI against whichever cities currently have materialized per-city feature outputs, then rerun it as more cities finish feature assembly:
 
 - `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_data_processing_reports"`
@@ -398,6 +478,9 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - `outputs/data_processing/<city_stem>/`
 - `outputs/data_processing/data_processing_report_summary.csv`
 - `outputs/modeling/`
+- `outputs/modeling/baselines/`
+- `outputs/modeling/logistic_saga/`
+- `outputs/modeling/random_forest/`
 - `outputs/storage/`
 - `figures/data_processing/<city_stem>/`
 - `figures/modeling/`
@@ -415,6 +498,9 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - Full all-city raw hydro acquisition/clipping has not been executed yet.
 - Full support-layer prep has not yet been materialized beyond the first four completed cities.
 - Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
+- No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset.
+- Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
+- The current sklearn-based first-pass runners may still need a scaling strategy or dedicated sampled dataset if full-canonical runtime or memory is too heavy on a workstation.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.

@@ -1,6 +1,6 @@
 # Modeling Plan
 
-This document describes the city-held-out modeling methodology for the urban heat project. It distinguishes clearly between what is already implemented and what is still planned.
+This document describes the city-held-out modeling methodology for the urban heat project. It distinguishes clearly between what is already implemented and what still remains for later expansion.
 
 ## Modeling Objective
 
@@ -49,51 +49,38 @@ These stages:
 - summarize missingness and class balance
 - generate deterministic city-level outer folds
 
-Initial baseline-modeling stage:
+First-pass modeling stage:
 
-- `src.run_model_baselines`
+- `src.run_modeling_baselines`
+- `src.run_logistic_saga`
+- `src.run_random_forest`
 
 Current implemented baseline models:
 
-- logistic regression baseline
-- lightweight decision-stump comparison
+- `global_mean_baseline`
+- `land_cover_only_baseline`
+- `impervious_only_baseline`
+- `climate_only_baseline`
 
-Current baseline outputs:
+Current implemented main models:
 
-- fold-level metrics
-- overall metrics
-- leakage checks
-- saved validation predictions
-- model-artifact tables
+- logistic regression with `solver="saga"` in an sklearn `Pipeline`
+- random forest in an sklearn `Pipeline`
+
+Current implemented evaluation outputs:
+
+- fold-level PR AUC
+- per-city PR AUC
+- recall at top 10% predicted risk
+- calibration-curve tables
+- held-out prediction tables
+- per-fold best-parameter summaries for tuned models
 
 Honest implementation status:
 
 - The modeling-prep stage has been manually verified on the real 30-city final dataset
-- The baseline-modeling code is implemented and test-verified
-- A full canonical baseline run on the real final dataset is still recorded as pending in `docs/chat_handoff.md`
-
-## Planned First Main Models
-
-These are documented design targets, not completed production stages yet.
-
-### Logistic Regression
-
-Planned setup:
-
-- sklearn `Pipeline`
-- logistic regression with `solver="saga"`
-- grouped CV with `GroupKFold`
-- hyperparameter tuning with `GridSearchCV`
-- primary selection metric: PR AUC
-
-### Random Forest
-
-Planned setup:
-
-- sklearn `Pipeline`
-- grouped CV with `GroupKFold`
-- hyperparameter tuning with `GridSearchCV`
-- primary selection metric: PR AUC
+- The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
+- A full canonical modeling run on the real final dataset is still recorded as pending in `docs/chat_handoff.md`
 
 ## Candidate Feature Contract
 
@@ -120,6 +107,7 @@ Columns to exclude from the first predictive feature set:
 Reason:
 
 - These excluded columns are either the target, direct target ingredients, identifiers, or location fields that are not part of the intended portable baseline feature contract
+- `lst_median_may_aug` is excluded explicitly because `hotspot_10pct` is derived from ECOSTRESS LST
 
 ## Evaluation Plan
 
@@ -127,15 +115,15 @@ Primary metric:
 
 - PR AUC
 
-Planned supporting evaluation:
+Implemented supporting evaluation:
 
 - recall at top 10% predicted risk
-- calibration review
+- calibration-curve tables
 - held-out-city comparison tables
+
+Planned next evaluation additions:
+
 - error analysis by city and climate group
-
-Planned map deliverables:
-
 - predicted hotspot maps
 - true hotspot maps
 - residual or error maps
@@ -147,7 +135,7 @@ Future modeling scripts should treat:
 - `final_dataset.parquet` as the canonical row-level input
 - `city_outer_folds.*` as the grouped outer-split contract
 
-Future training scripts should:
+Current training scripts already:
 
 - join folds by `city_id`
 - fit preprocessing only on training cities
@@ -156,7 +144,7 @@ Future training scripts should:
 
 Recommended implementation order:
 
-1. Run the canonical baseline-modeling pass and review the outputs
-2. Add the planned logistic `saga` pipeline
-3. Add the planned random-forest pipeline
-4. Add held-out-city map generation and richer evaluation reporting
+1. Run the new first-pass modeling CLIs on the canonical parquet and review the outputs under `outputs/modeling/`
+2. Add held-out-city figure generation under `figures/modeling/`
+3. Add richer calibration/reporting views and residual-map exports
+4. Add final-train-on-all-cities packaging for transfer to new cities
