@@ -73,7 +73,7 @@ class GridSearchRunResult:
 
 @contextmanager
 def _managed_cache_directory(base_dir: Path, prefix: str):
-    cache_dir = base_dir / f"{prefix}{uuid.uuid4().hex}"
+    cache_dir = base_dir / f"{prefix}{uuid.uuid4().hex[:8]}"
     cache_dir.mkdir(parents=True, exist_ok=False)
     try:
         yield cache_dir
@@ -300,6 +300,7 @@ def run_grouped_grid_search_model(
     model_n_jobs: int | None = None,
     tuning_preset: str = DEFAULT_TUNING_PRESET,
     pipeline_cache_enabled: bool = True,
+    command: str | None = None,
 ) -> GridSearchRunResult:
     """Run held-out-city evaluation with inner grouped tuning for one sklearn model."""
     total_start = perf_counter()
@@ -414,7 +415,7 @@ def run_grouped_grid_search_model(
 
         with _managed_cache_directory(
             base_dir=resolved_output_dir,
-            prefix=f"{model_name}_outer_fold_{outer_fold}_",
+            prefix=f"of{outer_fold}_",
         ) as cache_dir:
             pipeline_cache = Memory(location=str(cache_dir), verbose=0) if pipeline_cache_enabled else None
             preprocess_build_start = perf_counter()
@@ -677,6 +678,7 @@ def run_logistic_saga_model(
     grid_search_n_jobs: int | None = -1,
     tuning_preset: str = DEFAULT_TUNING_PRESET,
     pipeline_cache_enabled: bool = True,
+    command: str | None = None,
 ) -> GridSearchRunResult:
     """Run the grouped logistic SAGA experiment."""
     return run_grouped_grid_search_model(
@@ -696,6 +698,7 @@ def run_logistic_saga_model(
         grid_search_n_jobs=grid_search_n_jobs,
         tuning_preset=tuning_preset,
         pipeline_cache_enabled=pipeline_cache_enabled,
+        command=command,
     )
 
 
@@ -715,6 +718,7 @@ def run_random_forest_model(
     model_n_jobs: int | None = None,
     tuning_preset: str = DEFAULT_TUNING_PRESET,
     pipeline_cache_enabled: bool = True,
+    command: str | None = None,
 ) -> GridSearchRunResult:
     """Run the grouped random-forest experiment."""
     return run_grouped_grid_search_model(
@@ -735,4 +739,5 @@ def run_random_forest_model(
         model_n_jobs=model_n_jobs,
         tuning_preset=tuning_preset,
         pipeline_cache_enabled=pipeline_cache_enabled,
+        command=command,
     )

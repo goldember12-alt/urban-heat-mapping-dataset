@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import geopandas as gpd
 import numpy as np
@@ -109,6 +111,8 @@ class FinalDatasetResult:
     final_df: pd.DataFrame
     parquet_path: Path
     csv_path: Path
+    artifact_summary_path: Path
+
 
 def _normalized_name_tokens(path: Path) -> set[str]:
     stem = path.stem.lower()
@@ -777,6 +781,57 @@ def _enforce_final_drop_rules(final_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _write_dataframe_atomic(
+    df: pd.DataFrame,
+    output_path: Path,
+    writer: Callable[[pd.DataFrame, Path], None],
+) -> None:
+    """Write a dataframe to a temp path first, then atomically replace the final target."""
+    temp_path = output_path.with_name(f"{output_path.name}.tmp")
+    if temp_path.exists():
+        temp_path.unlink()
+    try:
+        writer(df, temp_path)
+        temp_path.replace(output_path)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
+
+
+def _build_final_dataset_artifact_summary(
+    final_df: pd.DataFrame,
+    parquet_path: Path,
+    csv_path: Path,
+    source_tables: list[Path],
+    input_row_count: int,
+) -> dict[str, object]:
+    """Build a compact provenance summary for the final dataset artifacts."""
+    return {
+        "generated_at_utc": pd.Timestamp.now("UTC").isoformat(),
+        "row_count": int(len(final_df)),
+        "input_city_feature_row_count": int(input_row_count),
+        "dropped_row_count": int(input_row_count - len(final_df)),
+        "column_names": list(final_df.columns),
+        "dtypes": {column_name: str(dtype) for column_name, dtype in final_df.dtypes.items()},
+        "canonical_modeling_input": str(parquet_path),
+        "csv_status": "compatibility_fallback_serialization",
+        "write_mode": "atomic_replace",
+        "source_city_feature_file_count": len(source_tables),
+        "source_city_feature_files": [str(path) for path in source_tables],
+        "artifacts": {
+            "parquet": {
+                "path": str(parquet_path),
+                "size_bytes": parquet_path.stat().st_size,
+            },
+            "csv": {
+                "path": str(csv_path),
+                "size_bytes": csv_path.stat().st_size,
+            },
+        },
+    }
+
+
 def assemble_final_dataset(
     city_features_dir: Path = CITY_FEATURES,
     final_dir: Path = FINAL,
@@ -788,6 +843,7 @@ def assemble_final_dataset(
 
     frames = [pd.read_parquet(path) for path in tables]
     final_df = pd.concat(frames, ignore_index=True)
+    input_row_count = len(final_df)
 
     for column in FINAL_COLUMNS:
         if column not in final_df.columns:
@@ -814,12 +870,27 @@ def assemble_final_dataset(
     final_dir.mkdir(parents=True, exist_ok=True)
     parquet_path = final_dir / "final_dataset.parquet"
     csv_path = final_dir / "final_dataset.csv"
-    final_df.to_parquet(parquet_path, index=False)
-    final_df.to_csv(csv_path, index=False)
+    artifact_summary_path = final_dir / "final_dataset_artifact_summary.json"
+    _write_dataframe_atomic(final_df, parquet_path, lambda frame, path: frame.to_parquet(path, index=False))
+    _write_dataframe_atomic(final_df, csv_path, lambda frame, path: frame.to_csv(path, index=False))
+    artifact_summary = _build_final_dataset_artifact_summary(
+        final_df=final_df,
+        parquet_path=parquet_path,
+        csv_path=csv_path,
+        source_tables=tables,
+        input_row_count=input_row_count,
+    )
+    artifact_summary_path.write_text(json.dumps(artifact_summary, indent=2), encoding="utf-8")
 
     logger.info("Saved final parquet: %s", parquet_path)
     logger.info("Saved final csv: %s", csv_path)
-    return FinalDatasetResult(final_df=final_df, parquet_path=parquet_path, csv_path=csv_path)
+    logger.info("Saved final artifact summary: %s", artifact_summary_path)
+    return FinalDatasetResult(
+        final_df=final_df,
+        parquet_path=parquet_path,
+        csv_path=csv_path,
+        artifact_summary_path=artifact_summary_path,
+    )
 
 
 

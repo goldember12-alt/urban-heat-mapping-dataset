@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import json
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -119,6 +119,64 @@ def test_assemble_final_dataset_applies_drop_rules_and_hotspot(tmp_path: Path, m
 
     assert result.parquet_path.exists()
     assert result.csv_path.exists()
+    assert result.artifact_summary_path.exists()
+
+    artifact_summary = json.loads(result.artifact_summary_path.read_text(encoding="utf-8"))
+    assert artifact_summary["row_count"] == 2
+    assert artifact_summary["input_city_feature_row_count"] == 4
+    assert artifact_summary["dropped_row_count"] == 2
+    assert artifact_summary["canonical_modeling_input"].endswith("final_dataset.parquet")
+    assert artifact_summary["csv_status"] == "compatibility_fallback_serialization"
+    assert len(artifact_summary["source_city_feature_files"]) == 2
+
+
+def test_assemble_final_dataset_keeps_existing_csv_when_rewrite_fails(tmp_path: Path, monkeypatch):
+    city_features_dir = tmp_path / "city_features"
+    final_dir = tmp_path / "final"
+    city_features_dir.mkdir(parents=True, exist_ok=True)
+    final_dir.mkdir(parents=True, exist_ok=True)
+
+    city_df = pd.DataFrame(
+        {
+            "city_id": [1],
+            "city_name": ["CityA"],
+            "climate_group": ["hot_arid"],
+            "cell_id": [1],
+            "centroid_lon": [0.0],
+            "centroid_lat": [0.0],
+            "impervious_pct": [20.0],
+            "land_cover_class": [21],
+            "elevation_m": [100.0],
+            "dist_to_water_m": [5.0],
+            "ndvi_median_may_aug": [0.2],
+            "lst_median_may_aug": [30.0],
+            "n_valid_ecostress_passes": [5],
+            "hotspot_10pct": [pd.NA],
+        }
+    )
+
+    parquet_path = city_features_dir / "01_citya_features.parquet"
+    parquet_path.write_text("mock")
+    (final_dir / "final_dataset.csv").write_text("previous csv output", encoding="utf-8")
+
+    monkeypatch.setattr(feature_assembly.pd, "read_parquet", lambda path: city_df.copy())
+    monkeypatch.setattr(
+        pd.DataFrame,
+        "to_parquet",
+        lambda self, path, index=False: Path(path).write_text("mock parquet output"),
+        raising=False,
+    )
+
+    def failing_to_csv(self, path, index=False):
+        raise RuntimeError("csv write failed")
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", failing_to_csv, raising=False)
+
+    with pytest.raises(RuntimeError, match="csv write failed"):
+        assemble_final_dataset(city_features_dir=city_features_dir, final_dir=final_dir)
+
+    assert (final_dir / "final_dataset.csv").read_text(encoding="utf-8") == "previous csv output"
+    assert not (final_dir / "final_dataset.csv.tmp").exists()
 
 
 def test_extract_features_for_all_cities_can_skip_missing_grids(monkeypatch, tmp_path: Path):

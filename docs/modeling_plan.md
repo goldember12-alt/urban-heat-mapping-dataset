@@ -81,6 +81,7 @@ Honest implementation status:
 - The modeling-prep stage has been manually verified on the real 30-city final dataset
 - The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
 - A full canonical modeling run on the real final dataset is still recorded as pending in `docs/chat_handoff.md`
+- `README.md` is now the canonical definition of `smoke` versus `full`, including how those presets should and should not be described in methodology/results language
 
 ## Candidate Feature Contract
 
@@ -148,3 +149,7 @@ Recommended implementation order:
 2. Add held-out-city figure generation under `figures/modeling/`
 3. Add richer calibration/reporting views and residual-map exports
 4. Add final-train-on-all-cities packaging for transfer to new cities
+
+Run logging note:
+
+- meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`

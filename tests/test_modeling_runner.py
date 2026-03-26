@@ -8,6 +8,7 @@ from sklearn.model_selection import ParameterGrid
 from src.modeling_baselines import run_modeling_baselines
 from src.modeling_config import DEFAULT_FEATURE_COLUMNS, get_model_tuning_spec
 from src.modeling_data import load_modeling_rows as load_modeling_rows_from_disk
+from src.modeling_run_registry import infer_run_registry_path, record_model_run
 from src.modeling_runner import (
     build_logistic_saga_pipeline,
     build_random_forest_pipeline,
@@ -192,6 +193,76 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(workspace_tmp_p
 
         predictions = pd.read_parquet(result.predictions_path)
         assert {"predicted_probability", "centroid_lon", "centroid_lat"}.issubset(predictions.columns)
+
+
+def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    logistic_output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    random_forest_output_dir = workspace_tmp_path / "outputs" / "modeling" / "random_forest"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    logistic_result = run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=logistic_output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=[{"model__penalty": ["l2"], "model__C": [0.1]}],
+        grid_search_n_jobs=1,
+    )
+    random_forest_result = run_random_forest_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=random_forest_output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=[
+            {
+                "model__n_estimators": [10],
+                "model__max_depth": [3],
+                "model__max_features": ["sqrt"],
+                "model__min_samples_leaf": [1],
+            }
+        ],
+        grid_search_n_jobs=1,
+    )
+
+    record_model_run(
+        model_type="logistic_saga",
+        preset="smoke",
+        command="python -m src.run_logistic_saga",
+        output_dir=logistic_output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=None,
+        grid_search_n_jobs=1,
+        summary_metrics_path=logistic_result.summary_metrics_path,
+        metadata_path=logistic_result.metadata_path,
+        status="success",
+    )
+    record_model_run(
+        model_type="random_forest",
+        preset="smoke",
+        command="python -m src.run_random_forest",
+        output_dir=random_forest_output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=None,
+        grid_search_n_jobs=1,
+        summary_metrics_path=random_forest_result.summary_metrics_path,
+        metadata_path=random_forest_result.metadata_path,
+        status="success",
+    )
+
+    registry_path = infer_run_registry_path(logistic_output_dir)
+    records = [json.loads(line) for line in registry_path.read_text(encoding="utf-8").splitlines()]
+
+    assert [record["model_type"] for record in records] == ["logistic_saga", "random_forest"]
+    assert all(record["status"] == "success" for record in records)
+    assert all(record["dataset_format"] == "parquet" for record in records)
+    assert all("pooled_pr_auc" in record["metrics"] for record in records)
 
 
 def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -22,6 +23,9 @@ from src.modeling_config import (
     get_feature_type_map,
 )
 from src.modeling_prep import get_final_dataset_columns, validate_binary_target, validate_required_final_columns
+
+LOGGER = logging.getLogger(__name__)
+_WARNED_CSV_DATASET_PATHS: set[Path] = set()
 
 
 @dataclass(frozen=True)
@@ -216,6 +220,14 @@ def load_modeling_rows(
     extra_columns: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """Load modeling rows from the canonical parquet path or an explicit CSV fallback path."""
+    resolved_dataset_path = dataset_path.resolve()
+    if resolved_dataset_path.suffix.lower() == ".csv" and resolved_dataset_path not in _WARNED_CSV_DATASET_PATHS:
+        LOGGER.warning(
+            "Using CSV modeling input %s. CSV support is a compatibility fallback and must not be assumed row-equivalent to the canonical parquet without an explicit audit.",
+            resolved_dataset_path,
+        )
+        _WARNED_CSV_DATASET_PATHS.add(resolved_dataset_path)
+
     available_columns = get_final_dataset_columns(dataset_path=dataset_path)
     validate_required_final_columns(available_columns)
     selected_columns = get_selected_modeling_columns(feature_columns=feature_columns, extra_columns=extra_columns)

@@ -171,6 +171,64 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 
 CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The current `data_processed/final/final_dataset.csv` is not row-equivalent to the canonical parquet and should not be treated as interchangeable for modeling.
 
+Current artifact-provenance note:
+
+- `src.feature_assembly.assemble_final_dataset()` writes parquet and CSV from the same in-memory final table, so they are intended to be equivalent serializations when generated successfully
+- the current live mismatch is historical artifact drift, not a separate documented pipeline branch: cities `1` through `24` match exactly, the CSV stops partway through Los Angeles (`city_id=25`), and cities `26` through `30` are absent from the CSV
+- final-dataset assembly now writes both artifacts with atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` so future runs leave a provenance summary next to the artifacts
+
+## Modeling Presets
+
+This README is the canonical definition of `smoke` versus `full`.
+
+`smoke` means:
+
+- the bounded default tuning preset used by the CLI runners
+- smaller search spaces and fewer inner grouped-CV splits than `full`
+- intended for environment verification, pipeline regression checks, artifact-path validation, and modest benchmarking increments
+- appropriate when confirming that parquet inputs, folds, preprocessing, and metric outputs behave correctly
+- not appropriate to cite as a benchmark-quality final result or as the project's main tuned-model estimate
+
+`full` means:
+
+- the broader tuning preset for more serious benchmark runs after inputs, provenance, and logging are stable
+- larger search spaces and more inner grouped-CV splits than `smoke`
+- intended for better-faith model comparison and methodology/results tables, subject to compute limits and explicit run logging
+
+Why `smoke` is the default CLI preset:
+
+- the canonical dataset is large enough that an unrestricted default search is too expensive for routine verification
+- most day-to-day work in this repo needs to validate the grouped modeling contract, not immediately launch the heaviest search
+- using `smoke` by default makes accidental broad runs less likely while preserving a documented path to `full`
+
+How to describe them in methods/results writing:
+
+- `smoke` results are verification runs or bounded benchmark checkpoints
+- `full` results are the ones to prefer for substantive model-performance discussion once they are actually executed and logged
+- always report the preset used, plus any sample cap, outer-fold subset, and job-count constraints
+
+The current preset sizes in code are:
+
+- logistic SAGA: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `full=20` candidates with `4` inner grouped-CV splits
+- random forest: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `full=81` candidates with `4` inner grouped-CV splits
+
+## Run Registry
+
+Meaningful modeling CLI runs now append a structured record to `outputs/modeling/run_registry.jsonl`.
+
+Each registry record captures:
+
+- model type and preset
+- exact CLI command and interpreter path
+- dataset path and format
+- fold selection and sample cap
+- job settings
+- output directory
+- summary metrics when available
+- wall-clock time when available
+- success or failure status
+- notes such as CSV fallback caveats
+
 Current sandbox-verified modeling commands:
 
 ```powershell

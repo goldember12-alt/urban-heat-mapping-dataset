@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
+import sys
 from pathlib import Path
 
 from src.modeling_baselines import run_modeling_baselines
 from src.modeling_config import BASELINE_OUTPUT_DIR, DEFAULT_FINAL_DATASET_PATH
+from src.modeling_run_registry import record_model_run
 
 
 def _parse_fold_list(raw_value: str | None) -> list[int] | None:
@@ -33,13 +36,53 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _build_arg_parser().parse_args()
-    result = run_modeling_baselines(
+    command = subprocess.list2cmdline([sys.executable, *sys.argv])
+    selected_outer_folds = _parse_fold_list(args.outer_folds)
+    notes = (
+        [
+            "CSV compatibility fallback input used; do not assume equivalence to canonical parquet without an explicit artifact audit."
+        ]
+        if args.dataset_path.suffix.lower() == ".csv"
+        else None
+    )
+    try:
+        result = run_modeling_baselines(
+            dataset_path=args.dataset_path,
+            folds_path=args.folds_path,
+            output_dir=args.output_dir,
+            selected_outer_folds=selected_outer_folds,
+            sample_rows_per_city=args.sample_rows_per_city,
+            random_state=args.random_state,
+        )
+    except Exception as exc:
+        record_model_run(
+            model_type="baselines",
+            preset=None,
+            command=command,
+            output_dir=args.output_dir,
+            dataset_path=args.dataset_path,
+            folds_path=args.folds_path,
+            sample_rows_per_city=args.sample_rows_per_city,
+            selected_outer_folds=selected_outer_folds,
+            status="failure",
+            notes=notes,
+            error=exc,
+        )
+        raise
+
+    record_model_run(
+        model_type="baselines",
+        preset=None,
+        command=command,
+        output_dir=args.output_dir,
         dataset_path=args.dataset_path,
         folds_path=args.folds_path,
-        output_dir=args.output_dir,
-        selected_outer_folds=_parse_fold_list(args.outer_folds),
         sample_rows_per_city=args.sample_rows_per_city,
-        random_state=args.random_state,
+        selected_outer_folds=selected_outer_folds,
+        summary_metrics_path=result.summary_metrics_path,
+        metadata_path=result.metadata_path,
+        status="success",
+        notes=notes,
     )
     print(result.fold_metrics_path)
     print(result.city_metrics_path)
