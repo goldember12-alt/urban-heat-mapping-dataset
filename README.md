@@ -169,13 +169,13 @@ Recommended first ML smoke run on the canonical dataset:
 
 These runners default to `data_processed/final/final_dataset.parquet` as the canonical row-level input and prefer `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
 
-CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The current `data_processed/final/final_dataset.csv` is not row-equivalent to the canonical parquet and should not be treated as interchangeable for modeling.
+CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The regenerated `data_processed/final/final_dataset.csv` was re-audited on 2026-03-26 and now matches the canonical parquet on row count, column names, per-city row counts, hotspot counts, and key null-count checks.
 
 Current artifact-provenance note:
 
 - `src.feature_assembly.assemble_final_dataset()` writes parquet and CSV from the same in-memory final table, so they are intended to be equivalent serializations when generated successfully
-- the current live mismatch is historical artifact drift, not a separate documented pipeline branch: cities `1` through `24` match exactly, the CSV stops partway through Los Angeles (`city_id=25`), and cities `26` through `30` are absent from the CSV
 - final-dataset assembly now writes both artifacts with atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` so future runs leave a provenance summary next to the artifacts
+- the artifact summary now records row count, column count, per-city row counts, artifact paths/sizes, and an explicit `artifacts_written_from_same_final_dataframe=true` flag
 
 ## Modeling Presets
 

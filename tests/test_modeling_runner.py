@@ -8,7 +8,7 @@ from sklearn.model_selection import ParameterGrid
 from src.modeling_baselines import run_modeling_baselines
 from src.modeling_config import DEFAULT_FEATURE_COLUMNS, get_model_tuning_spec
 from src.modeling_data import load_modeling_rows as load_modeling_rows_from_disk
-from src.modeling_run_registry import infer_run_registry_path, record_model_run
+from src.modeling_run_registry import build_cli_command, infer_run_registry_path, record_model_run
 from src.modeling_runner import (
     build_logistic_saga_pipeline,
     build_random_forest_pipeline,
@@ -263,6 +263,21 @@ def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
     assert all(record["status"] == "success" for record in records)
     assert all(record["dataset_format"] == "parquet" for record in records)
     assert all("pooled_pr_auc" in record["metrics"] for record in records)
+
+
+def test_build_cli_command_prefers_module_style_argv():
+    command = build_cli_command(
+        [
+            r"C:\\repo\\.venv\\Scripts\\python.exe",
+            "-m",
+            "src.run_logistic_saga",
+            "--outer-folds",
+            "0",
+        ]
+    )
+
+    assert "-m src.run_logistic_saga" in command
+    assert "--outer-folds 0" in command
 
 
 def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():

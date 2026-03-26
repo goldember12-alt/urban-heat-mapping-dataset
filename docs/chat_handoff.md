@@ -37,9 +37,9 @@ Implemented in code:
 - The modeling data loader is now parquet-first by default, while still supporting explicit CSV compatibility inputs including deterministic chunked per-city sampling when that fallback path is intentionally used.
 - The rebuilt repo-local `.venv` is now the standard interpreter for this repo, reads the canonical `final_dataset.parquet` and `city_outer_folds.parquet` cleanly through both `pandas` and low-level `pyarrow`, and both smoke modeling CLIs have been manually verified end to end against those parquet artifacts.
 - The tuned modeling runner now creates its per-fold cache directories with plain `Path.mkdir()` instead of `tempfile.TemporaryDirectory`, which avoids Windows temp-directory permission failures seen in this Codex session.
-- Final-dataset assembly now writes parquet and CSV via atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` so future exports leave an explicit provenance summary next to the final artifacts.
-- The current CSV/parquet mismatch has now been narrowed to historical CSV truncation rather than a separate upstream code path: cities `1-24` match the canonical parquet exactly, Los Angeles (`city_id=25`) is only partially present in the CSV, and cities `26-30` are absent from the CSV altogether.
-- Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available.
+- Final-dataset assembly now writes parquet and CSV via atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` with row count, column count, per-city row counts, artifact paths/sizes, and an explicit shared-dataframe provenance flag.
+- The regenerated `data_processed/final/final_dataset.csv` has now been re-audited against the canonical parquet and matches on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
+- Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
@@ -85,6 +85,18 @@ Standardization status:
 
 As of 2026-03-26:
 
+- Preflight provenance/registry regression checks after the CSV refresh and command-capture update:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - Result: `12 passed`
+  - Caveat: the run still emitted non-fatal Windows `joblib` cache warnings
+- Focused final-dataset tests remain blocked by the same Windows pytest temp-directory cleanup issue:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py -k assemble_final_dataset -q --basetemp .pytest_tmp_feature`
+  - Result: setup/cleanup failed with `PermissionError: [WinError 5] Access is denied`
+  - Interpretation: this did not surface a failing artifact assertion; pytest could not clean the temp root in this OneDrive-backed workspace
+- Bounded full-preset parquet dry run completed successfully:
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\pf0`
+  - Result: success, `total_wall_clock=1603.93s`, `pooled_pr_auc=0.1648`, `pooled_recall_at_top_10pct=0.2133`
+  - Caveats: non-fatal `joblib` cache-write warnings persisted; `sklearn` also emitted `ConvergenceWarning` for some logistic fits at `max_iter=2000`
 - Focused modeling verification still passes through the rebuilt `.venv` after the run-registry and shorter-cache-path updates:
   - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q`
   - Result: `19 passed`
@@ -343,6 +355,14 @@ Manually verified:
   - Confirmed from live code inspection that `src.feature_assembly.assemble_final_dataset()` writes `final_dataset.parquet` and `final_dataset.csv` from the same in-memory dataframe, so the intended design is equivalence rather than separate pipeline branches.
   - Compared the live artifacts directly and confirmed all 14 columns match, per-city rows match exactly for cities `1-24`, Los Angeles (`city_id=25`) is only partially present in the CSV, and cities `26-30` are missing entirely from the CSV.
   - Confirmed the partial CSV is a strict row-order prefix of the canonical parquet for Los Angeles, which points to historical CSV truncation/interruption rather than filtering or deduping on a separate CSV path.
+- 2026-03-26 regenerated-final-artifact preflight verification:
+  - Reran `.\.venv\Scripts\python.exe -m src.run_final_dataset_assembly`, which rewrote `data_processed/final/final_dataset.parquet`, `data_processed/final/final_dataset.csv`, and `data_processed/final/final_dataset_artifact_summary.json`.
+  - Re-audited the regenerated parquet and CSV with streaming parquet/CSV readers and confirmed row-equivalence on total rows (`71,394,894`), all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
+  - Confirmed the refreshed artifact summary timestamp is `2026-03-26T05:44:17.994051+00:00` and that its row count, column count, per-city row counts, and `artifacts_written_from_same_final_dataframe=true` flag all match the regenerated artifacts.
+- 2026-03-26 bounded full-preset parquet dry run:
+  - Ran `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\pf0`.
+  - Confirmed the dry run completed successfully and wrote outputs under `outputs/modeling/ls/pf0/`, including `metrics_summary.csv`, `best_params_by_fold.csv`, `heldout_predictions.parquet`, and `run_metadata.json`.
+  - Confirmed `outputs/modeling/run_registry.jsonl` appended a clean success record with the module-style command, preset=`full`, parquet dataset metadata, fold selection, output dir, wall-clock time, and summary metrics.
 - 2026-03-26 final-dataset write-path smoke verification:
   - Ran a workspace-local Python smoke script that built tiny per-city feature parquet fixtures, executed `assemble_final_dataset(...)`, and confirmed `final_dataset.parquet`, `final_dataset.csv`, and `final_dataset_artifact_summary.json` were all written successfully.
   - The artifact summary recorded the expected final row count (`2`) and dropped-row count (`2`) for that smoke fixture.
@@ -359,7 +379,7 @@ Manually verified:
 - Canonical parquet smoke verification is manually complete for:
   - `outputs/modeling/logistic_saga/parquet_verify/`
   - `outputs/modeling/random_forest/parquet_verify/`
-- The canonical modeling workflow now defaults to parquet-first guidance; CSV remains documented only as a compatibility fallback because `data_processed/final/final_dataset.csv` is not row-equivalent to the canonical parquet.
+- The canonical modeling workflow now defaults to parquet-first guidance; CSV remains a secondary compatibility artifact, but the regenerated live CSV is currently row-equivalent to the canonical parquet.
 
 - 2026-03-23 repository housekeeping verification:
   - Confirmed the only live `notebooks` references were the README repo-layout bullet and the unused `src.config.NOTEBOOKS` constant.
@@ -622,11 +642,16 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-The current recommended next step is to decide whether CSV parity is still a real deliverable:
+The repo is now ready for the first overnight benchmark run, with one remaining operational caution: keep output-dir names short and continue using the serial sandbox-safe job settings that were already verified here.
 
-- If CSV parity matters, deliberately regenerate `data_processed/final/final_dataset.csv` from the canonical final-dataset assembly path so the old truncated CSV artifact is replaced by a fresh atomic export plus `final_dataset_artifact_summary.json`.
-- If CSV parity does not matter, keep CSV documented as fallback-only and avoid any methodology/results language that implies interchangeability with parquet.
-- After that provenance decision, the next modeling expansion should be a bounded parquet `full` run or a broader smoke benchmark using the same registry-backed command style and short output-dir names that avoid Windows path-length issues.
+Recommended order:
+
+- Run logistic SAGA first:
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0,1,2,3,4 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\full_f01234`
+- Then run random forest:
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0,1,2,3,4 --tuning-preset full --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\rf\full_f01234`
+
+If more risk control is desired, split those same commands into fold batches such as `0,1` then `2,3` then `4` while keeping the same short-root naming pattern.
 
 
 
@@ -654,6 +679,7 @@ The current recommended next step is to decide whether CSV parity is still a rea
 - `outputs/modeling/logistic_saga/parquet_verify/`
 - `outputs/modeling/logistic_saga/pb_smk_f01/`
 - `outputs/modeling/logistic_saga/parquet_benchmark_smoke_folds01/` (failed long-path attempt recorded only for provenance)
+- `outputs/modeling/ls/pf0/`
 - `outputs/modeling/random_forest/`
 - `outputs/modeling/random_forest/parquet_verify/`
 - `outputs/modeling/random_forest/pb_smk_f01/`
@@ -676,9 +702,9 @@ The current recommended next step is to decide whether CSV parity is still a rea
 - Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
 - No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset.
 - The old parquet failure signatures are not reproducible in the rebuilt `.venv`; canonical parquet reads and parquet-backed smoke runs are now verified on `pandas 3.0.1` plus `pyarrow 23.0.1`.
-- `data_processed/final/final_dataset.csv` is now best understood as a historically truncated export, not a separate pipeline stage: it matches parquet through cities `1-24`, contains only `1,998,554` Los Angeles rows out of `4,736,063`, and omits cities `26-30` entirely. Deliberate regeneration is still pending if CSV parity is required.
 - The rebuilt `.venv` smoke runs still required `--grid-search-n-jobs 1` and, for random forest, `--model-n-jobs 1` because the Windows sandbox still makes serial execution the stable path here.
 - The smoke runs completed, but `joblib` pipeline-cache writes still emitted non-fatal warnings under the current Windows workspace paths, so cache effectiveness is not yet fully verified.
+- The bounded `full` logistic dry run also completed, but it reproduced the same non-fatal `joblib` cache warnings and several logistic `ConvergenceWarning` messages; those warnings did not block outputs or registry logging, but they remain the main overnight-run caveat.
 - The first broader logistic benchmark also exposed a Windows path-length limit when long output-dir names were combined with cache subdirectories; the runner now uses shorter cache-dir names, but future benchmark output dirs should still stay concise.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
 - The current sklearn-based first-pass runners may still need a scaling strategy or dedicated sampled dataset if full-canonical runtime or memory is too heavy on a workstation.
@@ -697,6 +723,39 @@ The current recommended next step is to decide whether CSV parity is still a rea
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-26 - Checkpoint: Overnight Benchmark Preflight Cleared
+
+- Date / checkpoint:
+  - 2026-03-26 final preflight cleanup immediately before the first overnight benchmark run.
+- Change made:
+  - Re-audited the regenerated final parquet and CSV and confirmed they now match on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
+  - Expanded `final_dataset_artifact_summary.json` provenance generation with `column_count`, `per_city_row_counts`, and `artifacts_written_from_same_final_dataframe`.
+  - Updated modeling CLI command capture so new `outputs/modeling/run_registry.jsonl` entries preserve the module-style `-m ...` invocation instead of only the resolved script path.
+  - Executed one short-path bounded `full` logistic SAGA dry run on parquet inputs and confirmed clean artifact output plus a clean registry append.
+- Files touched:
+  - `src/feature_assembly.py`
+  - `src/modeling_run_registry.py`
+  - `src/run_logistic_saga.py`
+  - `src/run_random_forest.py`
+  - `src/run_modeling_baselines.py`
+  - `tests/test_feature_assembly.py`
+  - `tests/test_modeling_runner.py`
+  - `README.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.\.venv\Scripts\python.exe -m src.run_final_dataset_assembly`
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\pf0`
+- Test status:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q` passed with `12 passed`.
+  - `.\.venv\Scripts\python.exe -m py_compile src\feature_assembly.py src\modeling_run_registry.py src\run_logistic_saga.py src\run_random_forest.py src\run_modeling_baselines.py tests\test_feature_assembly.py tests\test_modeling_runner.py` passed.
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_feature_assembly.py -k assemble_final_dataset -q --basetemp .pytest_tmp_feature` remained blocked by `PermissionError: [WinError 5] Access is denied` during pytest temp cleanup.
+- Manual verification status:
+  - Regenerated `final_dataset.parquet`, `final_dataset.csv`, and `final_dataset_artifact_summary.json` successfully.
+  - Verified the refreshed CSV now matches parquet on the preflight comparison dimensions above.
+  - Verified the dry-run outputs under `outputs/modeling/ls/pf0/` and the new success record in `outputs/modeling/run_registry.jsonl`.
+- Next recommended step:
+  - Start the real overnight parquet `full` benchmarks with short output-dir names and the same serial sandbox-safe flags recorded above.
 
 ### 2026-03-26 - Checkpoint: Artifact Provenance Locked Down, Run Registry Added, And Broader Parquet Smoke Benchmarks Recorded
 

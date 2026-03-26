@@ -810,12 +810,18 @@ def _build_final_dataset_artifact_summary(
     return {
         "generated_at_utc": pd.Timestamp.now("UTC").isoformat(),
         "row_count": int(len(final_df)),
+        "column_count": int(len(final_df.columns)),
         "input_city_feature_row_count": int(input_row_count),
         "dropped_row_count": int(input_row_count - len(final_df)),
         "column_names": list(final_df.columns),
         "dtypes": {column_name: str(dtype) for column_name, dtype in final_df.dtypes.items()},
+        "per_city_row_counts": {
+            str(int(city_id)): int(row_count)
+            for city_id, row_count in final_df.groupby("city_id").size().sort_index().items()
+        },
         "canonical_modeling_input": str(parquet_path),
         "csv_status": "compatibility_fallback_serialization",
+        "artifacts_written_from_same_final_dataframe": True,
         "write_mode": "atomic_replace",
         "source_city_feature_file_count": len(source_tables),
         "source_city_feature_files": [str(path) for path in source_tables],

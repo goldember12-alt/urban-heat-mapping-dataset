@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import argparse
 import logging
-import subprocess
-import sys
 from pathlib import Path
 
 from src.modeling_baselines import run_modeling_baselines
 from src.modeling_config import BASELINE_OUTPUT_DIR, DEFAULT_FINAL_DATASET_PATH
-from src.modeling_run_registry import record_model_run
+from src.modeling_run_registry import build_cli_command, record_model_run
 
 
 def _parse_fold_list(raw_value: str | None) -> list[int] | None:
@@ -36,7 +34,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _build_arg_parser().parse_args()
-    command = subprocess.list2cmdline([sys.executable, *sys.argv])
+    command = build_cli_command()
     selected_outer_folds = _parse_fold_list(args.outer_folds)
     notes = (
         [

@@ -123,10 +123,13 @@ def test_assemble_final_dataset_applies_drop_rules_and_hotspot(tmp_path: Path, m
 
     artifact_summary = json.loads(result.artifact_summary_path.read_text(encoding="utf-8"))
     assert artifact_summary["row_count"] == 2
+    assert artifact_summary["column_count"] == 14
     assert artifact_summary["input_city_feature_row_count"] == 4
     assert artifact_summary["dropped_row_count"] == 2
+    assert artifact_summary["per_city_row_counts"] == {"1": 1, "2": 1}
     assert artifact_summary["canonical_modeling_input"].endswith("final_dataset.parquet")
     assert artifact_summary["csv_status"] == "compatibility_fallback_serialization"
+    assert artifact_summary["artifacts_written_from_same_final_dataframe"] is True
     assert len(artifact_summary["source_city_feature_files"]) == 2
 
 

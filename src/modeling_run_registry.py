@@ -20,6 +20,12 @@ def create_run_id() -> str:
     return uuid.uuid4().hex
 
 
+def build_cli_command(argv: list[str] | None = None) -> str:
+    """Return a shell-ready command string for registry logging."""
+    effective_argv = argv or getattr(sys, "orig_argv", None) or [sys.executable, *sys.argv]
+    return subprocess.list2cmdline([str(part) for part in effective_argv])
+
+
 def infer_run_registry_path(output_dir: Path) -> Path:
     """Infer the shared modeling run-registry path from one run output directory."""
     resolved_output_dir = output_dir.resolve()

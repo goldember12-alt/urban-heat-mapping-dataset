@@ -47,10 +47,19 @@ def safe_name(proc: psutil.Process) -> str:
 
 def get_all_python_processes() -> List[psutil.Process]:
     result = []
-    for proc in psutil.process_iter(["pid", "name"]):
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if safe_name(proc) in PYTHON_PROCESS_NAMES:
-                result.append(proc)
+            name = safe_name(proc)
+            if name not in PYTHON_PROCESS_NAMES:
+                continue
+
+            cmdline = " ".join(proc.info.get("cmdline") or []).lower()
+
+            # Ignore this watchdog script itself
+            if "codex_awake_guard.py" in cmdline:
+                continue
+
+            result.append(proc)
         except Exception:
             pass
     return result
