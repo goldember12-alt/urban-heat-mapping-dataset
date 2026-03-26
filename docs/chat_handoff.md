@@ -33,6 +33,9 @@ Implemented in code:
   - random forest in an sklearn `Pipeline`
 - The tuned sklearn runners now share an explicit feature-type contract and coerce categorical columns before categorical imputation/encoding, which fixes the mixed `land_cover_class` / `climate_group` preprocessing failure that previously surfaced as `could not convert string to float: 'hot_arid'`.
 - The tuned sklearn runners now also expose explicit `smoke` and `full` tuning presets, preload sampled city rows once per run, enable safe per-fold sklearn pipeline caching, and emit concise timing/search-space diagnostics in logs plus `run_metadata.json`.
+- The modeling import path is now decoupled from `src.feature_assembly` / `geopandas` by a lightweight `src.final_dataset_contract` module, so focused modeling tests and CLIs can import without pulling the full geospatial stack.
+- The modeling data loader now supports the canonical final dataset as either parquet or CSV, including deterministic chunked per-city sampling from CSV when parquet reads are not usable in the active interpreter.
+- The tuned modeling runner now creates its per-fold cache directories with plain `Path.mkdir()` instead of `tempfile.TemporaryDirectory`, which avoids Windows temp-directory permission failures seen in this Codex session.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
@@ -75,8 +78,58 @@ Standardization status:
 
 ## Testing Status
 
-As of 2026-03-24:
+As of 2026-03-25:
 
+- Rebuilt repo-local `.venv` verification checkpoint:
+  - `.venv\Scripts\python.exe --version` returned `Python 3.13.5`
+  - `.venv\Scripts\python.exe -c "import sys; print(sys.executable); print(sys.prefix); print(sys.base_prefix)"` returned:
+    - `sys.executable=C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe`
+    - `sys.prefix=C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv`
+    - `sys.base_prefix=C:\Users\golde\anaconda3`
+  - `.venv\pyvenv.cfg` now records `home = C:\Users\golde\anaconda3` and `executable = C:\Users\golde\anaconda3\python.exe`
+  - `.venv\Scripts\python.exe -m pip --version` succeeded from the repo-local site-packages path
+  - Key imports succeeded directly through `.venv`:
+    - `import pandas, sklearn, pyarrow`
+    - `import geopandas`
+  - `requirements.txt` now includes `pytest` so future rebuilt environments can run tests directly; this session's rebuilt `.venv` initially lacked `pytest`, so the current environment was seeded from the accessible base interpreter's pytest packages after `pip install pytest` hit sandbox temp-path permission errors
+- Focused modeling verification now passes through the rebuilt `.venv`:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q`
+  - Result: `15 passed` in `5.77s`
+  - Caveat: the run emitted the same non-fatal Windows `joblib` cache warnings seen in earlier checkpoints
+- Real logistic smoke verification completed through the rebuilt `.venv` using CSV artifacts and serial grid search:
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\venv_verify`
+  - Wall clock: `382.43s`
+  - Metadata:
+    - `sampled_city_preload=95.08s`
+    - `grid_search_seconds=284.13s`
+    - `fold_wall_clock_seconds=284.36s`
+    - `train_row_count=95,000`
+    - `test_row_count=30,000`
+    - `param_candidate_count=4`
+  - Fold metric:
+    - `pooled_pr_auc=0.1739`
+    - `pooled_recall_at_top_10pct=0.2199`
+  - Caveats:
+    - `final_dataset.parquet` and `city_outer_folds.parquet` remain unverified in this sandbox, so the run still used CSV artifacts
+    - `joblib` emitted non-fatal cache-write warnings
+    - `sklearn` emitted `ConvergenceWarning` for some logistic fits at `max_iter=2000`
+- Real random-forest smoke verification completed through the rebuilt `.venv` using CSV artifacts and serial settings:
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\random_forest\venv_verify`
+  - Wall clock: `279.34s`
+  - Metadata:
+    - `sampled_city_preload=96.43s`
+    - `grid_search_seconds=178.19s`
+    - `fold_wall_clock_seconds=178.45s`
+    - `train_row_count=95,000`
+    - `test_row_count=30,000`
+    - `param_candidate_count=4`
+  - Fold metric:
+    - `pooled_pr_auc=0.1807`
+    - `pooled_recall_at_top_10pct=0.1995`
+  - Caveat: `joblib` emitted the same non-fatal cache-write warnings during pipeline caching
+- CLI entrypoint health through the rebuilt `.venv`:
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --help` succeeded
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --help` succeeded
 - Tuned-runtime checkpoint:
   - Syntax compilation passed via:
     - `cmd /c call "C:\Users\golde\anaconda3\python.exe" -m py_compile src\modeling_config.py src\modeling_runner.py src\run_logistic_saga.py src\run_random_forest.py tests\test_modeling_runner.py`
@@ -215,7 +268,8 @@ Test-verified:
 
 Not manually verified in the latest checkpoint:
 
-- The 2026-03-24 tuned-runtime patch was not run end to end on the real parquet in this session because the accessible `C:\Users\golde\anaconda3\python.exe` lacks `geopandas` and direct `.venv\Scripts\python.exe` execution returned `Access is denied`.
+- The rebuilt repo-local `.venv` is now manually runnable in this Codex session and is the standard interpreter path going forward.
+- The canonical parquet-based smoke path is still not manually verified through the rebuilt `.venv` because `final_dataset.parquet` and `city_outer_folds.parquet` remain problematic in this sandbox; CSV artifacts plus serial grid-search flags are still the currently verified smoke path.
 
 Manually verified:
 
@@ -480,17 +534,19 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Superseding the older runtime-diagnosis note, the current recommended next step is to rerun the tuned sampled commands inside a Python environment that can actually import the full project stack and execute the repo venv:
+Superseding the older runtime-diagnosis note, the current recommended next step is to standardize verification in this Codex session on the rebuilt repo-local `.venv` and keep using explicit `.venv\Scripts\python.exe -m ...` commands from the repo root:
 
-- Keep `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000"` as the quick canonical baseline smoke test.
-- Run `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke"` and `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command ".venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke"` first, then scale to all outer folds if the new timing metadata looks acceptable.
-- Inspect `run_metadata.json` and `metrics_by_fold.csv` under `outputs/modeling/logistic_saga/` and `outputs/modeling/random_forest/` for:
-  - `data_loading_strategy`
-  - `search_space.param_candidate_count`
-  - `search_space.estimated_total_inner_fits`
-  - `timing_seconds.total_wall_clock`
-  - per-fold `grid_search_seconds` and `preprocess_probe_fit_transform_seconds`
-- Use `--tuning-preset full` only after the smoke preset completes cleanly and the recorded wall-clock is acceptable.
+- First, repair or replace the unusable canonical parquet modeling artifacts:
+  - investigate why `data_processed\final\final_dataset.parquet` aborts `pyarrow` reads in the rebuilt `.venv`
+  - investigate why `data_processed\modeling\city_outer_folds.parquet` raises `OSError: Repetition level histogram size mismatch`
+  - once repaired, rerun the same smoke commands against parquet instead of the CSV fallback
+- Keep the command prefix explicit:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q`
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\venv_verify`
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\random_forest\venv_verify`
+- Treat virtual environments as disposable:
+  - if `.venv\pyvenv.cfg` points to the wrong or inaccessible base interpreter, delete and recreate `.venv` from the correct accessible base instead of copying or trying to repair the old environment
+- Even with the rebuilt `.venv`, the currently reproducible smoke pattern in this sandbox still uses CSV dataset artifacts and serial grid-search flags because the parquet artifacts and parallel joblib path are not yet stable here.
 
 Use the new shared reporting CLI against whichever cities currently have materialized per-city feature outputs, then rerun it as more cities finish feature assembly:
 
@@ -537,8 +593,10 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - Full support-layer prep has not yet been materialized beyond the first four completed cities.
 - Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
 - No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset.
-- The old tuned preprocessing failure is fixed, but the new 2026-03-24 smoke preset has not yet been completed on the real parquet in a working full-dependency environment, so the actual wall-clock improvement is still unverified.
-- The accessible fallback interpreter in this Codex session is missing `geopandas`, while direct repo-venv execution returned `Access is denied`, so fresh end-to-end tuned verification is currently environment-blocked rather than correctness-blocked.
+- The old tuned preprocessing failure is fixed, the rebuilt repo-local `.venv` now runs successfully in this sandbox, and both smoke presets complete on real data through the CSV fallback path, but the canonical parquet-based smoke path is still unverified.
+- `data_processed/final/final_dataset.parquet` currently aborts `pyarrow` reads in the rebuilt `.venv`, and `data_processed/modeling/city_outer_folds.parquet` currently raises `OSError: Repetition level histogram size mismatch`; both need repair or regeneration before canonical parquet smoke verification.
+- The rebuilt `.venv` smoke runs still required `--grid-search-n-jobs 1` and, for random forest, `--model-n-jobs 1` because the Windows sandbox still makes serial execution the stable path here.
+- The smoke runs completed, but `joblib` pipeline-cache writes still emitted non-fatal warnings under the current Windows workspace paths, so cache effectiveness is not yet fully verified.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
 - The current sklearn-based first-pass runners may still need a scaling strategy or dedicated sampled dataset if full-canonical runtime or memory is too heavy on a workstation.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
@@ -556,6 +614,42 @@ Use the new shared reporting CLI against whichever cities currently have materia
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-03-24 - Checkpoint: Modeling Environment Unblocked Via CSV Fallback And Real Smoke Verification
+
+- Date / checkpoint:
+  - 2026-03-24 modeling execution unblock and honest smoke verification after the earlier runtime-instrumentation pass.
+- Change made:
+  - Confirmed the repo `.venv` already contains the geospatial/modeling packages on disk, so the latest blocker in this Codex session is the venv launcher returning `Access is denied`, not a missing dependency set.
+  - Moved the final-dataset column contract into `src.final_dataset_contract` so the modeling import path no longer pulls `src.feature_assembly` / `geopandas` at import time.
+  - Added CSV support to the modeling data loader, including deterministic chunked per-city sampling, so the smoke runners can execute against `final_dataset.csv` when the parquet artifact is unreadable in the active interpreter.
+  - Replaced `tempfile.TemporaryDirectory` cache-dir creation in `src.modeling_runner` with a plain managed `Path.mkdir()` directory to avoid Windows temp-directory permission failures in this session.
+  - Updated the focused modeling tests to use workspace-backed temp paths and serial grid-search settings so the modeled behavior, not the host temp/multiprocessing implementation, is what gets verified.
+  - Completed one real sampled smoke run for tuned logistic SAGA and one for tuned random forest using the accessible interpreter, CSV dataset fallback, CSV folds artifact, and serial grid-search settings.
+- Files touched:
+  - `src/final_dataset_contract.py`
+  - `src/feature_assembly.py`
+  - `src/modeling_prep.py`
+  - `src/modeling_data.py`
+  - `src/modeling_runner.py`
+  - `tests/conftest.py`
+  - `tests/test_modeling_contract.py`
+  - `tests/test_modeling_runner.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\anaconda3\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q`
+  - `C:\Users\golde\anaconda3\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\vcsv`
+  - `C:\Users\golde\anaconda3\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\random_forest\vcsv`
+- Test status:
+  - Focused modeling subset passed: `15 passed` via `C:\Users\golde\anaconda3\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q`.
+- Manual verification status:
+  - Direct `.venv` execution still failed immediately with `Access is denied`.
+  - `final_dataset.parquet` still aborted inside `pyarrow` reads in the accessible interpreter, and `city_outer_folds.parquet` still failed with `Repetition level histogram size mismatch`.
+  - Logistic smoke completed in `824.36s` wall clock with `sampled_city_preload=270.32s`, `grid_search_seconds=532.12s`, `pr_auc=0.1739`, and `recall_at_top_10pct=0.2199`.
+  - Random-forest smoke completed in `313.08s` wall clock with `sampled_city_preload=86.10s`, `grid_search_seconds=223.17s`, `pr_auc=0.1808`, and `recall_at_top_10pct=0.1998`.
+  - Both real smoke runs completed despite non-fatal `joblib` cache warnings under the current Windows workspace paths.
+- Next recommended step:
+  - Repair or regenerate the canonical parquet artifacts and rerun the same smoke commands against parquet in a Python environment where the repo `.venv` launcher is actually executable.
 
 ### 2026-03-24 - Checkpoint: Tuned Runtime Smoke Preset And Timing Instrumentation
 

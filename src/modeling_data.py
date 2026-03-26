@@ -152,10 +152,59 @@ def _read_dataset_subset(
     columns: Sequence[str],
     city_ids: Sequence[int] | None = None,
 ) -> pd.DataFrame:
+    if dataset_path.suffix.lower() == ".csv":
+        read_kwargs: dict[str, object] = {"usecols": list(columns)}
+        if city_ids is None:
+            return pd.read_csv(dataset_path, **read_kwargs)
+
+        city_id_set = {int(city_id) for city_id in city_ids}
+        parts: list[pd.DataFrame] = []
+        for chunk in pd.read_csv(dataset_path, chunksize=250_000, **read_kwargs):
+            filtered = chunk.loc[chunk[GROUP_COLUMN].isin(city_id_set)].copy()
+            if not filtered.empty:
+                parts.append(filtered)
+        return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=list(columns))
+
     if city_ids is None:
         return pd.read_parquet(dataset_path, columns=list(columns))
     filters = [(GROUP_COLUMN, "in", [int(city_id) for city_id in city_ids])]
     return pd.read_parquet(dataset_path, columns=list(columns), filters=filters)
+
+
+def _sample_csv_rows_by_city(
+    dataset_path: Path,
+    columns: Sequence[str],
+    city_ids: Sequence[int],
+    sample_rows_per_city: int,
+    random_state: int,
+) -> pd.DataFrame:
+    city_id_set = {int(city_id) for city_id in city_ids}
+    rng = np.random.default_rng(int(random_state))
+    sampled_parts: dict[int, pd.DataFrame] = {}
+
+    for chunk in pd.read_csv(dataset_path, usecols=list(columns), chunksize=250_000):
+        filtered = chunk.loc[chunk[GROUP_COLUMN].isin(city_id_set)].copy()
+        if filtered.empty:
+            continue
+
+        filtered["_sample_priority"] = rng.random(len(filtered))
+        for city_id, city_chunk in filtered.groupby(GROUP_COLUMN, sort=False, dropna=False):
+            normalized_city_id = int(city_id)
+            existing = sampled_parts.get(normalized_city_id)
+            combined = city_chunk if existing is None else pd.concat([existing, city_chunk], ignore_index=True)
+            sampled_parts[normalized_city_id] = combined.nsmallest(
+                int(sample_rows_per_city),
+                columns="_sample_priority",
+            )
+
+    final_parts = []
+    for city_id in [int(city_id) for city_id in city_ids]:
+        city_sample = sampled_parts.get(city_id)
+        if city_sample is None:
+            continue
+        final_parts.append(city_sample.drop(columns="_sample_priority").reset_index(drop=True))
+
+    return pd.concat(final_parts, ignore_index=True) if final_parts else pd.DataFrame(columns=list(columns))
 
 
 def load_modeling_rows(
@@ -180,16 +229,25 @@ def load_modeling_rows(
     else:
         if city_ids is None:
             raise ValueError("sample_rows_per_city requires an explicit list of city_ids")
-        parts: list[pd.DataFrame] = []
-        for city_id in city_ids:
-            city_df = _read_dataset_subset(dataset_path=dataset_path, columns=selected_columns, city_ids=[int(city_id)])
-            if len(city_df) > sample_rows_per_city:
-                city_df = city_df.sample(
-                    n=sample_rows_per_city,
-                    random_state=int(random_state) + int(city_id),
-                )
-            parts.append(city_df)
-        df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=selected_columns)
+        if dataset_path.suffix.lower() == ".csv":
+            df = _sample_csv_rows_by_city(
+                dataset_path=dataset_path,
+                columns=selected_columns,
+                city_ids=city_ids,
+                sample_rows_per_city=sample_rows_per_city,
+                random_state=random_state,
+            )
+        else:
+            parts: list[pd.DataFrame] = []
+            for city_id in city_ids:
+                city_df = _read_dataset_subset(dataset_path=dataset_path, columns=selected_columns, city_ids=[int(city_id)])
+                if len(city_df) > sample_rows_per_city:
+                    city_df = city_df.sample(
+                        n=sample_rows_per_city,
+                        random_state=int(random_state) + int(city_id),
+                    )
+                parts.append(city_df)
+            df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=selected_columns)
 
     if TARGET_COLUMN in df.columns and not df.empty:
         validate_binary_target(df, target_column=TARGET_COLUMN)

@@ -82,10 +82,10 @@ def _build_mixed_type_feature_fixture() -> tuple[pd.DataFrame, pd.Series]:
     return X, y
 
 
-def test_run_modeling_baselines_writes_expected_artifacts(tmp_path: Path):
-    dataset_path = tmp_path / "final_dataset.parquet"
-    folds_path = tmp_path / "city_outer_folds.parquet"
-    output_dir = tmp_path / "outputs" / "modeling" / "baselines"
+def test_run_modeling_baselines_writes_expected_artifacts(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "baselines"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
@@ -142,14 +142,14 @@ def test_tuned_pipelines_fit_with_mixed_type_categorical_missing_values(builder,
     assert probabilities.shape == (len(X), 2)
 
 
-def test_run_logistic_and_random_forest_write_expected_artifacts(tmp_path: Path):
-    dataset_path = tmp_path / "final_dataset.parquet"
-    folds_path = tmp_path / "city_outer_folds.parquet"
+def test_run_logistic_and_random_forest_write_expected_artifacts(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
-    logistic_output_dir = tmp_path / "outputs" / "modeling" / "logistic_saga"
-    random_forest_output_dir = tmp_path / "outputs" / "modeling" / "random_forest"
+    logistic_output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    random_forest_output_dir = workspace_tmp_path / "outputs" / "modeling" / "random_forest"
 
     logistic_result = run_logistic_saga_model(
         dataset_path=dataset_path,
@@ -157,6 +157,7 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(tmp_path: Path)
         output_dir=logistic_output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         param_grid=[{"model__penalty": ["l2"], "model__C": [0.1, 1.0]}],
+        grid_search_n_jobs=1,
     )
     forest_result = run_random_forest_model(
         dataset_path=dataset_path,
@@ -171,6 +172,7 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(tmp_path: Path)
                 "model__min_samples_leaf": [1],
             }
         ],
+        grid_search_n_jobs=1,
     )
 
     for result in (logistic_result, forest_result):
@@ -204,10 +206,10 @@ def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     assert forest_smoke.inner_cv_splits < forest_full.inner_cv_splits
 
 
-def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(tmp_path: Path):
-    dataset_path = tmp_path / "final_dataset.parquet"
-    folds_path = tmp_path / "city_outer_folds.parquet"
-    output_dir = tmp_path / "outputs" / "modeling" / "logistic_saga"
+def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
@@ -217,6 +219,7 @@ def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(tmp_pat
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
+        grid_search_n_jobs=1,
     )
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
@@ -234,10 +237,10 @@ def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(tmp_pat
     assert metadata["fold_runtime"][0]["grid_search_seconds"] >= 0.0
 
 
-def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    dataset_path = tmp_path / "final_dataset.parquet"
-    folds_path = tmp_path / "city_outer_folds.parquet"
-    output_dir = tmp_path / "outputs" / "modeling" / "logistic_saga"
+def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
@@ -261,6 +264,7 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
         selected_outer_folds=[0],
         sample_rows_per_city=5,
         param_grid=[{"model__penalty": ["l2"], "model__C": [0.1]}],
+        grid_search_n_jobs=1,
     )
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))

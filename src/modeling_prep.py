@@ -10,7 +10,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from src.config import FINAL, MODELING
-from src.feature_assembly import FINAL_COLUMNS
+from src.final_dataset_contract import FINAL_COLUMNS
 from src.modeling_config import (
     DEFAULT_FEATURE_COLUMNS,
     EXCLUDED_FEATURE_COLUMNS,
@@ -56,6 +56,8 @@ def get_final_dataset_columns(dataset_path: Path = FINAL / "final_dataset.parque
     """Read parquet schema column names without materializing the full dataset."""
     if not dataset_path.exists():
         raise FileNotFoundError(f"Final dataset not found: {dataset_path}")
+    if dataset_path.suffix.lower() == ".csv":
+        return pd.read_csv(dataset_path, nrows=0).columns.tolist()
     return list(pq.read_schema(dataset_path).names)
 
 
@@ -71,6 +73,8 @@ def load_final_dataset(
         logger.info("Loading final dataset from %s", dataset_path)
     else:
         logger.info("Loading %s selected columns from %s", len(selected_columns), dataset_path)
+    if dataset_path.suffix.lower() == ".csv":
+        return pd.read_csv(dataset_path, usecols=selected_columns)
     return pd.read_parquet(dataset_path, columns=selected_columns)
 
 

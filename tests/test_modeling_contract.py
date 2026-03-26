@@ -1,3 +1,6 @@
+import builtins
+import importlib
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -99,6 +102,28 @@ def test_feature_type_contract_keeps_climate_group_categorical():
     assert feature_type_map["land_cover_class"] == FEATURE_TYPE_CATEGORICAL
 
 
+def test_modeling_prep_import_does_not_pull_geospatial_stack(monkeypatch: pytest.MonkeyPatch):
+    original_modeling_prep = sys.modules.pop("src.modeling_prep", None)
+    original_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {"src.feature_assembly", "geopandas"}:
+            raise AssertionError(f"unexpected import during modeling_prep import: {name}")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+    try:
+        modeling_prep = importlib.import_module("src.modeling_prep")
+        assert "hotspot_10pct" in modeling_prep.FINAL_COLUMNS
+    finally:
+        sys.modules.pop("src.modeling_prep", None)
+        if original_modeling_prep is not None:
+            sys.modules["src.modeling_prep"] = original_modeling_prep
+        else:
+            importlib.import_module("src.modeling_prep")
+
+
 def test_recall_at_top_fraction_matches_expected_example():
     recall = recall_at_top_fraction(
         y_true=[1, 0, 1, 0, 1],
@@ -109,9 +134,9 @@ def test_recall_at_top_fraction_matches_expected_example():
     assert recall == pytest.approx(2 / 3)
 
 
-def test_load_outer_fold_data_keeps_train_and_test_cities_disjoint(tmp_path: Path):
-    dataset_path = tmp_path / "final_dataset.parquet"
-    folds_path = tmp_path / "city_outer_folds.parquet"
+def test_load_outer_fold_data_keeps_train_and_test_cities_disjoint(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 

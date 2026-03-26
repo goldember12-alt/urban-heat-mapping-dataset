@@ -1,2 +1,6 @@
 model_name,outer_fold,inner_cv_splits,best_inner_cv_average_precision,best_params_json
 random_forest,0,4,0.1561522196266537,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 10, ""model__n_estimators"": 100}"
+random_forest,1,4,0.16449372442398374,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 10, ""model__n_estimators"": 300}"
+random_forest,2,4,0.18752403272766952,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 10, ""model__n_estimators"": 500}"
+random_forest,3,4,0.1604440449070288,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 10, ""model__n_estimators"": 300}"
+random_forest,4,4,0.16190359871476206,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 10, ""model__n_estimators"": 500}"

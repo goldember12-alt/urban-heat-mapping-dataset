@@ -124,6 +124,21 @@ Important `data_processed/` subdirectories:
 - `modeling/`
 - `orchestration/`
 
+## Python Environment
+
+Run project commands from the repo root with the repo-local virtualenv:
+
+```powershell
+.venv\Scripts\python.exe -m ...
+```
+
+Current verified environment notes:
+
+- `.venv` is expected to be built from the accessible base interpreter at `C:\Users\golde\anaconda3\python.exe`
+- `sys.executable` and `sys.prefix` should point into the repo `.venv`, while `sys.base_prefix` should point to `C:\Users\golde\anaconda3`
+- virtual environments are disposable; if `.venv\pyvenv.cfg` points to the wrong or inaccessible base interpreter, delete and recreate `.venv` from the correct base instead of copying or repairing an old broken environment
+- `requirements.txt` now includes `pytest` so rebuilt environments can run the focused test suite directly
+
 ## Main Runnable Entrypoints
 
 These are the most important current entrypoints. The workflow doc lists how they fit together.
@@ -151,6 +166,16 @@ Recommended first ML smoke run on the canonical dataset:
 ```
 
 These runners treat `data_processed/final/final_dataset.parquet` as the canonical row-level input and `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
+
+Current sandbox-verified modeling commands:
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q
+.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\venv_verify
+.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\random_forest\venv_verify
+```
+
+In this sandbox, the CSV dataset and fold files are still the verified smoke path because the canonical parquet artifacts remain unreadable in the current environment, and serial grid-search flags are still required for stable execution.
 
 ## How To Navigate The Docs
 

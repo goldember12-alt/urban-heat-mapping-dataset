@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
+import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from time import perf_counter
 from typing import Callable, Sequence
 
@@ -67,6 +69,16 @@ class GridSearchRunResult:
     predictions_path: Path
     calibration_curve_path: Path
     metadata_path: Path
+
+
+@contextmanager
+def _managed_cache_directory(base_dir: Path, prefix: str):
+    cache_dir = base_dir / f"{prefix}{uuid.uuid4().hex}"
+    cache_dir.mkdir(parents=True, exist_ok=False)
+    try:
+        yield cache_dir
+    finally:
+        shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 def _split_feature_types(feature_columns: Sequence[str]) -> tuple[list[str], list[str]]:
@@ -400,8 +412,11 @@ def run_grouped_grid_search_model(
                 f"outer_fold={outer_fold} has only {train_group_count} training cities, so GroupKFold needs at least 2"
             )
 
-        with TemporaryDirectory(prefix=f"{model_name}_outer_fold_{outer_fold}_", dir=resolved_output_dir) as cache_dir:
-            pipeline_cache = Memory(location=cache_dir, verbose=0) if pipeline_cache_enabled else None
+        with _managed_cache_directory(
+            base_dir=resolved_output_dir,
+            prefix=f"{model_name}_outer_fold_{outer_fold}_",
+        ) as cache_dir:
+            pipeline_cache = Memory(location=str(cache_dir), verbose=0) if pipeline_cache_enabled else None
             preprocess_build_start = perf_counter()
             pipeline = pipeline_builder(
                 feature_columns=selected_features,

@@ -33,6 +33,7 @@ from src.config import (
     SUPPORT_LAYERS,
 )
 from src.load_cities import load_cities
+from src.final_dataset_contract import FINAL_COLUMNS
 from src.support_layers import discover_prepared_support_sources
 from src.vector_io import write_gpkg_atomic
 from src.raster_features import (
@@ -52,23 +53,6 @@ logger = logging.getLogger(__name__)
 CELL_FILTER_STUDY_AREA = "study_area"
 CELL_FILTER_CORE_CITY = "core_city"
 CELL_CONTEXT_COLUMNS = ["is_core_city_cell", "is_buffer_ring_cell"]
-
-FINAL_COLUMNS = [
-    "city_id",
-    "city_name",
-    "climate_group",
-    "cell_id",
-    "centroid_lon",
-    "centroid_lat",
-    "impervious_pct",
-    "land_cover_class",
-    "elevation_m",
-    "dist_to_water_m",
-    "ndvi_median_may_aug",
-    "lst_median_may_aug",
-    "n_valid_ecostress_passes",
-    "hotspot_10pct",
-]
 
 OPEN_WATER_CLASS = 11
 
