@@ -1,0 +1,7 @@
+model_name,outer_fold,city_id,city_name,climate_group,row_count,positive_count,prevalence,pr_auc,recall_at_top_10pct
+random_forest,0,2,Tucson,hot_arid,5000,521,0.1042,0.2530693999379101,0.32053742802303264
+random_forest,0,9,Bakersfield,hot_arid,5000,478,0.0956,0.25397745558535956,0.36610878661087864
+random_forest,0,13,Richmond,hot_humid,5000,479,0.0958,0.2400088107067661,0.30062630480167013
+random_forest,0,15,Tampa,hot_humid,5000,470,0.094,0.22046724532564035,0.26170212765957446
+random_forest,0,18,Atlanta,hot_humid,5000,509,0.1018,0.21418430013225395,0.2475442043222004
+random_forest,0,24,San Jose,mild_cool,5000,468,0.0936,0.10464801860984702,0.13034188034188035

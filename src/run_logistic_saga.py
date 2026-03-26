@@ -25,21 +25,44 @@ def _parse_fold_list(raw_value: str | None) -> list[int] | None:
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run grouped logistic SAGA hotspot modeling.")
-    parser.add_argument("--dataset-path", type=Path, default=DEFAULT_FINAL_DATASET_PATH)
-    parser.add_argument("--folds-path", type=Path, default=None)
+    parser = argparse.ArgumentParser(
+        description="Run grouped logistic SAGA hotspot modeling on the canonical parquet-first dataset.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--dataset-path",
+        type=Path,
+        default=DEFAULT_FINAL_DATASET_PATH,
+        help="Canonical modeling input. Defaults to final_dataset.parquet; CSV remains supported as a compatibility fallback only.",
+    )
+    parser.add_argument(
+        "--folds-path",
+        type=Path,
+        default=None,
+        help="Optional explicit folds path. When omitted, the runner prefers city_outer_folds.parquet and falls back to CSV only if parquet is absent.",
+    )
     parser.add_argument("--output-dir", type=Path, default=LOGISTIC_OUTPUT_DIR)
     parser.add_argument("--feature-columns", default=",".join(DEFAULT_FEATURE_COLUMNS))
     parser.add_argument("--outer-folds", default=None, help="Optional comma-delimited subset of outer folds")
-    parser.add_argument("--sample-rows-per-city", type=int, default=None)
+    parser.add_argument(
+        "--sample-rows-per-city",
+        type=int,
+        default=None,
+        help="Optional per-city sample cap for bounded smoke verification without changing the parquet-first default input path.",
+    )
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--inner-cv-splits", type=int, default=None)
-    parser.add_argument("--grid-search-n-jobs", type=int, default=-1)
+    parser.add_argument(
+        "--grid-search-n-jobs",
+        type=int,
+        default=-1,
+        help="GridSearchCV worker count. Keep the default for normal runs; constrained sandboxes may still prefer 1 for smoke verification.",
+    )
     parser.add_argument(
         "--tuning-preset",
         choices=VALID_TUNING_PRESETS,
         default=DEFAULT_TUNING_PRESET,
-        help="Use 'smoke' for faster sampled verification defaults or 'full' for the heavier historical search.",
+        help="Use 'smoke' for the bounded default verification search or 'full' for the broader tuning search.",
     )
     return parser
 

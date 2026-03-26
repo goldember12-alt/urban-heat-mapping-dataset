@@ -283,3 +283,15 @@ def test_tuned_runner_clis_default_to_explicit_smoke_preset():
     assert forest_args.tuning_preset == "smoke"
     assert logistic_args.inner_cv_splits is None
     assert forest_args.inner_cv_splits is None
+
+
+def test_tuned_runner_cli_help_reflects_parquet_first_defaults_and_csv_fallback():
+    logistic_help = build_logistic_arg_parser().format_help()
+    forest_help = build_random_forest_arg_parser().format_help()
+
+    for help_text in (logistic_help, forest_help):
+        assert "final_dataset.parquet" in help_text
+        assert "compatibility fallback only" in help_text
+        assert "prefers city_outer_folds.parquet" in help_text
+        assert "bounded default verification" in help_text
+        assert "broader tuning search" in help_text

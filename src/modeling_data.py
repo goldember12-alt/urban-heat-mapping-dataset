@@ -38,7 +38,7 @@ def _deduplicate_columns(columns: Iterable[str]) -> list[str]:
 
 
 def resolve_fold_table_path(folds_path: Path | None = None) -> Path:
-    """Return the preferred city-level fold artifact path."""
+    """Return the city-level fold artifact path, preferring parquet over CSV fallback."""
     if folds_path is not None:
         return folds_path
     if DEFAULT_FOLDS_PARQUET_PATH.exists():
@@ -215,7 +215,7 @@ def load_modeling_rows(
     random_state: int = 42,
     extra_columns: Sequence[str] | None = None,
 ) -> pd.DataFrame:
-    """Load the selected modeling columns, optionally with deterministic per-city sampling."""
+    """Load modeling rows from the canonical parquet path or an explicit CSV fallback path."""
     available_columns = get_final_dataset_columns(dataset_path=dataset_path)
     validate_required_final_columns(available_columns)
     selected_columns = get_selected_modeling_columns(feature_columns=feature_columns, extra_columns=extra_columns)

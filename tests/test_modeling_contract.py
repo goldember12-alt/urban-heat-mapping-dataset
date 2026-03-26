@@ -8,6 +8,7 @@ import pytest
 
 from src.modeling_config import (
     DEFAULT_FEATURE_COLUMNS,
+    DEFAULT_FINAL_DATASET_PATH,
     FEATURE_TYPE_CATEGORICAL,
     FEATURE_TYPE_NUMERIC,
     get_feature_type_map,
@@ -16,6 +17,7 @@ from src.modeling_data import (
     get_requested_outer_folds,
     load_city_outer_folds,
     load_outer_fold_data,
+    resolve_fold_table_path,
     validate_model_feature_columns,
 )
 from src.modeling_metrics import recall_at_top_fraction
@@ -155,3 +157,26 @@ def test_load_outer_fold_data_keeps_train_and_test_cities_disjoint(workspace_tmp
     assert set(fold_data.test_city_ids) == {1, 2}
     assert set(fold_data.train_df["city_id"].unique()) == {3, 4}
     assert set(fold_data.test_df["city_id"].unique()) == {1, 2}
+
+
+def test_resolve_fold_table_path_prefers_parquet_then_csv(
+    monkeypatch: pytest.MonkeyPatch,
+    workspace_tmp_path: Path,
+):
+    parquet_path = workspace_tmp_path / "city_outer_folds.parquet"
+    csv_path = workspace_tmp_path / "city_outer_folds.csv"
+    parquet_path.write_bytes(b"parquet-placeholder")
+    csv_path.write_text("city_id,outer_fold\n1,0\n", encoding="utf-8")
+
+    monkeypatch.setattr("src.modeling_data.DEFAULT_FOLDS_PARQUET_PATH", parquet_path)
+    monkeypatch.setattr("src.modeling_data.DEFAULT_FOLDS_CSV_PATH", csv_path)
+
+    assert resolve_fold_table_path() == parquet_path
+
+    parquet_path.unlink()
+
+    assert resolve_fold_table_path() == csv_path
+
+
+def test_modeling_cli_default_dataset_path_is_canonical_parquet():
+    assert DEFAULT_FINAL_DATASET_PATH.as_posix().endswith("data_processed/final/final_dataset.parquet")

@@ -58,8 +58,9 @@ Verified status:
 
 - Full-stack orchestration has been manually verified for Phoenix, Tucson, Las Vegas, and Albuquerque
 - The canonical modeling-prep stage has been manually verified on the real `final_dataset.parquet`
+- Parquet-backed logistic SAGA and random-forest smoke runs have been manually verified in the rebuilt repo-local `.venv` using the canonical parquet artifacts
 - The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
-- A full end-to-end canonical modeling run on the real `71,394,894`-row dataset has not yet been recorded in the handoff log
+- A full all-fold canonical modeling run on the real `71,394,894`-row dataset has not yet been recorded in the handoff log
 
 Planned next, not yet implemented as full production code:
 
@@ -126,14 +127,15 @@ Important `data_processed/` subdirectories:
 
 ## Python Environment
 
-Run project commands from the repo root with the repo-local virtualenv:
+Run project commands from the repo root with the repo-local virtualenv. This repo-local `.venv` is the standard interpreter for normal use:
 
 ```powershell
-.venv\Scripts\python.exe -m ...
+.\.venv\Scripts\python.exe -m ...
 ```
 
 Current verified environment notes:
 
+- The canonical modeling path is the rebuilt repo-local `.venv` plus parquet-backed artifacts
 - `.venv` is expected to be built from the accessible base interpreter at `C:\Users\golde\anaconda3\python.exe`
 - `sys.executable` and `sys.prefix` should point into the repo `.venv`, while `sys.base_prefix` should point to `C:\Users\golde\anaconda3`
 - virtual environments are disposable; if `.venv\pyvenv.cfg` points to the wrong or inaccessible base interpreter, delete and recreate `.venv` from the correct base instead of copying or repairing an old broken environment
@@ -144,15 +146,15 @@ Current verified environment notes:
 These are the most important current entrypoints. The workflow doc lists how they fit together.
 
 ```powershell
-.venv\Scripts\python.exe -m src.run_city_batch_processing --resolution 30
-.venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
-.venv\Scripts\python.exe -m src.run_final_dataset_assembly
-.venv\Scripts\python.exe -m src.run_data_processing_reports
-.venv\Scripts\python.exe -m src.audit_final_dataset
-.venv\Scripts\python.exe -m src.make_model_folds --n-splits 5
-.venv\Scripts\python.exe -m src.run_modeling_baselines
-.venv\Scripts\python.exe -m src.run_logistic_saga
-.venv\Scripts\python.exe -m src.run_random_forest
+.\.venv\Scripts\python.exe -m src.run_city_batch_processing --resolution 30
+.\.venv\Scripts\python.exe -m src.run_full_stack_orchestration --city-ids 1 --start-date 2023-05-01 --end-date 2023-08-31
+.\.venv\Scripts\python.exe -m src.run_final_dataset_assembly
+.\.venv\Scripts\python.exe -m src.run_data_processing_reports
+.\.venv\Scripts\python.exe -m src.audit_final_dataset
+.\.venv\Scripts\python.exe -m src.make_model_folds --n-splits 5
+.\.venv\Scripts\python.exe -m src.run_modeling_baselines
+.\.venv\Scripts\python.exe -m src.run_logistic_saga
+.\.venv\Scripts\python.exe -m src.run_random_forest
 ```
 
 AppEEARS-dependent commands read credentials from environment variables only. See the workflow doc for the acquisition contract and expected raw-output locations.
@@ -160,22 +162,24 @@ AppEEARS-dependent commands read credentials from environment variables only. Se
 Recommended first ML smoke run on the canonical dataset:
 
 ```powershell
-.venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000
-.venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000
-.venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000
+.\.venv\Scripts\python.exe -m src.run_modeling_baselines --sample-rows-per-city 5000
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000
+.\.venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000
 ```
 
-These runners treat `data_processed/final/final_dataset.parquet` as the canonical row-level input and `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
+These runners default to `data_processed/final/final_dataset.parquet` as the canonical row-level input and prefer `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
+
+CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The current `data_processed/final/final_dataset.csv` is not row-equivalent to the canonical parquet and should not be treated as interchangeable for modeling.
 
 Current sandbox-verified modeling commands:
 
 ```powershell
-.venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q
-.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\venv_verify
-.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.csv --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\random_forest\venv_verify
+.\.venv\Scripts\python.exe -m pytest tests/test_modeling_contract.py tests/test_modeling_runner.py -q
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\parquet_verify
+.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\random_forest\parquet_verify
 ```
 
-In this sandbox, the CSV dataset and fold files are still the verified smoke path because the canonical parquet artifacts remain unreadable in the current environment, and serial grid-search flags are still required for stable execution.
+In this sandbox, the canonical parquet dataset and fold artifacts are verified through the rebuilt `.venv`, and the serial grid-search flags above remain the stable smoke settings for constrained verification here. Those serial flags are sandbox-specific guidance, not a requirement to force serial mode or CSV in normal use.
 
 ## How To Navigate The Docs
 
