@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -6,12 +7,18 @@ import pytest
 from sklearn.model_selection import ParameterGrid
 
 from src.modeling_baselines import run_modeling_baselines
-from src.modeling_config import DEFAULT_FEATURE_COLUMNS, get_model_tuning_spec
+from src.modeling_config import (
+    DEFAULT_FEATURE_COLUMNS,
+    DEFAULT_LOGISTIC_MAX_ITER,
+    DEFAULT_LOGISTIC_TOL,
+    get_model_tuning_spec,
+)
 from src.modeling_data import load_modeling_rows as load_modeling_rows_from_disk
 from src.modeling_run_registry import build_cli_command, infer_run_registry_path, record_model_run
 from src.modeling_runner import (
     build_logistic_saga_pipeline,
     build_random_forest_pipeline,
+    _get_pipeline_cache_base_dir,
     run_logistic_saga_model,
     run_random_forest_model,
 )
@@ -126,6 +133,13 @@ def test_logistic_preprocessor_routes_contract_categoricals_away_from_numeric_br
     assert "land_cover_class" not in transformer_columns["numeric"]
 
 
+def test_logistic_pipeline_defaults_to_configured_max_iter():
+    pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS)
+
+    assert pipeline.named_steps["model"].max_iter == DEFAULT_LOGISTIC_MAX_ITER
+    assert pipeline.named_steps["model"].tol == DEFAULT_LOGISTIC_TOL
+
+
 @pytest.mark.parametrize(
     ("builder", "builder_kwargs"),
     [
@@ -157,7 +171,7 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(workspace_tmp_p
         folds_path=folds_path,
         output_dir=logistic_output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
-        param_grid=[{"model__penalty": ["l2"], "model__C": [0.1, 1.0]}],
+        param_grid=[{"model__C": [0.1, 1.0], "model__l1_ratio": [0.0]}],
         grid_search_n_jobs=1,
     )
     forest_result = run_random_forest_model(
@@ -208,7 +222,7 @@ def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
         folds_path=folds_path,
         output_dir=logistic_output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
-        param_grid=[{"model__penalty": ["l2"], "model__C": [0.1]}],
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
         grid_search_n_jobs=1,
     )
     random_forest_result = run_random_forest_model(
@@ -290,6 +304,8 @@ def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     assert len(list(ParameterGrid(forest_smoke.param_grid))) < len(list(ParameterGrid(forest_full.param_grid)))
     assert logistic_smoke.inner_cv_splits < logistic_full.inner_cv_splits
     assert forest_smoke.inner_cv_splits < forest_full.inner_cv_splits
+    assert all("model__penalty" not in candidate for candidate in logistic_smoke.param_grid)
+    assert all("model__penalty" not in candidate for candidate in logistic_full.param_grid)
 
 
 def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(workspace_tmp_path: Path):
@@ -314,6 +330,11 @@ def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(workspa
     assert metadata["tuning_preset"] == "smoke"
     assert metadata["inner_cv_splits_requested"] == get_model_tuning_spec("logistic_saga", "smoke").inner_cv_splits
     assert metadata["pipeline_cache_enabled"] is True
+    assert metadata["pipeline_cache_root"] == str(_get_pipeline_cache_base_dir())
+    assert metadata["pipeline_builder_kwargs"] == {
+        "max_iter": DEFAULT_LOGISTIC_MAX_ITER,
+        "tol": DEFAULT_LOGISTIC_TOL,
+    }
     assert metadata["data_loading_strategy"] == "per_outer_fold_load"
     assert metadata["search_space"]["param_candidate_count"] == expected_candidates
     assert metadata["search_space"]["estimated_total_inner_fits"] == expected_candidates * 2
@@ -349,7 +370,7 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
         sample_rows_per_city=5,
-        param_grid=[{"model__penalty": ["l2"], "model__C": [0.1]}],
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
         grid_search_n_jobs=1,
     )
 
@@ -361,11 +382,26 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
     assert metadata["timing_seconds"]["sampled_city_preload"] is not None
 
 
+def test_logistic_l1_ratio_tuning_avoids_penalty_future_warning():
+    X, y = _build_mixed_type_feature_fixture()
+    pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS, max_iter=200)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        pipeline.set_params(model__C=1.0, model__l1_ratio=0.0)
+        pipeline.fit(X, y)
+
+    messages = [str(item.message) for item in caught]
+    assert not any("'penalty' was deprecated" in message for message in messages)
+
+
 def test_tuned_runner_clis_default_to_explicit_smoke_preset():
     logistic_args = build_logistic_arg_parser().parse_args([])
     forest_args = build_random_forest_arg_parser().parse_args([])
 
     assert logistic_args.tuning_preset == "smoke"
+    assert logistic_args.max_iter == DEFAULT_LOGISTIC_MAX_ITER
+    assert logistic_args.tol == DEFAULT_LOGISTIC_TOL
     assert forest_args.tuning_preset == "smoke"
     assert logistic_args.inner_cv_splits is None
     assert forest_args.inner_cv_splits is None

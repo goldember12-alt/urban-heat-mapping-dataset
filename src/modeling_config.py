@@ -63,6 +63,8 @@ MODELING_FIGURE_ROOT = MODELING_FIGURES
 DEFAULT_PR_SCORING = "average_precision"
 DEFAULT_TOP_FRACTION = 0.10
 DEFAULT_RANDOM_STATE = 42
+DEFAULT_LOGISTIC_MAX_ITER = 4000
+DEFAULT_LOGISTIC_TOL = 5e-4
 DEFAULT_INNER_CV_SPLITS = 4
 SMOKE_INNER_CV_SPLITS = 3
 DEFAULT_CALIBRATION_BINS = 10
@@ -73,26 +75,24 @@ VALID_TUNING_PRESETS = (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
 
 LOGISTIC_SMOKE_PARAM_GRID = [
     {
-        "model__penalty": ["l2"],
         "model__C": [0.1, 1.0],
+        "model__l1_ratio": [0.0],
     },
     {
-        "model__penalty": ["elasticnet"],
         "model__C": [0.1, 1.0],
         "model__l1_ratio": [0.5],
     },
 ]
 LOGISTIC_FULL_PARAM_GRID = [
     {
-        "model__penalty": ["l2"],
         "model__C": [0.01, 0.1, 1.0, 10.0],
+        "model__l1_ratio": [0.0],
     },
     {
-        "model__penalty": ["l1"],
         "model__C": [0.01, 0.1, 1.0, 10.0],
+        "model__l1_ratio": [1.0],
     },
     {
-        "model__penalty": ["elasticnet"],
         "model__C": [0.01, 0.1, 1.0, 10.0],
         "model__l1_ratio": [0.2, 0.5, 0.8],
     },

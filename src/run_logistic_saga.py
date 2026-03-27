@@ -7,6 +7,8 @@ from pathlib import Path
 from src.modeling_config import (
     DEFAULT_FEATURE_COLUMNS,
     DEFAULT_FINAL_DATASET_PATH,
+    DEFAULT_LOGISTIC_MAX_ITER,
+    DEFAULT_LOGISTIC_TOL,
     DEFAULT_TUNING_PRESET,
     LOGISTIC_OUTPUT_DIR,
     VALID_TUNING_PRESETS,
@@ -54,6 +56,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--inner-cv-splits", type=int, default=None)
     parser.add_argument(
+        "--max-iter",
+        type=int,
+        default=DEFAULT_LOGISTIC_MAX_ITER,
+        help="Maximum SAGA iterations for each logistic fit. Increase this if real-data elastic-net candidates still emit convergence warnings.",
+    )
+    parser.add_argument(
+        "--tol",
+        type=float,
+        default=DEFAULT_LOGISTIC_TOL,
+        help="SAGA convergence tolerance. A slightly looser tolerance can remove real-data convergence warnings without the runtime cost of much larger max_iter values.",
+    )
+    parser.add_argument(
         "--grid-search-n-jobs",
         type=int,
         default=-1,
@@ -91,6 +105,8 @@ def main() -> None:
             random_state=args.random_state,
             inner_cv_splits=args.inner_cv_splits,
             grid_search_n_jobs=args.grid_search_n_jobs,
+            max_iter=args.max_iter,
+            tol=args.tol,
             tuning_preset=args.tuning_preset,
             command=command,
         )

@@ -1,0 +1,7 @@
+model_name,outer_fold,city_id,city_name,climate_group,row_count,positive_count,prevalence,pr_auc,recall_at_top_10pct
+logistic_saga,0,2,Tucson,hot_arid,5000,521,0.1042,0.13110580941879788,0.07485604606525911
+logistic_saga,0,9,Bakersfield,hot_arid,5000,478,0.0956,0.1230195996583004,0.13179916317991633
+logistic_saga,0,13,Richmond,hot_humid,5000,479,0.0958,0.24014575056264437,0.3048016701461378
+logistic_saga,0,15,Tampa,hot_humid,5000,470,0.094,0.21874863031653122,0.26170212765957446
+logistic_saga,0,18,Atlanta,hot_humid,5000,509,0.1018,0.24748231575644447,0.2888015717092338
+logistic_saga,0,24,San Jose,mild_cool,5000,468,0.0936,0.1689843252333762,0.1987179487179487

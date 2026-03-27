@@ -1681,3 +1681,58 @@ If more risk control is desired, split those same commands into fold batches suc
 
 
 
+### 2026-03-26 - Checkpoint: Modeling Warning Cleanup For Logistic Tuning And Pipeline Cache Paths
+
+- Date / checkpoint:
+  - 2026-03-26 warning-reduction pass after the full logistic run surfaced repeated sklearn and joblib messages.
+- Change made:
+  - Switched the logistic SAGA tuning grids in `src.modeling_config` from explicit `model__penalty` values to sklearn 1.8-compatible `model__l1_ratio` encodings, preserving the same effective L2, L1, and elastic-net search space without the deprecation warning.
+  - Moved sklearn pipeline-cache scratch directories in `src.modeling_runner` to a short workspace-local root under `.t/j/` instead of nesting them under deep `outputs/...` paths, reducing Windows path length enough to avoid the non-fatal `joblib` cache-write warnings seen in OneDrive-backed runs.
+  - Extended focused runner tests to cover the new logistic grid contract, record the cache-root metadata, and assert that fitting the logistic pipeline with `l1_ratio` no longer emits the sklearn `penalty` FutureWarning.
+- Files touched:
+  - `src/modeling_config.py`
+  - `src/modeling_runner.py`
+  - `tests/test_modeling_runner.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\warning_verify`
+- Test status:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q` passed with `13 passed`.
+  - `.\.venv\Scripts\python.exe -m py_compile src\modeling_config.py src\modeling_runner.py tests\test_modeling_runner.py` passed.
+- Manual verification status:
+  - Started a real parquet logistic rerun with `--sample-rows-per-city 5000 --outer-folds 0 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\warning_verify`.
+  - The run exceeded a `30` minute verification window before writing final outputs, so it was not completed in-session.
+  - During that live rerun, the previous sklearn `FutureWarning` about explicit `penalty` values did not reappear, and the earlier Windows `joblib` cache-write warnings also did not reappear.
+  - The remaining live warning during that bounded rerun was sklearn `ConvergenceWarning` from `saga` fits reaching `max_iter`.
+- Immediate Next Step:
+  - Decide whether to tune down the full logistic search space or raise `max_iter` / solver controls to address the remaining `ConvergenceWarning` noise on longer real-data runs.
+### 2026-03-26 - Checkpoint: Logistic SAGA Convergence Warning Reduction
+
+- Date / checkpoint:
+  - 2026-03-26 follow-up after the cache/deprecation cleanup left only logistic `ConvergenceWarning` messages on real-data runs.
+- Change made:
+  - Probed the real sampled parquet training fold directly and confirmed the elastic-net logistic candidate (`l1_ratio=0.5`) still emitted `ConvergenceWarning` at `max_iter=2000` but cleared at `max_iter=4000`.
+  - Probed the actual inner `GroupKFold` smoke-CV path and found one remaining warning at `max_iter=4000` with sklearn's default `tol=1e-4`; the same CV path cleared when the logistic tolerance was relaxed to `5e-4`.
+  - A temporary `max_iter=6000` smoke rerun also cleared the warning, but it drove one-fold smoke runtime to roughly `100` minutes, so that was not kept as the default.
+  - Finalized the default logistic settings at `max_iter=4000` and `tol=5e-4` in `src.modeling_config`, added dedicated `--max-iter` and `--tol` CLI overrides in `src.run_logistic_saga`, and recorded those pipeline builder kwargs in run metadata.
+- Files touched:
+  - `src/modeling_config.py`
+  - `src/modeling_runner.py`
+  - `src/run_logistic_saga.py`
+  - `tests/test_modeling_runner.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\conv_verify`
+- Test status:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q` passed with `14 passed`.
+  - `.\.venv\Scripts\python.exe -m py_compile src\modeling_config.py src\modeling_runner.py src\run_logistic_saga.py tests\test_modeling_runner.py` passed.
+- Manual verification status:
+  - Real-data probe completed on the sampled training fold: `l1_ratio=0.5` warned at `max_iter=2000` and stopped warning at `max_iter=4000`.
+  - Real-data inner-CV probe completed on the sampled training fold: one smoke-grid candidate still warned at `max_iter=4000` with default tolerance, and the same CV path stopped warning at `tol=5e-4`.
+  - An exploratory smoke rerun at `max_iter=6000` completed without warnings but took about `6045s`, so it was treated as a diagnostic only, not the retained fix.
+  - Completed a retained-default smoke rerun with `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\conv_verify_smoke_tol`.
+  - The retained-default smoke rerun completed in `84.60s` wall clock with `grid_search=71.86s`, wrote outputs under `outputs/modeling/ls/conv_verify_smoke_tol/`, and did not emit the earlier sklearn `ConvergenceWarning`.
+- Immediate Next Step:
+  - If the broader `full` preset still needs overnight verification, rerun it with the retained default `max_iter=4000` and `tol=5e-4`; the one-fold smoke path is now verified clean and fast on the canonical parquet.

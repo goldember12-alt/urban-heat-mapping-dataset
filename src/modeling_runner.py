@@ -26,6 +26,8 @@ from src.modeling_config import (
     CITY_NAME_COLUMN,
     DEFAULT_CALIBRATION_BINS,
     DEFAULT_FINAL_DATASET_PATH,
+    DEFAULT_LOGISTIC_MAX_ITER,
+    DEFAULT_LOGISTIC_TOL,
     DEFAULT_PR_SCORING,
     DEFAULT_RANDOM_STATE,
     DEFAULT_TUNING_PRESET,
@@ -58,6 +60,8 @@ from src.modeling_metrics import (
 from src.modeling_prep import get_final_dataset_columns, validate_required_final_columns
 
 LOGGER = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PIPELINE_CACHE_ROOT = PROJECT_ROOT / ".t" / "j"
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,12 @@ def _managed_cache_directory(base_dir: Path, prefix: str):
 
 def _split_feature_types(feature_columns: Sequence[str]) -> tuple[list[str], list[str]]:
     return split_model_feature_columns(feature_columns)
+
+
+def _get_pipeline_cache_base_dir() -> Path:
+    """Return a short workspace-local cache root to stay under Windows path-length limits."""
+    PIPELINE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    return PIPELINE_CACHE_ROOT
 
 
 def _coerce_numeric_frame(X: pd.DataFrame) -> pd.DataFrame:
@@ -163,7 +173,8 @@ def build_logistic_saga_pipeline(
     feature_columns: Sequence[str],
     random_state: int = DEFAULT_RANDOM_STATE,
     n_jobs: int | None = None,
-    max_iter: int = 2000,
+    max_iter: int = DEFAULT_LOGISTIC_MAX_ITER,
+    tol: float = DEFAULT_LOGISTIC_TOL,
     memory: Memory | str | Path | None = None,
 ) -> Pipeline:
     """Build the first-pass logistic SAGA pipeline with train-only preprocessing."""
@@ -204,6 +215,7 @@ def build_logistic_saga_pipeline(
                 LogisticRegression(
                     solver="saga",
                     max_iter=max_iter,
+                    tol=tol,
                     random_state=random_state,
                 ),
             ),
@@ -300,6 +312,7 @@ def run_grouped_grid_search_model(
     model_n_jobs: int | None = None,
     tuning_preset: str = DEFAULT_TUNING_PRESET,
     pipeline_cache_enabled: bool = True,
+    pipeline_builder_kwargs: dict[str, object] | None = None,
     command: str | None = None,
 ) -> GridSearchRunResult:
     """Run held-out-city evaluation with inner grouped tuning for one sklearn model."""
@@ -337,6 +350,7 @@ def run_grouped_grid_search_model(
     preloaded_modeling_rows: pd.DataFrame | None = None
     sampled_preload_seconds: float | None = None
     data_loading_strategy = "per_outer_fold_load"
+    resolved_pipeline_builder_kwargs = dict(pipeline_builder_kwargs or {})
     if sample_rows_per_city is not None:
         preload_start = perf_counter()
         preloaded_modeling_rows = drop_missing_target_rows(
@@ -414,8 +428,8 @@ def run_grouped_grid_search_model(
             )
 
         with _managed_cache_directory(
-            base_dir=resolved_output_dir,
-            prefix=f"of{outer_fold}_",
+            base_dir=_get_pipeline_cache_base_dir(),
+            prefix=f"f{outer_fold}_",
         ) as cache_dir:
             pipeline_cache = Memory(location=str(cache_dir), verbose=0) if pipeline_cache_enabled else None
             preprocess_build_start = perf_counter()
@@ -424,6 +438,7 @@ def run_grouped_grid_search_model(
                 random_state=random_state,
                 n_jobs=model_n_jobs,
                 memory=pipeline_cache,
+                **resolved_pipeline_builder_kwargs,
             )
             preprocess_build_seconds = perf_counter() - preprocess_build_start
 
@@ -620,6 +635,8 @@ def run_grouped_grid_search_model(
         "grid_search_n_jobs": grid_search_n_jobs,
         "model_n_jobs": model_n_jobs,
         "pipeline_cache_enabled": pipeline_cache_enabled,
+        "pipeline_cache_root": str(_get_pipeline_cache_base_dir()) if pipeline_cache_enabled else None,
+        "pipeline_builder_kwargs": resolved_pipeline_builder_kwargs,
         "data_loading_strategy": data_loading_strategy,
         "search_space": {
             "param_candidate_count": int(param_candidate_count),
@@ -676,6 +693,8 @@ def run_logistic_saga_model(
     calibration_bins: int = DEFAULT_CALIBRATION_BINS,
     param_grid: Sequence[dict[str, object]] | None = None,
     grid_search_n_jobs: int | None = -1,
+    max_iter: int = DEFAULT_LOGISTIC_MAX_ITER,
+    tol: float = DEFAULT_LOGISTIC_TOL,
     tuning_preset: str = DEFAULT_TUNING_PRESET,
     pipeline_cache_enabled: bool = True,
     command: str | None = None,
@@ -696,6 +715,7 @@ def run_logistic_saga_model(
         top_fraction=top_fraction,
         calibration_bins=calibration_bins,
         grid_search_n_jobs=grid_search_n_jobs,
+        pipeline_builder_kwargs={"max_iter": int(max_iter), "tol": float(tol)},
         tuning_preset=tuning_preset,
         pipeline_cache_enabled=pipeline_cache_enabled,
         command=command,
