@@ -2,23 +2,72 @@
 
 ## Project
 
-Build a reproducible Python geospatial workflow for constructing a cross-city urban heat dataset for 30 U.S. cities.
+Build and maintain a reproducible end-to-end urban heat workflow for 30 U.S. cities that covers:
 
-## Goal
+1. study design
+2. geospatial data acquisition and preprocessing
+3. per-city feature assembly
+4. final dataset generation
+5. modeling-ready handoff
+6. city-held-out machine learning evaluation
+7. later modeling figures and transfer-oriented deliverables
 
-Create a final cell-level dataset at 30 m resolution with one row per grid cell per city.
+This repo is not only a preprocessing pipeline. It is a cross-city urban heat dataset and modeling framework.
 
-## Required outputs
+## Core Objective
+
+Produce a canonical 30 m cell-level dataset and use it to predict urban heat hotspots in cities that were not seen during training.
+
+Analytic unit:
+
+- one row per 30 m grid cell per city
+
+Canonical label:
+
+- `hotspot_10pct`
+
+Grouping variable for evaluation:
+
+- `city_id`
+
+## Canonical Outputs
+
+Primary dataset artifacts:
 
 - `data_processed/final/final_dataset.parquet`
 - `data_processed/final/final_dataset.csv`
-- one per-city GeoPackage in `data_processed/city_features/`
-- figures in `figures/`
-- reproducible CLI entrypoint
-- tests in `tests/`
-- documentation in `docs/`
 
-## Final columns
+Per-city feature artifacts:
+
+- `data_processed/city_features/*.parquet`
+- `data_processed/city_features/*.gpkg`
+
+Modeling handoff artifacts:
+
+- `data_processed/modeling/final_dataset_audit_summary.json`
+- `data_processed/modeling/final_dataset_audit.md`
+- `data_processed/modeling/final_dataset_city_summary.csv`
+- `data_processed/modeling/final_dataset_feature_missingness.csv`
+- `data_processed/modeling/final_dataset_feature_missingness_by_city.csv`
+- `data_processed/modeling/city_outer_folds.parquet`
+- `data_processed/modeling/city_outer_folds.csv`
+
+Data-processing report outputs:
+
+- `outputs/data_processing/<city_stem>/`
+- `figures/data_processing/<city_stem>/`
+
+First-pass modeling outputs:
+
+- `outputs/modeling/baselines/`
+- `outputs/modeling/logistic_saga/`
+- `outputs/modeling/random_forest/`
+
+Reserved later-stage modeling figures:
+
+- `figures/modeling/`
+
+## Canonical Final Dataset Columns
 
 - `city_id`
 - `city_name`
@@ -35,69 +84,230 @@ Create a final cell-level dataset at 30 m resolution with one row per grid cell 
 - `n_valid_ecostress_passes`
 - `hotspot_10pct`
 
-## Data logic
+## Workflow Contract
 
-- Study area = Census urban area polygon containing city center, buffered by 2 km
-- Build master 30 m grid in local UTM CRS
-- Align all rasters to the master grid
-- Compute distance-to-water raster from hydrography
-- NDVI = median May-Aug composite from Landsat surface reflectance
-- LST = median valid daytime May-Aug ECOSTRESS/AppEEARS observations
-- Drop open-water cells
-- Drop cells with fewer than 3 valid ECOSTRESS passes
-- Define `hotspot_10pct` within each city
+The repo should be treated as an end-to-end lifecycle with these stages:
 
-## Engineering rules
+1. define study design and target
+2. build study areas and 30 m grids
+3. acquire AppEEARS and support-layer inputs
+4. prepare support layers and assemble per-city features
+5. merge the final dataset
+6. audit the final dataset and create held-out-city folds
+7. run first-pass held-out-city models
+8. expand to figures, map deliverables, and final-train packaging
+
+## Data Logic
+
+Study design and feature logic:
+
+- Study area = Census urban area polygon containing the city center, buffered by 2 km by default
+- Preserve both buffered study-area geometry and the original core urban geometry
+- Build the master 30 m grid in a local UTM CRS
+- Align raster and vector-derived features to the master grid
+- Compute cell-level elevation, land cover, imperviousness, distance to water, NDVI, and ECOSTRESS-derived LST
+- Support both `study_area` and `core_city` cell filtering modes where implemented
+
+Final assembly rules:
+
+- Drop open-water cells where `land_cover_class == 11` when land cover is available
+- Drop rows with `n_valid_ecostress_passes < 3` when LST is available
+- Recompute `hotspot_10pct` within each city after row filtering
+
+## Modeling Contract
+
+Treat modeling as a first-class pipeline stage.
+
+Canonical modeling inputs:
+
+- `data_processed/final/final_dataset.parquet`
+- `data_processed/modeling/city_outer_folds.parquet`
+- `data_processed/modeling/city_outer_folds.csv`
+
+Leakage-safe evaluation rules:
+
+- split by `city_id`, not by individual cells
+- held-out cities must remain fully unseen during training
+- all preprocessing, imputation, scaling, encoding, feature selection, and tuning must be fit using training-city rows only
+- tuning must happen only inside the training cities for each outer split
+
+Implemented first-pass model runners:
+
+- `src.run_modeling_baselines`
+- `src.run_logistic_saga`
+- `src.run_random_forest`
+
+Implemented baseline models:
+
+- `global_mean_baseline`
+- `land_cover_only_baseline`
+- `impervious_only_baseline`
+- `climate_only_baseline`
+
+Implemented main models:
+
+- logistic regression with `solver="saga"` in an sklearn `Pipeline`
+- random forest in an sklearn `Pipeline`
+
+Implemented evaluation outputs:
+
+- fold-level PR AUC
+- per-city PR AUC
+- recall at top 10% predicted risk
+- calibration-curve tables
+- held-out prediction tables
+- best-parameter summaries for tuned models
+
+Feature-contract guidance for the first hotspot models:
+
+Safe predictive features:
+
+- `impervious_pct`
+- `land_cover_class`
+- `elevation_m`
+- `dist_to_water_m`
+- `ndvi_median_may_aug`
+- `climate_group`
+
+Do not use these as first-pass predictive features:
+
+- `hotspot_10pct`
+- `lst_median_may_aug`
+- `n_valid_ecostress_passes`
+- `cell_id`
+- `city_id`
+- `city_name`
+- `centroid_lon`
+- `centroid_lat`
+
+## Preset And Benchmarking Rules
+
+`README.md` is the canonical definition of `smoke` versus `full`.
+
+Use that document as the source of truth for:
+
+- what `smoke` means
+- what `full` means
+- how those presets should be described in methods/results language
+- the current search-space sizes in code
+
+Do not describe `smoke` runs as final benchmark-quality results.
+Always report the preset used, plus any sample cap, fold subset, and job-count constraints.
+
+Meaningful modeling runs should append to:
+
+- `outputs/modeling/run_registry.jsonl`
+
+Do not claim a full canonical benchmark has been completed unless it is actually recorded in `docs/chat_handoff.md`.
+
+## Python Environment Rules
+
+Use the repo-local virtual environment as the standard interpreter:
+
+```powershell
+.\.venv\Scripts\python.exe -m ...
+```
+
+Environment rules:
+
+- prefer the repo-local `.venv` for normal repo work
+- treat parquet as the canonical modeling path
+- keep CSV support as a compatibility path, not the primary modeling reference
+- do not hardcode credentials
+- read secrets from environment variables only
+- AppEEARS-dependent commands must use environment-provided credentials or tokens only
+
+## Engineering Rules
 
 - Use Python only
-- Prefer `geopandas`, `rasterio`, `rioxarray`, `xarray`, `pandas`, `numpy`, `shapely`
-- Use functions, not notebook-only logic
+- Prefer production modules and CLI entrypoints over notebook-only logic
 - Keep raw data immutable
-- Save intermediate artifacts
+- Preserve deterministic output paths
+- Save intermediate artifacts where the pipeline expects them
 - Add logging
 - Add type hints where practical
-- Add tests for core geometry/alignment functions
-- Do not hardcode credentials
-- Read secrets from environment variables
+- Add or update tests for modified logic
+- Prefer memory-aware, column-selective, parquet-first implementations when working with large artifacts
+- Keep preprocessing/modeling logic separate from geospatial-heavy imports when possible
+- Do not silently change canonical output schemas or directory contracts
+- When changing modeling behavior, preserve the grouped-city leakage-safe contract
 
-## Git operations
+Preferred libraries include:
 
-- Before any push, run:
-  - `git remote -v`
-  - `git branch --show-current`
-  - `git status`
-- Default branch is `main`.
-- Keep `origin` configured as:
-  - `https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`
-- If `origin` is missing, add it:
-  - `git remote add origin https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`
-- Push with:
-  - `git push -u origin main`
-- If push fails, capture and report the exact error text.
-- In this Codex environment, a first push may fail due sandbox/network restrictions (for example: unable to connect to GitHub on port 443). Retry outside sandbox restrictions and record the result.
-- Do not guess auth/permission causes; verify by rerunning and reporting the exact message.
-- Do not force-push `main` unless explicitly requested.
+- `geopandas`
+- `rasterio`
+- `rioxarray`
+- `xarray`
+- `pandas`
+- `numpy`
+- `shapely`
+- `scikit-learn`
+- `pyarrow`
 
-## Documentation rules
+## Main Entrypoints To Respect
 
-- Update `README` when architecture changes
-- Maintain `docs/workflow.md` with pipeline steps
-- Maintain `docs/data_dictionary.md` with column definitions
-- Add docstrings to public functions
+Geospatial and orchestration:
 
-## State and handoff maintenance
+- `src.run_city_processing`
+- `src.run_city_batch_processing`
+- `src.run_appeears_acquisition`
+- `src.run_raw_data_acquisition`
+- `src.run_support_layers`
+- `src.run_city_features`
+- `src.run_city_features_batch`
+- `src.run_acquisition_orchestration`
+- `src.run_full_stack_orchestration`
+- `src.run_full_pipeline`
 
-- Treat `docs/chat_handoff.md` as the canonical rolling project-state document for handoff to future chats/sessions.
-- Prefer updating existing docs over creating redundant new status files.
-- Do not create additional tracking documents if `docs/chat_handoff.md` can be updated instead.
-- After any meaningful change to code, pipeline behavior, tests, outputs, docs, or git workflow status, and before ending the task, update `docs/chat_handoff.md`.
-- If a prompt asks for code changes, tests, or docs changes, assume `docs/chat_handoff.md` must also be updated unless the prompt explicitly says not to.
-- Keep `docs/chat_handoff.md` concise, factual, and current.
-- Do not invent verification status; only mark something verified if it was actually checked.
+Reporting and final assembly:
 
-## Required handoff contents
+- `src.run_data_processing_reports`
+- `src.summarize_phoenix_dataset`
+- `src.run_final_dataset_assembly`
 
-When relevant, refresh these sections in `docs/chat_handoff.md`:
+Modeling-prep and modeling:
+
+- `src.audit_final_dataset`
+- `src.make_model_folds`
+- `src.run_modeling_baselines`
+- `src.run_logistic_saga`
+- `src.run_random_forest`
+
+## Documentation Rules
+
+Keep these documents aligned:
+
+- `README.md` = landing page and canonical high-level repo definition
+- `docs/workflow.md` = lifecycle-oriented workflow and stage sequencing
+- `docs/data_dictionary.md` = canonical artifacts, columns, and output contracts
+- `docs/modeling_plan.md` = grouped-city modeling methodology and feature-contract guidance
+- `docs/chat_handoff.md` = rolling state, verification history, and next-step handoff
+
+Documentation expectations:
+
+- update `README.md` when repo architecture or canonical usage changes
+- update `docs/workflow.md` when lifecycle stages, entrypoints, or stage outputs change
+- update `docs/data_dictionary.md` when schemas, artifact names, or output contracts change
+- update `docs/modeling_plan.md` when modeling methodology, feature contract, or evaluation scope changes
+- add docstrings to public functions and CLI entrypoints where practical
+
+## State And Handoff Maintenance
+
+Treat `docs/chat_handoff.md` as the canonical rolling handoff file.
+
+Rules:
+
+- prefer updating existing docs over creating redundant status files
+- do not create extra tracking docs if `docs/chat_handoff.md` can carry the state
+- after any meaningful code, test, documentation, output, or workflow change, update `docs/chat_handoff.md` before ending the task unless explicitly told not to
+- keep handoff notes concise, factual, and honest
+- distinguish clearly between:
+  - implemented
+  - test-verified
+  - manually verified
+- do not invent manual verification or benchmark status
+
+When relevant, refresh these handoff sections:
 
 - What Is Completed
 - Testing Status
@@ -106,7 +316,7 @@ When relevant, refresh these sections in `docs/chat_handoff.md`:
 - Current Output Structure
 - Not Started Yet / Open Issues
 
-When adding a new module, CLI entrypoint, output artifact, or pipeline stage, record:
+For any new module, CLI, artifact, or workflow stage, record:
 
 - what was added
 - where it lives
@@ -114,50 +324,68 @@ When adding a new module, CLI entrypoint, output artifact, or pipeline stage, re
 - what was verified manually
 - what was verified only by tests
 
-When tests are run, record the latest high-level result in `docs/chat_handoff.md`.
+## Task Completion Rule
 
-## Verification logging
+A task is not complete until the relevant combination of:
 
-- For each completed stage, note the next recommended manual verification step in `docs/chat_handoff.md`.
-- Distinguish clearly between:
-  - implemented
-  - test-verified
-  - manually verified
+- code
+- tests
+- docs
+- `docs/chat_handoff.md`
 
-## Handoff update template
+has been updated consistently.
 
-Each update to `docs/chat_handoff.md` should include, when relevant:
+## Git Operations
 
-- Date / checkpoint
-- Change made
-- Files touched
-- How to run
-- Test status
-- Manual verification status
-- Next recommended step
-- Keep handoff entries short but effective
+Before any push, run:
 
-## Task completion rule
+- `git remote -v`
+- `git branch --show-current`
+- `git status`
 
-- A task is not complete until relevant code, tests, docs, and `docs/chat_handoff.md` updates are finished.
+Git rules:
 
-## Remote sensing acquisition rules
+- default branch is `main`
+- keep `origin` configured as:
+  - `https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`
+- if `origin` is missing, add it:
+  - `git remote add origin https://github.com/goldember12-alt/urban-heat-mapping-dataset.git`
+- push with:
+  - `git push -u origin main`
+- if push fails, capture and report the exact error text
+- do not guess auth or permission causes; verify by rerunning and reporting the actual message
+- do not force-push `main` unless explicitly requested
 
-- AppEEARS acquisition is an official pipeline stage for NDVI and ECOSTRESS inputs.
-- For each city, export an AppEEARS-ready AOI polygon from the buffered study area:
-  - output format: GeoJSON
-  - CRS: EPSG:4326
-  - one AOI file per city
-- Save AOI exports under `data_processed/appeears_aoi/`.
-- Automate AppEEARS submission, polling, and download with Python CLI entrypoints.
-- Read Earthdata/AppEEARS credentials or tokens from environment variables only.
-- Save downloaded raw files under:
-  - `data_raw/ndvi/<city_slug>/`
-  - `data_raw/ecostress/<city_slug>/`
-- Keep raw downloads immutable.
-- Acquisition must be resumable:
-  - support submit-only
-  - poll-only
-  - download-only
-  - retry for incomplete cities without restarting all cities
-- Log per-city request status and record high-level acquisition status in `docs/chat_handoff.md`.
+## AppEEARS And Remote-Sensing Rules
+
+AppEEARS is a required pipeline stage for NDVI and ECOSTRESS acquisition.
+
+Rules:
+
+- export one AOI GeoJSON per city from the buffered study area
+- AOI CRS must be EPSG:4326
+- store AOIs under `data_processed/appeears_aoi/`
+- keep acquisition resumable
+- support submit-only, poll-only, download-only, and retry-incomplete workflows where the CLI already exposes them
+- store raw NDVI downloads under `data_raw/ndvi/<city_slug>/`
+- store raw ECOSTRESS downloads under `data_raw/ecostress/<city_slug>/`
+- keep raw downloads immutable
+- record per-city acquisition or blocking status in the appropriate status summaries
+
+Support-layer acquisition rules:
+
+- preserve reusable downloads under `data_raw/cache/`
+- materialize deterministic city-specific raw files for DEM, NLCD, and hydro inputs
+- do not bypass the documented raw/prepared support-layer contract without updating docs and handoff notes
+
+## Output-Structure Rules
+
+Respect the split output structure:
+
+- `data_processed/` = canonical machine-readable processed artifacts by stage
+- `outputs/data_processing/` = report-style preprocessing/data summaries
+- `figures/data_processing/` = preprocessing/data-report figures
+- `outputs/modeling/` = modeling metrics, predictions, calibration, metadata, registry
+- `figures/modeling/` = modeling/evaluation maps and figures as that stage expands
+
+Do not collapse these stage-specific roots back into a single mixed output directory without a deliberate repo-wide documentation update.

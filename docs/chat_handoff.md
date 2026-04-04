@@ -1681,6 +1681,37 @@ If more risk control is desired, split those same commands into fold batches suc
 
 
 
+### 2026-04-04 - Checkpoint: Logistic Smoke Grid Restored To Explicit Family Comparison
+
+- Date / checkpoint:
+  - 2026-04-04 targeted audit of the grouped logistic SAGA tuning contract after the sklearn 1.8 `l1_ratio` migration.
+- Change made:
+  - Audited the checked-in logistic runner and confirmed the grouped city-held-out workflow itself was still correct: outer holdout remained by `city_id`, inner tuning still used `GroupKFold` on training-city rows only, and the first-pass six-feature contract was unchanged.
+  - Confirmed that on sklearn `1.8`, leaving `LogisticRegression.penalty` at its default deprecated sentinel means `l1_ratio` still determines the effective penalty family (`0 -> l2`, `1 -> l1`, `0 < ratio < 1 -> elasticnet`), so the checked-in code was not silently fixed to a single penalty family.
+  - Patched `src.modeling_config` so the `smoke` logistic preset once again spans all three intended families (`l2`, `l1`, `elasticnet`) while keeping the bounded `4`-candidate size; the `full` preset remains a `20`-candidate grouped search spanning the same three families with a broader `C` / elastic-net range.
+  - Added inline code comments plus focused test coverage so future readers can see that the logistic family search is intentionally encoded through `l1_ratio` under sklearn `1.8`, without reintroducing the deprecated explicit `penalty` parameter path.
+- Files touched:
+  - `src/modeling_config.py`
+  - `src/modeling_runner.py`
+  - `tests/test_modeling_runner.py`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\logistic_saga\smoke_penalty_verify`
+- Test status:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q` passed with `14 passed`.
+  - `.\.venv\Scripts\python.exe -m py_compile src\modeling_config.py src\modeling_runner.py src\run_logistic_saga.py tests\test_modeling_runner.py` passed.
+- Manual verification status:
+  - Completed one real parquet smoke fold with `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\pen_smk_f0`.
+  - Confirmed `outputs/modeling/ls/pen_smk_f0/run_metadata.json` records the intended three-branch smoke grid:
+    - `l1_ratio=0.0` for the `l2` branch
+    - `l1_ratio=1.0` for the `l1` branch
+    - `l1_ratio=0.5` for the elastic-net branch
+  - Confirmed `outputs/modeling/ls/pen_smk_f0/best_params_by_fold.csv` wrote a clean winning configuration from that family-complete grid (`{"model__C": 1.0, "model__l1_ratio": 0.0}` in this run).
+  - The smoke rerun completed successfully in about `132.20s` wall clock, wrote the standard metrics/predictions/calibration outputs, and appended a clean success record to `outputs/modeling/run_registry.jsonl`.
+- Immediate Next Step:
+  - If a broader benchmark is needed, rerun `src.run_logistic_saga` on the `full` preset and compare the resulting `best_params_by_fold.csv` / `run_metadata.json` against this corrected smoke baseline.
+
 ### 2026-03-26 - Checkpoint: Modeling Warning Cleanup For Logistic Tuning And Pipeline Cache Paths
 
 - Date / checkpoint:

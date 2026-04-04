@@ -26,6 +26,19 @@ from src.run_logistic_saga import _build_arg_parser as build_logistic_arg_parser
 from src.run_random_forest import _build_arg_parser as build_random_forest_arg_parser
 
 
+def _logistic_penalty_families_from_grid(param_grid: list[dict[str, object]]) -> set[str]:
+    families: set[str] = set()
+    for candidate in ParameterGrid(param_grid):
+        l1_ratio = float(candidate["model__l1_ratio"])
+        if l1_ratio == 0.0:
+            families.add("l2")
+        elif l1_ratio == 1.0:
+            families.add("l1")
+        else:
+            families.add("elasticnet")
+    return families
+
+
 def _build_modeling_fixture() -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     city_specs = [
@@ -306,6 +319,8 @@ def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     assert forest_smoke.inner_cv_splits < forest_full.inner_cv_splits
     assert all("model__penalty" not in candidate for candidate in logistic_smoke.param_grid)
     assert all("model__penalty" not in candidate for candidate in logistic_full.param_grid)
+    assert _logistic_penalty_families_from_grid(logistic_smoke.param_grid) == {"l2", "l1", "elasticnet"}
+    assert _logistic_penalty_families_from_grid(logistic_full.param_grid) == {"l2", "l1", "elasticnet"}
 
 
 def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(workspace_tmp_path: Path):
@@ -384,15 +399,16 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
 
 def test_logistic_l1_ratio_tuning_avoids_penalty_future_warning():
     X, y = _build_mixed_type_feature_fixture()
-    pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS, max_iter=200)
+    for l1_ratio in (0.0, 1.0, 0.5):
+        pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS, max_iter=200)
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        pipeline.set_params(model__C=1.0, model__l1_ratio=0.0)
-        pipeline.fit(X, y)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pipeline.set_params(model__C=1.0, model__l1_ratio=l1_ratio)
+            pipeline.fit(X, y)
 
-    messages = [str(item.message) for item in caught]
-    assert not any("'penalty' was deprecated" in message for message in messages)
+        messages = [str(item.message) for item in caught]
+        assert not any("'penalty' was deprecated" in message for message in messages)
 
 
 def test_tuned_runner_clis_default_to_explicit_smoke_preset():

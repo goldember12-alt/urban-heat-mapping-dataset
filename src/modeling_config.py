@@ -73,24 +73,36 @@ TUNING_PRESET_FULL = "full"
 DEFAULT_TUNING_PRESET = TUNING_PRESET_SMOKE
 VALID_TUNING_PRESETS = (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
 
+# sklearn 1.8 deprecates explicit LogisticRegression penalty values. When penalty
+# is left at its default sentinel, l1_ratio selects the effective family:
+#   0.0 -> l2
+#   1.0 -> l1
+#   0 < l1_ratio < 1 -> elasticnet
+LOGISTIC_L2_RATIO = 0.0
+LOGISTIC_L1_RATIO = 1.0
+
 LOGISTIC_SMOKE_PARAM_GRID = [
     {
         "model__C": [0.1, 1.0],
-        "model__l1_ratio": [0.0],
+        "model__l1_ratio": [LOGISTIC_L2_RATIO],
     },
     {
-        "model__C": [0.1, 1.0],
+        "model__C": [1.0],
+        "model__l1_ratio": [LOGISTIC_L1_RATIO],
+    },
+    {
+        "model__C": [1.0],
         "model__l1_ratio": [0.5],
     },
 ]
 LOGISTIC_FULL_PARAM_GRID = [
     {
         "model__C": [0.01, 0.1, 1.0, 10.0],
-        "model__l1_ratio": [0.0],
+        "model__l1_ratio": [LOGISTIC_L2_RATIO],
     },
     {
         "model__C": [0.01, 0.1, 1.0, 10.0],
-        "model__l1_ratio": [1.0],
+        "model__l1_ratio": [LOGISTIC_L1_RATIO],
     },
     {
         "model__C": [0.01, 0.1, 1.0, 10.0],

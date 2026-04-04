@@ -212,6 +212,9 @@ def build_logistic_saga_pipeline(
             ("preprocess", preprocessor),
             (
                 "model",
+                # Keep penalty at sklearn's default sentinel so GridSearchCV can
+                # vary l1_ratio across l2/l1/elastic-net families without the
+                # deprecated explicit-penalty parameter path.
                 LogisticRegression(
                     solver="saga",
                     max_iter=max_iter,
