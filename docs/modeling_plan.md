@@ -153,3 +153,4 @@ Recommended implementation order:
 Run logging note:
 
 - meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`
+- that registry now also supports `outputs/modeling/tuning_history.csv` as a cross-run chronology for later figure generation and model-selection rationale, with `outputs/modeling/tuning_history_annotations.csv` reserved for manual status and decision notes

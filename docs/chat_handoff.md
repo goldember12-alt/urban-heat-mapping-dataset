@@ -1681,6 +1681,44 @@ If more risk control is desired, split those same commands into fold batches suc
 
 
 
+### 2026-04-04 - Checkpoint: Cross-Run Modeling Tuning History Layer
+
+- Date / checkpoint:
+  - 2026-04-04 lightweight tuning-history/documentation pass for later paper-writing and model-selection rationale.
+- Change made:
+  - Added `src.modeling_tuning_history` plus the thin CLI entrypoint `src.run_modeling_tuning_history` to rebuild a machine-readable cross-run tuning chronology from `outputs/modeling/run_registry.jsonl` plus per-run `run_metadata.json`.
+  - Wired `src.modeling_run_registry.record_model_run(...)` to refresh the new tuning-history artifacts automatically whenever a modeling CLI run is logged, so the chronology stays current without a separate tracking platform.
+  - Added `outputs/modeling/tuning_history.csv` as the main machine-readable history table and `outputs/modeling/tuning_history_annotations.csv` as a durable manual-annotation sidecar for labels such as `validation`, `exploratory`, `benchmark`, or `superseded`, along with decision notes and comparability notes.
+  - The generated history table now carries search-contract descriptors/signatures, comparison signatures, runtime, key held-out summary metrics, and frontier fields such as prior-best pooled PR AUC within the same comparison group, making later plots and stopping-rationale tables much easier to produce.
+  - Seeded the current logged runs with explicit manual annotations so the historical logistic drift and validation-versus-exploratory status are already visible in the checked-in history outputs.
+- Files touched:
+  - `src/modeling_tuning_history.py`
+  - `src/run_modeling_tuning_history.py`
+  - `src/modeling_run_registry.py`
+  - `tests/test_modeling_runner.py`
+  - `README.md`
+  - `docs/data_dictionary.md`
+  - `docs/workflow.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+  - `outputs/modeling/tuning_history.csv`
+  - `outputs/modeling/tuning_history_annotations.csv`
+- How to run:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - `.\.venv\Scripts\python.exe -m src.run_modeling_tuning_history --registry-path outputs/modeling/run_registry.jsonl`
+- Test status:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q` passed with `15 passed`.
+  - `.\.venv\Scripts\python.exe -m py_compile src\modeling_run_registry.py src\modeling_tuning_history.py src\run_modeling_tuning_history.py tests\test_modeling_runner.py` passed.
+- Manual verification status:
+  - Rebuilt the new history outputs from the real checked-in registry with `.\.venv\Scripts\python.exe -m src.run_modeling_tuning_history --registry-path outputs/modeling/run_registry.jsonl`.
+  - Confirmed `outputs/modeling/tuning_history.csv` now lists the recorded modeling runs in chronology with search-contract descriptors such as:
+    - `explicit_penalty_grid`
+    - `l1_ratio_missing_l1`
+    - `l1_ratio_family_complete`
+  - Confirmed the generated history distinguishes comparison groups, surfaces frontier deltas, and merges the seeded manual labels/decision notes from `outputs/modeling/tuning_history_annotations.csv`.
+- Immediate Next Step:
+  - When the next benchmark-grade run is completed, mark it explicitly in `tuning_history_annotations.csv`, then use `tuning_history.csv` as the source for performance-versus-runtime and smoke-versus-full tuning figures.
+
 ### 2026-04-04 - Checkpoint: Logistic Smoke Grid Restored To Explicit Family Comparison
 
 - Date / checkpoint:

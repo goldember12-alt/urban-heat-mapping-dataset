@@ -188,6 +188,7 @@ Implemented now:
 - Train grouped logistic regression with `solver="saga"` using training-city-only preprocessing and tuning
 - Train grouped random forest with the same held-out-city discipline
 - Save held-out prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`
+- Refresh a lightweight cross-run tuning-history table plus manual-annotation template under `outputs/modeling/`
 
 Current implemented baseline models:
 
@@ -217,6 +218,9 @@ Key outputs:
 - `outputs/modeling/random_forest/metrics_summary.csv`
 - `outputs/modeling/random_forest/best_params_by_fold.csv`
 - `outputs/modeling/random_forest/heldout_predictions.parquet`
+- `outputs/modeling/run_registry.jsonl`
+- `outputs/modeling/tuning_history.csv`
+- `outputs/modeling/tuning_history_annotations.csv`
 
 Main entrypoints:
 

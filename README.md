@@ -216,6 +216,13 @@ The current preset sizes in code are:
 
 Meaningful modeling CLI runs now append a structured record to `outputs/modeling/run_registry.jsonl`.
 
+The modeling registry now also refreshes a lightweight cross-run tuning-history layer under `outputs/modeling/`:
+
+- `tuning_history.csv` = machine-readable chronology built from the registry plus per-run metadata
+- `tuning_history_annotations.csv` = durable manual annotation sidecar for status labels, comparability notes, and decision rationale
+
+This layer is intended for later figures and writeups such as tuning chronology, smoke-versus-full comparisons, contract-drift notes, and stopping-rationale tables without re-parsing every individual run directory by hand.
+
 Each registry record captures:
 
 - model type and preset
@@ -228,6 +235,12 @@ Each registry record captures:
 - wall-clock time when available
 - success or failure status
 - notes such as CSV fallback caveats
+
+You can rebuild the tuning-history artifacts from the registry at any time with:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_modeling_tuning_history
+```
 
 Current sandbox-verified modeling commands:
 

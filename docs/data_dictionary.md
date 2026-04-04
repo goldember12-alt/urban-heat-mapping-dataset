@@ -246,6 +246,12 @@ Shared artifact pattern:
 - `run_metadata.json`
 - `feature_contract.json`
 
+Cross-run history artifacts:
+
+- `outputs/modeling/run_registry.jsonl`
+- `outputs/modeling/tuning_history.csv`
+- `outputs/modeling/tuning_history_annotations.csv`
+
 Model-specific extras:
 
 - `outputs/modeling/logistic_saga/best_params_by_fold.csv`
@@ -302,6 +308,22 @@ Held-out prediction table columns:
 - `outer_fold`
 - `best_inner_cv_average_precision`
 - `best_params_json`
+
+`tuning_history.csv` contains:
+
+- one row per logged modeling run in chronological order
+- factual run metadata reused from `run_registry.jsonl` and per-run `run_metadata.json`
+- search-contract descriptors and signatures for contract-drift tracking
+- comparison signatures for identifying directly comparable runs
+- key held-out summary metrics and runtime
+- frontier fields such as prior-best pooled PR AUC within the same comparison group
+- merged manual annotation fields for status labels, decision notes, and comparability notes
+
+`tuning_history_annotations.csv` contains:
+
+- one row per logged modeling run
+- lightweight manual fields only
+- a durable place to label runs as validation, exploratory, benchmark, superseded, or similar without editing generated metadata
 
 Honest status note:
 

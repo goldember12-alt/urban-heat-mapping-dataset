@@ -144,6 +144,9 @@ def record_model_run(
         record["error_type"] = type(error).__name__
         record["error_message"] = str(error)
     append_run_registry_record(registry_path, record)
+    from src.modeling_tuning_history import refresh_tuning_history_artifacts
+
+    refresh_tuning_history_artifacts(registry_path)
     return registry_path
 
 

@@ -15,6 +15,11 @@ from src.modeling_config import (
 )
 from src.modeling_data import load_modeling_rows as load_modeling_rows_from_disk
 from src.modeling_run_registry import build_cli_command, infer_run_registry_path, record_model_run
+from src.modeling_tuning_history import (
+    infer_tuning_history_annotations_path,
+    infer_tuning_history_path,
+    refresh_tuning_history_artifacts,
+)
 from src.modeling_runner import (
     build_logistic_saga_pipeline,
     build_random_forest_pipeline,
@@ -290,6 +295,69 @@ def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
     assert all(record["status"] == "success" for record in records)
     assert all(record["dataset_format"] == "parquet" for record in records)
     assert all("pooled_pr_auc" in record["metrics"] for record in records)
+
+    history_path = infer_tuning_history_path(registry_path)
+    annotations_path = infer_tuning_history_annotations_path(registry_path)
+    assert history_path.exists()
+    assert annotations_path.exists()
+
+    history_df = pd.read_csv(history_path)
+    assert list(history_df["run_id"]) == [record["run_id"] for record in records]
+    assert {"search_contract_signature", "comparison_signature", "history_status_label", "decision_note"}.issubset(
+        history_df.columns
+    )
+    assert set(history_df["history_status_label"]) == {"unreviewed"}
+
+
+def test_tuning_history_refresh_preserves_manual_annotations(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+    record_model_run(
+        model_type="logistic_saga",
+        preset="smoke",
+        command="python -m src.run_logistic_saga",
+        output_dir=output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=None,
+        grid_search_n_jobs=1,
+        summary_metrics_path=result.summary_metrics_path,
+        metadata_path=result.metadata_path,
+        status="success",
+    )
+
+    registry_path = infer_run_registry_path(output_dir)
+    history_path = infer_tuning_history_path(registry_path)
+    annotations_path = infer_tuning_history_annotations_path(registry_path)
+
+    history_df = pd.read_csv(history_path, dtype="string").fillna("")
+    annotations_df = pd.read_csv(annotations_path, dtype="string").fillna("")
+    run_id = history_df.loc[0, "run_id"]
+
+    annotations_df.loc[annotations_df["run_id"] == run_id, "manual_history_status_label"] = "benchmark"
+    annotations_df.loc[annotations_df["run_id"] == run_id, "manual_decision_note"] = "retained for writeup"
+    annotations_df.loc[annotations_df["run_id"] == run_id, "manual_comparability_note"] = "same folds and sample cap"
+    annotations_df.to_csv(annotations_path, index=False)
+
+    refresh_tuning_history_artifacts(registry_path)
+    refreshed_history_df = pd.read_csv(history_path, dtype="string").fillna("")
+
+    assert refreshed_history_df.loc[0, "history_status_label"] == "benchmark"
+    assert refreshed_history_df.loc[0, "decision_note"] == "retained for writeup"
+    assert refreshed_history_df.loc[0, "comparability_note"] == "same folds and sample cap"
 
 
 def test_build_cli_command_prefers_module_style_argv():
