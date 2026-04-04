@@ -189,6 +189,7 @@ Implemented now:
 - Train grouped random forest with the same held-out-city discipline
 - Save held-out prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`
 - Refresh a lightweight cross-run tuning-history table plus manual-annotation template under `outputs/modeling/`
+- Auto-generate unique tuned-model output directories when `--output-dir` is omitted so important runs are easier to preserve and compare without accidental overwrites
 
 Current implemented baseline models:
 

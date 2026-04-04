@@ -1,5 +1,6 @@
 import json
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -14,6 +15,12 @@ from src.modeling_config import (
     get_model_tuning_spec,
 )
 from src.modeling_data import load_modeling_rows as load_modeling_rows_from_disk
+from src.modeling_output_naming import (
+    build_generated_model_run_dirname,
+    format_model_run_fold_scope,
+    format_model_run_sample_scope,
+    resolve_model_output_dir,
+)
 from src.modeling_run_registry import build_cli_command, infer_run_registry_path, record_model_run
 from src.modeling_tuning_history import (
     infer_tuning_history_annotations_path,
@@ -375,6 +382,79 @@ def test_build_cli_command_prefers_module_style_argv():
     assert "--outer-folds 0" in command
 
 
+def test_model_output_naming_formats_fold_scope_for_single_multi_and_allfold_runs():
+    assert format_model_run_fold_scope([0]) == "f0"
+    assert format_model_run_fold_scope([0, 1, 2]) == "f0-2"
+    assert format_model_run_fold_scope([0, 2, 3, 5]) == "f0_f2-3_f5"
+    assert format_model_run_fold_scope(None) == "allfolds"
+
+
+def test_model_output_naming_formats_sample_scope_for_sampled_and_full_row_runs():
+    assert format_model_run_sample_scope(5000) == "s5000"
+    assert format_model_run_sample_scope(None) == "fullrows"
+
+
+def test_generated_model_run_dirname_is_readable_and_supports_optional_run_label():
+    dirname = build_generated_model_run_dirname(
+        tuning_preset="full",
+        selected_outer_folds=[0, 1, 2],
+        sample_rows_per_city=5000,
+        run_label="Post Audit",
+        now=datetime(2026, 4, 4, 14, 52, 33),
+    )
+
+    assert dirname == "full_f0-2_s5000_post-audit_2026-04-04_145233"
+
+
+def test_resolve_model_output_dir_generates_under_model_root_and_avoids_collisions(workspace_tmp_path: Path):
+    base_output_root = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    base_output_root.mkdir(parents=True, exist_ok=True)
+
+    first_path, first_generated = resolve_model_output_dir(
+        model_name="logistic_saga",
+        output_dir=None,
+        tuning_preset="smoke",
+        selected_outer_folds=[0],
+        sample_rows_per_city=5000,
+        now=datetime(2026, 4, 4, 15, 1, 20),
+        base_output_root=base_output_root,
+    )
+    first_path.mkdir(parents=True, exist_ok=False)
+    second_path, second_generated = resolve_model_output_dir(
+        model_name="logistic_saga",
+        output_dir=None,
+        tuning_preset="smoke",
+        selected_outer_folds=[0],
+        sample_rows_per_city=5000,
+        now=datetime(2026, 4, 4, 15, 1, 20),
+        base_output_root=base_output_root,
+    )
+
+    assert first_generated is True
+    assert second_generated is True
+    assert first_path.parent == base_output_root
+    assert second_path.parent == base_output_root
+    assert first_path.name == "smoke_f0_s5000_2026-04-04_150120"
+    assert second_path.name == "smoke_f0_s5000_2026-04-04_150120_01"
+
+
+def test_resolve_model_output_dir_preserves_explicit_output_dir_override(workspace_tmp_path: Path):
+    explicit_output_dir = workspace_tmp_path / "my" / "explicit" / "path"
+
+    resolved_output_dir, was_generated = resolve_model_output_dir(
+        model_name="random_forest",
+        output_dir=explicit_output_dir,
+        tuning_preset="full",
+        selected_outer_folds=[0, 1],
+        sample_rows_per_city=None,
+        run_label="ignored",
+        now=datetime(2026, 4, 4, 15, 10, 0),
+    )
+
+    assert was_generated is False
+    assert resolved_output_dir == explicit_output_dir
+
+
 def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     logistic_smoke = get_model_tuning_spec("logistic_saga", "smoke")
     logistic_full = get_model_tuning_spec("logistic_saga", "full")
@@ -484,9 +564,11 @@ def test_tuned_runner_clis_default_to_explicit_smoke_preset():
     forest_args = build_random_forest_arg_parser().parse_args([])
 
     assert logistic_args.tuning_preset == "smoke"
+    assert logistic_args.output_dir is None
     assert logistic_args.max_iter == DEFAULT_LOGISTIC_MAX_ITER
     assert logistic_args.tol == DEFAULT_LOGISTIC_TOL
     assert forest_args.tuning_preset == "smoke"
+    assert forest_args.output_dir is None
     assert logistic_args.inner_cv_splits is None
     assert forest_args.inner_cv_splits is None
 

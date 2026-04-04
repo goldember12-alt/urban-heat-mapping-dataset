@@ -1,0 +1,2 @@
+model_name,outer_fold,train_city_count,test_city_count,train_row_count,test_row_count,test_positive_count,test_prevalence,pr_auc,recall_at_top_10pct,inner_cv_splits,best_inner_cv_average_precision,param_candidate_count,estimated_inner_fit_count,data_load_seconds,preprocess_build_seconds,preprocess_probe_fit_transform_seconds,grid_search_seconds,fold_wall_clock_seconds
+logistic_saga,0,24,6,120000,30000,2925,0.0975,0.1729009739861538,0.2170940170940171,3,0.148157285082605,4,12,0.01822349999565631,0.0001572000328451395,0.24061670002993196,50.21879549999721,50.493148900044616

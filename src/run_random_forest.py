@@ -8,9 +8,9 @@ from src.modeling_config import (
     DEFAULT_FEATURE_COLUMNS,
     DEFAULT_FINAL_DATASET_PATH,
     DEFAULT_TUNING_PRESET,
-    RANDOM_FOREST_OUTPUT_DIR,
     VALID_TUNING_PRESETS,
 )
+from src.modeling_output_naming import resolve_model_output_dir
 from src.modeling_run_registry import build_cli_command, record_model_run
 from src.modeling_runner import run_random_forest_model
 
@@ -42,9 +42,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional explicit folds path. When omitted, the runner prefers city_outer_folds.parquet and falls back to CSV only if parquet is absent.",
     )
-    parser.add_argument("--output-dir", type=Path, default=RANDOM_FOREST_OUTPUT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional explicit output directory. When omitted, the CLI generates a unique run directory under outputs/modeling/random_forest/.",
+    )
     parser.add_argument("--feature-columns", default=",".join(DEFAULT_FEATURE_COLUMNS))
     parser.add_argument("--outer-folds", default=None, help="Optional comma-delimited subset of outer folds")
+    parser.add_argument(
+        "--run-label",
+        default=None,
+        help="Optional short label appended to an auto-generated output directory name. Ignored if --output-dir is provided.",
+    )
     parser.add_argument(
         "--sample-rows-per-city",
         type=int,
@@ -79,6 +89,18 @@ def main() -> None:
     args = _build_arg_parser().parse_args()
     command = build_cli_command()
     selected_outer_folds = _parse_fold_list(args.outer_folds)
+    resolved_output_dir, output_dir_was_generated = resolve_model_output_dir(
+        model_name="random_forest",
+        output_dir=args.output_dir,
+        tuning_preset=args.tuning_preset,
+        selected_outer_folds=selected_outer_folds,
+        sample_rows_per_city=args.sample_rows_per_city,
+        run_label=args.run_label,
+    )
+    if output_dir_was_generated:
+        logging.getLogger(__name__).info("Auto-generated output directory: %s", resolved_output_dir)
+    elif args.run_label:
+        logging.getLogger(__name__).info("--run-label was ignored because --output-dir was supplied explicitly.")
     notes = (
         [
             "CSV compatibility fallback input used; do not assume equivalence to canonical parquet without an explicit artifact audit."
@@ -90,7 +112,7 @@ def main() -> None:
         result = run_random_forest_model(
             dataset_path=args.dataset_path,
             folds_path=args.folds_path,
-            output_dir=args.output_dir,
+            output_dir=resolved_output_dir,
             feature_columns=_parse_csv_list(args.feature_columns),
             selected_outer_folds=selected_outer_folds,
             sample_rows_per_city=args.sample_rows_per_city,
@@ -106,7 +128,7 @@ def main() -> None:
             model_type="random_forest",
             preset=args.tuning_preset,
             command=command,
-            output_dir=args.output_dir,
+            output_dir=resolved_output_dir,
             dataset_path=args.dataset_path,
             folds_path=args.folds_path,
             sample_rows_per_city=args.sample_rows_per_city,
@@ -123,7 +145,7 @@ def main() -> None:
         model_type="random_forest",
         preset=args.tuning_preset,
         command=command,
-        output_dir=args.output_dir,
+        output_dir=resolved_output_dir,
         dataset_path=args.dataset_path,
         folds_path=args.folds_path,
         sample_rows_per_city=args.sample_rows_per_city,

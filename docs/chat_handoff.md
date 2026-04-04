@@ -1681,6 +1681,43 @@ If more risk control is desired, split those same commands into fold batches suc
 
 
 
+### 2026-04-04 - Checkpoint: Auto-Generated Modeling Output Directories
+
+- Date / checkpoint:
+  - 2026-04-04 CLI usability/reproducibility pass for tuned-model output naming.
+- Change made:
+  - Added a shared helper in `src.modeling_output_naming` so `src.run_logistic_saga` and `src.run_random_forest` now auto-generate unique, readable output directories when `--output-dir` is omitted.
+  - Generated names now encode the tuning preset, fold scope, sample scope, optional `--run-label`, and a timestamp; examples follow the pattern `smoke_f0_s5000_autopath_2026-04-04_151656`.
+  - Explicit `--output-dir` values are still preserved exactly, and `--run-label` is ignored when an explicit output path is supplied.
+  - The chosen output directory is now logged clearly at run start for auto-named runs and continues to flow unchanged into `run_metadata.json`, `outputs/modeling/run_registry.jsonl`, and `outputs/modeling/tuning_history.csv`.
+- Files touched:
+  - `src/modeling_output_naming.py`
+  - `src/run_logistic_saga.py`
+  - `src/run_random_forest.py`
+  - `tests/test_modeling_runner.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --run-label autopath`
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1`
+- Test status:
+  - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q` passed with `20 passed`.
+  - `.\.venv\Scripts\python.exe -m py_compile src\modeling_output_naming.py src\run_logistic_saga.py src\run_random_forest.py tests\test_modeling_runner.py` passed.
+- Manual verification status:
+  - Completed one real logistic smoke run without `--output-dir`:
+    - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.csv --sample-rows-per-city 5000 --outer-folds 0 --tuning-preset smoke --grid-search-n-jobs 1 --run-label autopath`
+  - Confirmed the CLI logged and used:
+    - `outputs/modeling/logistic_saga/smoke_f0_s5000_autopath_2026-04-04_151656/`
+  - Confirmed the same generated path is preserved in:
+    - `outputs/modeling/logistic_saga/smoke_f0_s5000_autopath_2026-04-04_151656/run_metadata.json`
+    - `outputs/modeling/run_registry.jsonl`
+    - `outputs/modeling/tuning_history.csv`
+  - The auto-named smoke rerun completed successfully in about `64.46s` wall clock.
+- Immediate Next Step:
+  - Use the new default auto-naming for future smoke/full tuned runs, and reserve explicit `--output-dir` only for deliberate custom path choices or legacy path compatibility.
+
 ### 2026-04-04 - Checkpoint: Cross-Run Modeling Tuning History Layer
 
 - Date / checkpoint:

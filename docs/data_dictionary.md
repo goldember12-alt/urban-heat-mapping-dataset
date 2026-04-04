@@ -252,6 +252,13 @@ Cross-run history artifacts:
 - `outputs/modeling/tuning_history.csv`
 - `outputs/modeling/tuning_history_annotations.csv`
 
+Tuned-model CLI output-path behavior:
+
+- `src.run_logistic_saga` and `src.run_random_forest` accept an optional `--output-dir`
+- when `--output-dir` is omitted, those CLIs now create a unique, readable run directory under the model-family root
+- generated names encode the preset, fold scope, sample scope, and timestamp so later filesystem review is easier
+- `--run-label` can append a short manual tag to the generated name without replacing the shared naming contract
+
 Model-specific extras:
 
 - `outputs/modeling/logistic_saga/best_params_by_fold.csv`
