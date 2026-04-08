@@ -173,6 +173,65 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 
 CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The regenerated `data_processed/final/final_dataset.csv` was re-audited on 2026-03-26 and now matches the canonical parquet on row count, column names, per-city row counts, hotspot counts, and key null-count checks.
 
+## Manual Parquet Inspection Pattern
+
+If you need a scratch script for quick inspection or a small local experiment, keep it aligned with the repo's modeling contract:
+
+- use `pd.read_parquet(...)` or `src.modeling_data.load_modeling_rows(...)`, not `pd.read_csv(...)`, for `final_dataset.parquet`
+- do not use `skiprows` or `nrows` to carve out cities from parquet; filter by `city_id` instead
+- use the first-pass feature contract:
+  - `impervious_pct`
+  - `land_cover_class`
+  - `elevation_m`
+  - `dist_to_water_m`
+  - `ndvi_median_may_aug`
+  - `climate_group`
+- use `hotspot_10pct` as the target
+- do not use `lst_median_may_aug` or `n_valid_ecostress_passes` as predictors in the first-pass hotspot models because they leak target information
+- do not treat a random cell-level `train_test_split(...)` as the project benchmark; the canonical evaluation is city-held-out using `city_outer_folds.*`
+
+Example for loading one city's rows with the approved feature set:
+
+```python
+from src.modeling_config import DEFAULT_FEATURE_COLUMNS, TARGET_COLUMN
+from src.modeling_data import drop_missing_target_rows, load_modeling_rows
+
+phoenix = drop_missing_target_rows(
+    load_modeling_rows(
+        city_ids=[1],
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+    )
+)
+
+X = phoenix[DEFAULT_FEATURE_COLUMNS].copy()
+y = phoenix[TARGET_COLUMN].copy()
+```
+
+Example for a leakage-safe fold from the canonical grouped split contract:
+
+```python
+from src.modeling_config import DEFAULT_FEATURE_COLUMNS, TARGET_COLUMN
+from src.modeling_data import load_outer_fold_data
+
+fold_data = load_outer_fold_data(
+    outer_fold=0,
+    feature_columns=DEFAULT_FEATURE_COLUMNS,
+    sample_rows_per_city=5000,
+)
+
+X_train = fold_data.train_df[DEFAULT_FEATURE_COLUMNS].copy()
+y_train = fold_data.train_df[TARGET_COLUMN].copy()
+X_test = fold_data.test_df[DEFAULT_FEATURE_COLUMNS].copy()
+y_test = fold_data.test_df[TARGET_COLUMN].copy()
+```
+
+For actual repo-consistent runs, prefer the existing CLI entrypoints instead of ad hoc scripts:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --sample-rows-per-city 5000
+.\.venv\Scripts\python.exe -m src.run_random_forest --sample-rows-per-city 5000
+```
+
 Current artifact-provenance note:
 
 - `src.feature_assembly.assemble_final_dataset()` writes parquet and CSV from the same in-memory final table, so they are intended to be equivalent serializations when generated successfully

@@ -136,6 +136,20 @@ Future modeling scripts should treat:
 - `final_dataset.parquet` as the canonical row-level input
 - `city_outer_folds.*` as the grouped outer-split contract
 
+Scratch-script guidance:
+
+- Read `final_dataset.parquet` with `pd.read_parquet(...)` or the repo helper `src.modeling_data.load_modeling_rows(...)`, not `pd.read_csv(...)`
+- Do not use row counts, `skiprows`, or `nrows` to isolate Phoenix, Tucson, or any other city from parquet; filter by `city_id`
+- Select predictors from the explicit first-pass feature contract only:
+  - `impervious_pct`
+  - `land_cover_class`
+  - `elevation_m`
+  - `dist_to_water_m`
+  - `ndvi_median_may_aug`
+  - `climate_group`
+- Use `hotspot_10pct` as the target
+- Treat within-city random train/test splits as exploratory debugging only, not as the canonical project evaluation
+
 Current training scripts already:
 
 - join folds by `city_id`

@@ -41,6 +41,7 @@ Implemented in code:
 - The regenerated `data_processed/final/final_dataset.csv` has now been re-audited against the canonical parquet and matches on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
+- README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
@@ -85,6 +86,8 @@ Standardization status:
 
 As of 2026-03-26:
 
+- 2026-04-07 scratch-script guidance doc update:
+  - No tests were run because this checkpoint only updated modeling documentation and handoff notes.
 - Preflight provenance/registry regression checks after the CSV refresh and command-capture update:
   - `.\.venv\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
   - Result: `12 passed`
@@ -351,6 +354,10 @@ Not manually verified in the latest checkpoint:
 
 Manually verified:
 
+- 2026-04-07 scratch-script guidance checkpoint:
+  - Reviewed a partner logistic-regression draft against the live repo modeling contract and confirmed the key corrections needed were methodological rather than new pipeline code.
+  - Confirmed from live code inspection that the correct scratch-script path is `pd.read_parquet(...)` or `src.modeling_data.load_modeling_rows(...)`, filtered by `city_id`, with predictors restricted to `DEFAULT_FEATURE_COLUMNS` and `hotspot_10pct` as the target.
+  - Added matching guidance to `README.md` and `docs/modeling_plan.md`, including a minimal code example for one-city inspection and a leakage-safe `load_outer_fold_data(...)` example tied to `city_outer_folds.*`.
 - 2026-03-26 final-artifact provenance diagnosis:
   - Confirmed from live code inspection that `src.feature_assembly.assemble_final_dataset()` writes `final_dataset.parquet` and `final_dataset.csv` from the same in-memory dataframe, so the intended design is equivalence rather than separate pipeline branches.
   - Compared the live artifacts directly and confirmed all 14 columns match, per-city rows match exactly for cities `1-24`, Los Angeles (`city_id=25`) is only partially present in the CSV, and cities `26-30` are missing entirely from the CSV.
