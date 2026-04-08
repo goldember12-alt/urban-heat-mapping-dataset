@@ -1,0 +1,30 @@
+{
+  "run_id": "e8464ccf7efb49c983161d57f088729b",
+  "output_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_f0_s5000_sampled-full-f0_2026-04-07_232219",
+  "model_family": "logistic_saga",
+  "tuning_preset": "full",
+  "phase": "complete",
+  "outer_fold_index": null,
+  "selected_outer_folds": [
+    0
+  ],
+  "candidate_count": 20,
+  "inner_cv_split_count_requested": 4,
+  "current_inner_cv_split_count": null,
+  "estimated_total_inner_fits": 80,
+  "completed_inner_fits": 80,
+  "completed_candidates": 20,
+  "elapsed_wall_time_seconds": 433.38753867149353,
+  "average_seconds_per_completed_fit": 5.417344233393669,
+  "eta_seconds": 0.0,
+  "current_params": null,
+  "completed_outer_folds": [
+    0
+  ],
+  "remaining_outer_folds": [],
+  "current_outer_fold_completed_inner_fits": 0,
+  "current_outer_fold_estimated_inner_fits": null,
+  "last_updated_utc": "2026-04-08T03:29:32.482733+00:00",
+  "note": "run_complete",
+  "sample_rows_per_city": 5000
+}

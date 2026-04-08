@@ -1,0 +1,6 @@
+timestamp_utc,phase,outer_fold_index,completed_inner_fits,completed_candidates,estimated_total_inner_fits,current_inner_cv_split_count,elapsed_wall_time_seconds,average_seconds_per_completed_fit,eta_seconds,current_params_json,note
+2026-04-08T03:58:25.037413+00:00,startup,,0,0,400,,0.0009853839874267578,,,,startup
+2026-04-08T03:58:25.062775+00:00,data_load,,0,0,400,,0.02633523941040039,,,,sampled_city_preload_started
+2026-04-08T03:58:45.183875+00:00,data_load,0,0,0,400,4,20.147441148757935,,,,outer_fold_started
+2026-04-08T03:58:45.456864+00:00,preprocess,0,0,0,400,4,20.42043161392212,,,,preprocess_complete
+2026-04-08T03:58:45.480077+00:00,tuning,0,0,0,400,4,20.443643808364868,,,,grid_search_started

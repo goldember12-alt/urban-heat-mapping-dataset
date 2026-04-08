@@ -1,0 +1,65 @@
+{
+  "run_id": "47efd1f0437640de93e7c67389c2b19d",
+  "output_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s5000_sampled-full-allfolds_2026-04-07_235825",
+  "model_family": "logistic_saga",
+  "tuning_preset": "full",
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "dataset_path": "data_processed\\final\\final_dataset.parquet",
+  "folds_path": "data_processed\\modeling\\city_outer_folds.csv",
+  "feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "sample_rows_per_city": 5000,
+  "random_state": 42,
+  "candidate_count": 20,
+  "inner_cv_splits_requested": 4,
+  "estimated_total_inner_fits": 400,
+  "run_started_at_utc": "2026-04-08T03:58:25.036426+00:00",
+  "last_updated_utc": "2026-04-08T03:58:45.480095+00:00",
+  "completed_outer_folds": [],
+  "remaining_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "folds": {
+    "0": {
+      "status": "running",
+      "started_at_utc": "2026-04-08T03:58:45.183816+00:00",
+      "last_updated_utc": "2026-04-08T03:58:45.183827+00:00",
+      "effective_inner_cv_splits": 4,
+      "estimated_inner_fit_count": 80,
+      "completed_inner_fits": 0,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6
+    },
+    "1": {
+      "status": "pending"
+    },
+    "2": {
+      "status": "pending"
+    },
+    "3": {
+      "status": "pending"
+    },
+    "4": {
+      "status": "pending"
+    }
+  },
+  "last_error": null
+}
