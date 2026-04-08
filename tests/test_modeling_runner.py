@@ -21,6 +21,12 @@ from src.modeling_output_naming import (
     format_model_run_sample_scope,
     resolve_model_output_dir,
 )
+from src.modeling_progress import (
+    FOLD_STATUS_FILENAME,
+    PROGRESS_FILENAME,
+    PROGRESS_LOG_FILENAME,
+    SAMPLED_DIAGNOSTICS_FILENAME,
+)
 from src.modeling_run_registry import build_cli_command, infer_run_registry_path, record_model_run
 from src.modeling_tuning_history import (
     infer_tuning_history_annotations_path,
@@ -98,6 +104,38 @@ def _build_fold_fixture() -> pd.DataFrame:
             "outer_fold": [0, 0, 1, 1],
         }
     )
+
+
+def _build_imbalanced_modeling_fixture() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    city_specs = [
+        (1, "Phoenix", "hot_arid", 0, 1),
+        (2, "Tucson", "hot_arid", 0, 8),
+        (3, "Miami", "humid_subtropical", 1, 2),
+        (4, "Atlanta", "humid_subtropical", 1, 7),
+    ]
+    for city_id, city_name, climate_group, _, positive_count in city_specs:
+        for idx in range(10):
+            hotspot = idx < positive_count
+            rows.append(
+                {
+                    "city_id": city_id,
+                    "city_name": city_name,
+                    "climate_group": climate_group,
+                    "cell_id": (city_id * 1000) + idx,
+                    "centroid_lon": -100.0 - city_id - (idx * 0.01),
+                    "centroid_lat": 30.0 + city_id + (idx * 0.01),
+                    "impervious_pct": float(10 + (idx * 7) + city_id),
+                    "land_cover_class": 21 if idx < 5 else 24,
+                    "elevation_m": float(100 + (city_id * 10) + idx),
+                    "dist_to_water_m": float(800 - (idx * 35)),
+                    "ndvi_median_may_aug": float(0.15 + (idx * 0.03)),
+                    "lst_median_may_aug": float(32 + city_id + idx),
+                    "n_valid_ecostress_passes": 5,
+                    "hotspot_10pct": hotspot,
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def _build_mixed_type_feature_fixture() -> tuple[pd.DataFrame, pd.Series]:
@@ -516,14 +554,28 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
 
     load_calls: list[list[int]] = []
 
-    def counting_load_modeling_rows(*args, **kwargs):
+    def counting_load_sampled_rows(*args, **kwargs):
         load_calls.append(list(kwargs["city_ids"]))
-        return load_modeling_rows_from_disk(*args, **kwargs)
+        sampled_df = load_modeling_rows_from_disk(*args, **kwargs)
+        diagnostics = pd.DataFrame(
+            {
+                "city_id": sorted(kwargs["city_ids"]),
+                "city_name": ["city"] * len(kwargs["city_ids"]),
+                "sampling_strategy": ["target_rate_stratified"] * len(kwargs["city_ids"]),
+                "full_row_count": [10] * len(kwargs["city_ids"]),
+                "full_positive_count": [5] * len(kwargs["city_ids"]),
+                "sampled_row_count": [5] * len(kwargs["city_ids"]),
+                "sampled_positive_count": [2] * len(kwargs["city_ids"]),
+                "full_positive_rate": [0.5] * len(kwargs["city_ids"]),
+                "sampled_positive_rate": [0.4] * len(kwargs["city_ids"]),
+            }
+        )
+        return sampled_df, diagnostics
 
     def fail_load_outer_fold_data(*args, **kwargs):
         raise AssertionError("sampled runs should reuse a preloaded city sample instead of loading each fold separately")
 
-    monkeypatch.setattr("src.modeling_runner.load_modeling_rows", counting_load_modeling_rows)
+    monkeypatch.setattr("src.modeling_runner.load_sampled_modeling_rows_with_diagnostics", counting_load_sampled_rows)
     monkeypatch.setattr("src.modeling_runner.load_outer_fold_data", fail_load_outer_fold_data)
 
     result = run_logistic_saga_model(
@@ -543,6 +595,127 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
     assert sorted(load_calls[0]) == [1, 2, 3, 4]
     assert metadata["data_loading_strategy"] == "sampled_city_preload"
     assert metadata["timing_seconds"]["sampled_city_preload"] is not None
+
+
+def test_tuned_runner_writes_progress_and_fold_status_artifacts(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+
+    progress = json.loads((output_dir / PROGRESS_FILENAME).read_text(encoding="utf-8"))
+    fold_status = json.loads((output_dir / FOLD_STATUS_FILENAME).read_text(encoding="utf-8"))
+    progress_log = pd.read_csv(output_dir / PROGRESS_LOG_FILENAME)
+
+    assert progress["phase"] == "complete"
+    assert progress["selected_outer_folds"] == [0]
+    assert progress["completed_inner_fits"] == progress["estimated_total_inner_fits"] == 2
+    assert progress["completed_candidates"] == 1
+    assert set(progress_log["phase"]) >= {"startup", "data_load", "preprocess", "tuning", "prediction", "metrics", "complete"}
+    assert progress_log["completed_inner_fits"].max() == 2
+    assert fold_status["completed_outer_folds"] == [0]
+    assert fold_status["remaining_outer_folds"] == []
+    assert fold_status["folds"]["0"]["status"] == "completed"
+    assert Path(fold_status["folds"]["0"]["artifact_paths"]["predictions"]).exists()
+
+
+def test_tuned_runner_rerun_skips_completed_folds(monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+
+    load_calls: list[int] = []
+
+    def counting_load_outer_fold_data(*args, **kwargs):
+        load_calls.append(int(kwargs["outer_fold"]))
+        from src.modeling_data import load_outer_fold_data as load_outer_fold_data_from_disk
+
+        return load_outer_fold_data_from_disk(*args, **kwargs)
+
+    monkeypatch.setattr("src.modeling_runner.load_outer_fold_data", counting_load_outer_fold_data)
+
+    result = run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0, 1],
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    fold_metrics = pd.read_csv(result.fold_metrics_path)
+
+    assert load_calls == [1]
+    assert metadata["resume"]["resumed_from_existing_output_dir"] is True
+    assert metadata["resume"]["skipped_completed_outer_folds"] == [0]
+    assert list(fold_metrics["outer_fold"]) == [0, 1]
+
+
+def test_sampled_tuned_runs_write_signal_preservation_diagnostics(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    _build_imbalanced_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_logistic_saga_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        sample_rows_per_city=4,
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+
+    diagnostics_path = output_dir / SAMPLED_DIAGNOSTICS_FILENAME
+    diagnostics = pd.read_csv(diagnostics_path).sort_values("city_id").reset_index(drop=True)
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+
+    assert diagnostics_path.exists()
+    assert list(diagnostics.columns) == [
+        "city_id",
+        "city_name",
+        "sampling_strategy",
+        "full_row_count",
+        "full_positive_count",
+        "sampled_row_count",
+        "sampled_positive_count",
+        "full_positive_rate",
+        "sampled_positive_rate",
+    ]
+    assert diagnostics.loc[diagnostics["city_id"] == 1, "full_positive_count"].iloc[0] == 1
+    assert diagnostics.loc[diagnostics["city_id"] == 1, "sampled_positive_count"].iloc[0] == 1
+    assert diagnostics.loc[diagnostics["city_id"] == 2, "full_positive_count"].iloc[0] == 8
+    assert diagnostics.loc[diagnostics["city_id"] == 2, "sampled_positive_count"].iloc[0] == 3
+    assert set(diagnostics["sampling_strategy"]) >= {"target_rate_stratified"}
+    assert metadata["output_files"]["sampled_diagnostics"] == str(diagnostics_path)
 
 
 def test_logistic_l1_ratio_tuning_avoids_penalty_future_warning():

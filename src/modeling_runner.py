@@ -18,6 +18,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import get_scorer
 from sklearn.model_selection import GridSearchCV, GroupKFold, ParameterGrid
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, OrdinalEncoder, StandardScaler
@@ -43,10 +44,9 @@ from src.modeling_config import (
 )
 from src.modeling_data import (
     OuterFoldData,
-    drop_missing_target_rows,
     get_requested_outer_folds,
     load_city_outer_folds,
-    load_modeling_rows,
+    load_sampled_modeling_rows_with_diagnostics,
     load_outer_fold_data,
     validate_model_feature_columns,
     write_feature_contract,
@@ -57,7 +57,14 @@ from src.modeling_metrics import (
     compute_prediction_metrics,
     summarize_predictions_by_group,
 )
+from src.modeling_progress import (
+    FOLD_ARTIFACTS_DIRNAME,
+    ProgressScorer,
+    ModelRunProgressTracker,
+    atomic_write_json,
+)
 from src.modeling_prep import get_final_dataset_columns, validate_required_final_columns
+from src.modeling_run_registry import create_run_id
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -296,6 +303,58 @@ def _build_prediction_frame(
     return predictions
 
 
+def _fold_artifact_dir(output_dir: Path, outer_fold: int) -> Path:
+    return output_dir / FOLD_ARTIFACTS_DIRNAME / f"outer_fold_{int(outer_fold):02d}"
+
+
+def _write_fold_artifacts(
+    *,
+    output_dir: Path,
+    outer_fold: int,
+    prediction_df: pd.DataFrame,
+    fold_metrics_row: dict[str, object],
+    best_params_row: dict[str, object],
+    calibration_df: pd.DataFrame,
+    fold_runtime_row: dict[str, object],
+) -> dict[str, Path]:
+    artifact_dir = _fold_artifact_dir(output_dir=output_dir, outer_fold=outer_fold)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    predictions_path = artifact_dir / "heldout_predictions.parquet"
+    fold_metrics_path = artifact_dir / "fold_metrics.json"
+    best_params_path = artifact_dir / "best_params.json"
+    calibration_curve_path = artifact_dir / "calibration_curve.csv"
+    runtime_path = artifact_dir / "runtime.json"
+
+    prediction_df.to_parquet(predictions_path, index=False)
+    atomic_write_json(fold_metrics_path, fold_metrics_row)
+    atomic_write_json(best_params_path, best_params_row)
+    calibration_df.to_csv(calibration_curve_path, index=False)
+    atomic_write_json(runtime_path, fold_runtime_row)
+
+    return {
+        "predictions": predictions_path,
+        "fold_metrics": fold_metrics_path,
+        "best_params": best_params_path,
+        "calibration_curve": calibration_curve_path,
+        "runtime": runtime_path,
+    }
+
+
+def _load_completed_fold_artifacts(
+    *,
+    output_dir: Path,
+    outer_fold: int,
+) -> tuple[pd.DataFrame, dict[str, object], dict[str, object], pd.DataFrame, dict[str, object]]:
+    artifact_dir = _fold_artifact_dir(output_dir=output_dir, outer_fold=outer_fold)
+    predictions_df = pd.read_parquet(artifact_dir / "heldout_predictions.parquet")
+    fold_metrics_row = json.loads((artifact_dir / "fold_metrics.json").read_text(encoding="utf-8"))
+    best_params_row = json.loads((artifact_dir / "best_params.json").read_text(encoding="utf-8"))
+    calibration_df = pd.read_csv(artifact_dir / "calibration_curve.csv")
+    fold_runtime_row = json.loads((artifact_dir / "runtime.json").read_text(encoding="utf-8"))
+    return predictions_df, fold_metrics_row, best_params_row, calibration_df, fold_runtime_row
+
+
 def run_grouped_grid_search_model(
     model_name: str,
     pipeline_builder: Callable[..., Pipeline],
@@ -342,6 +401,7 @@ def run_grouped_grid_search_model(
     requested_folds = get_requested_outer_folds(fold_table=fold_table, selected_outer_folds=selected_outer_folds)
     fold_table_load_seconds = perf_counter() - fold_load_start
     param_candidate_count = _count_parameter_combinations(resolved_param_grid)
+    param_names = sorted({param_name for candidate in resolved_param_grid for param_name in candidate})
 
     resolved_output_dir = output_dir or (
         LOGISTIC_OUTPUT_DIR if model_name == "logistic_saga" else RANDOM_FOREST_OUTPUT_DIR
@@ -354,19 +414,6 @@ def run_grouped_grid_search_model(
     sampled_preload_seconds: float | None = None
     data_loading_strategy = "per_outer_fold_load"
     resolved_pipeline_builder_kwargs = dict(pipeline_builder_kwargs or {})
-    if sample_rows_per_city is not None:
-        preload_start = perf_counter()
-        preloaded_modeling_rows = drop_missing_target_rows(
-            load_modeling_rows(
-                dataset_path=dataset_path,
-                feature_columns=selected_features,
-                city_ids=all_city_ids,
-                sample_rows_per_city=sample_rows_per_city,
-                random_state=random_state,
-            )
-        )
-        sampled_preload_seconds = perf_counter() - preload_start
-        data_loading_strategy = "sampled_city_preload"
 
     effective_split_counts = [
         min(
@@ -376,6 +423,24 @@ def run_grouped_grid_search_model(
         for outer_fold in requested_folds
     ]
     estimated_total_inner_fits = int(sum(param_candidate_count * split_count for split_count in effective_split_counts))
+    run_id = create_run_id()
+    progress_tracker = ModelRunProgressTracker(
+        output_dir=resolved_output_dir,
+        run_id=run_id,
+        model_family=model_name,
+        tuning_preset=tuning_preset_name,
+        selected_outer_folds=requested_folds,
+        candidate_count=param_candidate_count,
+        inner_cv_splits_requested=resolved_inner_cv_splits,
+        estimated_total_inner_fits=estimated_total_inner_fits,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        feature_columns=selected_features,
+        sample_rows_per_city=sample_rows_per_city,
+        random_state=random_state,
+    )
+    completed_resume_folds = progress_tracker.initialize()
+    skipped_completed_folds = sorted(fold for fold in requested_folds if fold in completed_resume_folds)
     LOGGER.info(
         "Tuning setup model=%s preset=%s outer_folds=%s param_candidates=%s estimated_inner_fits=%s",
         model_name,
@@ -392,126 +457,225 @@ def run_grouped_grid_search_model(
         0.0 if sampled_preload_seconds is None else sampled_preload_seconds,
         sample_rows_per_city,
     )
-
     all_predictions: list[pd.DataFrame] = []
     fold_metrics_rows: list[dict[str, object]] = []
     best_params_rows: list[dict[str, object]] = []
     calibration_frames: list[pd.DataFrame] = []
     fold_runtime_rows: list[dict[str, object]] = []
 
-    for outer_fold in requested_folds:
-        fold_start = perf_counter()
-        data_load_start = perf_counter()
-        if preloaded_modeling_rows is not None:
-            fold_data = _build_outer_fold_data_from_preloaded_rows(
-                outer_fold=outer_fold,
-                fold_table=fold_table,
-                modeling_rows=preloaded_modeling_rows,
-            )
-        else:
-            fold_data = load_outer_fold_data(
-                outer_fold=outer_fold,
+    if skipped_completed_folds:
+        LOGGER.info(
+            "Skipping already completed outer folds=%s from existing artifacts under %s",
+            skipped_completed_folds,
+            resolved_output_dir,
+        )
+        for outer_fold in skipped_completed_folds:
+            (
+                completed_predictions,
+                completed_fold_metrics,
+                completed_best_params,
+                completed_calibration,
+                completed_runtime,
+            ) = _load_completed_fold_artifacts(output_dir=resolved_output_dir, outer_fold=outer_fold)
+            all_predictions.append(completed_predictions)
+            fold_metrics_rows.append(completed_fold_metrics)
+            best_params_rows.append(completed_best_params)
+            calibration_frames.append(completed_calibration)
+            fold_runtime_rows.append(completed_runtime)
+
+    current_phase = "startup"
+    current_outer_fold: int | None = None
+    try:
+        if sample_rows_per_city is not None:
+            current_phase = "data_load"
+            progress_tracker.mark_phase(phase="data_load", note="sampled_city_preload_started")
+            preload_start = perf_counter()
+            preloaded_modeling_rows, sampling_diagnostics_df = load_sampled_modeling_rows_with_diagnostics(
                 dataset_path=dataset_path,
-                folds_path=folds_path,
                 feature_columns=selected_features,
+                city_ids=all_city_ids,
                 sample_rows_per_city=sample_rows_per_city,
                 random_state=random_state,
             )
-        data_load_seconds = perf_counter() - data_load_start
-        train_df = fold_data.train_df
-        test_df = fold_data.test_df
-        if train_df.empty or test_df.empty:
-            raise ValueError(f"outer_fold={outer_fold} produced an empty train or test split")
-
-        train_group_count = int(train_df[GROUP_COLUMN].nunique())
-        effective_inner_splits = min(int(resolved_inner_cv_splits), train_group_count)
-        if effective_inner_splits < 2:
-            raise ValueError(
-                f"outer_fold={outer_fold} has only {train_group_count} training cities, so GroupKFold needs at least 2"
-            )
-
-        with _managed_cache_directory(
-            base_dir=_get_pipeline_cache_base_dir(),
-            prefix=f"f{outer_fold}_",
-        ) as cache_dir:
-            pipeline_cache = Memory(location=str(cache_dir), verbose=0) if pipeline_cache_enabled else None
-            preprocess_build_start = perf_counter()
-            pipeline = pipeline_builder(
-                feature_columns=selected_features,
-                random_state=random_state,
-                n_jobs=model_n_jobs,
-                memory=pipeline_cache,
-                **resolved_pipeline_builder_kwargs,
-            )
-            preprocess_build_seconds = perf_counter() - preprocess_build_start
-
-            preprocess_probe_start = perf_counter()
-            probe_preprocessor = clone(pipeline.named_steps["preprocess"])
-            probe_matrix = probe_preprocessor.fit_transform(
-                train_df[selected_features],
-                train_df[TARGET_COLUMN].to_numpy(dtype="int8"),
-            )
-            preprocess_probe_seconds = perf_counter() - preprocess_probe_start
-            feature_matrix_summary = _summarize_feature_matrix(probe_matrix)
-            del probe_matrix
-
+            sampled_preload_seconds = perf_counter() - preload_start
+            data_loading_strategy = "sampled_city_preload"
+            progress_tracker.write_sample_diagnostics(sampling_diagnostics_df)
             LOGGER.info(
-                "outer_fold=%s rows train=%s test=%s data_load=%.2fs inner_cv=%s candidates=%s",
+                "Sampled tuning rows loaded in %.2fs with diagnostics at %s",
+                sampled_preload_seconds,
+                progress_tracker.sampled_diagnostics_path,
+            )
+
+        for outer_fold in requested_folds:
+            if outer_fold in skipped_completed_folds:
+                continue
+
+            current_outer_fold = int(outer_fold)
+            fold_start = perf_counter()
+            current_phase = "data_load"
+            data_load_start = perf_counter()
+            if preloaded_modeling_rows is not None:
+                fold_data = _build_outer_fold_data_from_preloaded_rows(
+                    outer_fold=outer_fold,
+                    fold_table=fold_table,
+                    modeling_rows=preloaded_modeling_rows,
+                )
+            else:
+                fold_data = load_outer_fold_data(
+                    outer_fold=outer_fold,
+                    dataset_path=dataset_path,
+                    folds_path=folds_path,
+                    feature_columns=selected_features,
+                    sample_rows_per_city=sample_rows_per_city,
+                    random_state=random_state,
+                )
+            data_load_seconds = perf_counter() - data_load_start
+            train_df = fold_data.train_df
+            test_df = fold_data.test_df
+            if train_df.empty or test_df.empty:
+                raise ValueError(f"outer_fold={outer_fold} produced an empty train or test split")
+
+            train_group_count = int(train_df[GROUP_COLUMN].nunique())
+            effective_inner_splits = min(int(resolved_inner_cv_splits), train_group_count)
+            if effective_inner_splits < 2:
+                raise ValueError(
+                    f"outer_fold={outer_fold} has only {train_group_count} training cities, so GroupKFold needs at least 2"
+                )
+            estimated_inner_fit_count = int(param_candidate_count * effective_inner_splits)
+            progress_tracker.mark_fold_started(
+                outer_fold=outer_fold,
+                effective_inner_cv_splits=effective_inner_splits,
+                estimated_inner_fit_count=estimated_inner_fit_count,
+                train_row_count=len(train_df),
+                test_row_count=len(test_df),
+                train_city_count=len(fold_data.train_city_ids),
+                test_city_count=len(fold_data.test_city_ids),
+            )
+            LOGGER.info(
+                "outer_fold=%s start train_rows=%s test_rows=%s inner_cv=%s candidates=%s progress=%s",
                 outer_fold,
                 len(train_df),
                 len(test_df),
-                data_load_seconds,
                 effective_inner_splits,
                 param_candidate_count,
-            )
-            LOGGER.info(
-                "outer_fold=%s preprocess build=%.2fs probe_fit_transform=%.2fs matrix=%sx%s density=%s",
-                outer_fold,
-                preprocess_build_seconds,
-                preprocess_probe_seconds,
-                feature_matrix_summary["row_count"],
-                feature_matrix_summary["feature_count"],
-                (
-                    "n/a"
-                    if feature_matrix_summary["density"] is None
-                    else f"{float(feature_matrix_summary['density']):.4f}"
-                ),
+                progress_tracker.progress_path,
             )
 
-            grid_search = GridSearchCV(
-                estimator=pipeline,
-                param_grid=resolved_param_grid,
-                cv=GroupKFold(n_splits=effective_inner_splits),
-                scoring=scoring,
-                n_jobs=grid_search_n_jobs,
-                refit=True,
-                error_score="raise",
-            )
-            grid_search_start = perf_counter()
-            grid_search.fit(
-                train_df[selected_features],
-                train_df[TARGET_COLUMN].to_numpy(dtype="int8"),
-                groups=train_df[GROUP_COLUMN].to_numpy(),
-            )
-            grid_search_seconds = perf_counter() - grid_search_start
-        fold_wall_clock_seconds = perf_counter() - fold_start
+            with _managed_cache_directory(
+                base_dir=_get_pipeline_cache_base_dir(),
+                prefix=f"f{outer_fold}_",
+            ) as cache_dir:
+                pipeline_cache = Memory(location=str(cache_dir), verbose=0) if pipeline_cache_enabled else None
+                preprocess_build_start = perf_counter()
+                pipeline = pipeline_builder(
+                    feature_columns=selected_features,
+                    random_state=random_state,
+                    n_jobs=model_n_jobs,
+                    memory=pipeline_cache,
+                    **resolved_pipeline_builder_kwargs,
+                )
+                preprocess_build_seconds = perf_counter() - preprocess_build_start
 
-        probabilities = grid_search.best_estimator_.predict_proba(test_df[selected_features])[:, 1]
-        prediction_df = _build_prediction_frame(
-            test_df=test_df,
-            model_name=model_name,
-            outer_fold=outer_fold,
-            probabilities=probabilities,
-        )
-        all_predictions.append(prediction_df)
+                current_phase = "preprocess"
+                preprocess_probe_start = perf_counter()
+                probe_preprocessor = clone(pipeline.named_steps["preprocess"])
+                probe_matrix = probe_preprocessor.fit_transform(
+                    train_df[selected_features],
+                    train_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                )
+                preprocess_probe_seconds = perf_counter() - preprocess_probe_start
+                feature_matrix_summary = _summarize_feature_matrix(probe_matrix)
+                del probe_matrix
+                progress_tracker.mark_phase(
+                    phase="preprocess",
+                    outer_fold=outer_fold,
+                    effective_inner_cv_splits=effective_inner_splits,
+                    note="preprocess_complete",
+                )
 
-        metrics = compute_prediction_metrics(
-            y_true=prediction_df[TARGET_COLUMN].to_numpy(dtype="int8"),
-            y_score=prediction_df["predicted_probability"].to_numpy(dtype="float64"),
-            top_fraction=top_fraction,
-        )
-        fold_metrics_rows.append(
-            {
+                LOGGER.info(
+                    "outer_fold=%s preprocess complete build=%.2fs probe_fit_transform=%.2fs matrix=%sx%s density=%s",
+                    outer_fold,
+                    preprocess_build_seconds,
+                    preprocess_probe_seconds,
+                    feature_matrix_summary["row_count"],
+                    feature_matrix_summary["feature_count"],
+                    (
+                        "n/a"
+                        if feature_matrix_summary["density"] is None
+                        else f"{float(feature_matrix_summary['density']):.4f}"
+                    ),
+                )
+
+                current_phase = "tuning"
+                progress_tracker.mark_phase(
+                    phase="tuning",
+                    outer_fold=outer_fold,
+                    effective_inner_cv_splits=effective_inner_splits,
+                    note="grid_search_started",
+                )
+                LOGGER.info(
+                    "outer_fold=%s tuning started estimated_inner_fits=%s grid_search_n_jobs=%s",
+                    outer_fold,
+                    estimated_inner_fit_count,
+                    grid_search_n_jobs,
+                )
+                grid_search = GridSearchCV(
+                    estimator=pipeline,
+                    param_grid=resolved_param_grid,
+                    cv=GroupKFold(n_splits=effective_inner_splits),
+                    scoring=ProgressScorer(
+                        base_scorer=get_scorer(scoring),
+                        tracker=progress_tracker,
+                        outer_fold=outer_fold,
+                        effective_inner_cv_splits=effective_inner_splits,
+                        param_names=param_names,
+                    ),
+                    n_jobs=grid_search_n_jobs,
+                    refit=True,
+                    error_score="raise",
+                )
+                grid_search_start = perf_counter()
+                grid_search.fit(
+                    train_df[selected_features],
+                    train_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                    groups=train_df[GROUP_COLUMN].to_numpy(),
+                )
+                grid_search_seconds = perf_counter() - grid_search_start
+            fold_wall_clock_seconds = perf_counter() - fold_start
+
+            current_phase = "refit"
+            progress_tracker.mark_phase(
+                phase="refit",
+                outer_fold=outer_fold,
+                effective_inner_cv_splits=effective_inner_splits,
+                current_params=grid_search.best_params_,
+                note="grid_search_fit_complete",
+            )
+
+            current_phase = "prediction"
+            progress_tracker.mark_phase(
+                phase="prediction",
+                outer_fold=outer_fold,
+                effective_inner_cv_splits=effective_inner_splits,
+                current_params=grid_search.best_params_,
+                note="heldout_prediction_started",
+            )
+            probabilities = grid_search.best_estimator_.predict_proba(test_df[selected_features])[:, 1]
+            prediction_df = _build_prediction_frame(
+                test_df=test_df,
+                model_name=model_name,
+                outer_fold=outer_fold,
+                probabilities=probabilities,
+            )
+            all_predictions.append(prediction_df)
+
+            metrics = compute_prediction_metrics(
+                y_true=prediction_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                y_score=prediction_df["predicted_probability"].to_numpy(dtype="float64"),
+                top_fraction=top_fraction,
+            )
+            fold_metrics_row = {
                 "model_name": model_name,
                 "outer_fold": int(outer_fold),
                 "train_city_count": int(len(fold_data.train_city_ids)),
@@ -525,25 +689,23 @@ def run_grouped_grid_search_model(
                 "inner_cv_splits": int(effective_inner_splits),
                 "best_inner_cv_average_precision": float(grid_search.best_score_),
                 "param_candidate_count": int(param_candidate_count),
-                "estimated_inner_fit_count": int(param_candidate_count * effective_inner_splits),
+                "estimated_inner_fit_count": int(estimated_inner_fit_count),
                 "data_load_seconds": float(data_load_seconds),
                 "preprocess_build_seconds": float(preprocess_build_seconds),
                 "preprocess_probe_fit_transform_seconds": float(preprocess_probe_seconds),
                 "grid_search_seconds": float(grid_search_seconds),
                 "fold_wall_clock_seconds": float(fold_wall_clock_seconds),
             }
-        )
-        best_params_rows.append(
-            {
+            fold_metrics_rows.append(fold_metrics_row)
+            best_params_row = {
                 "model_name": model_name,
                 "outer_fold": int(outer_fold),
                 "inner_cv_splits": int(effective_inner_splits),
                 "best_inner_cv_average_precision": float(grid_search.best_score_),
                 "best_params_json": json.dumps(grid_search.best_params_, sort_keys=True),
             }
-        )
-        fold_runtime_rows.append(
-            {
+            best_params_rows.append(best_params_row)
+            fold_runtime_row = {
                 "outer_fold": int(outer_fold),
                 "train_row_count": int(len(train_df)),
                 "test_row_count": int(len(test_df)),
@@ -551,7 +713,7 @@ def run_grouped_grid_search_model(
                 "test_city_count": int(len(fold_data.test_city_ids)),
                 "inner_cv_splits": int(effective_inner_splits),
                 "param_candidate_count": int(param_candidate_count),
-                "estimated_inner_fit_count": int(param_candidate_count * effective_inner_splits),
+                "estimated_inner_fit_count": int(estimated_inner_fit_count),
                 "data_load_seconds": float(data_load_seconds),
                 "preprocess_build_seconds": float(preprocess_build_seconds),
                 "preprocess_probe_fit_transform_seconds": float(preprocess_probe_seconds),
@@ -561,24 +723,46 @@ def run_grouped_grid_search_model(
                 "grid_search_seconds": float(grid_search_seconds),
                 "fold_wall_clock_seconds": float(fold_wall_clock_seconds),
             }
-        )
-        calibration_frames.append(
-            build_calibration_curve_table(
+            fold_runtime_rows.append(fold_runtime_row)
+            fold_calibration_df = build_calibration_curve_table(
                 predictions_df=prediction_df,
                 model_name=model_name,
                 scope_name="outer_fold",
                 scope_value=str(outer_fold),
                 n_bins=calibration_bins,
             )
-        )
-        LOGGER.info(
-            "outer_fold=%s grid_search=%.2fs total=%.2fs best_score=%.4f",
-            outer_fold,
-            grid_search_seconds,
-            fold_wall_clock_seconds,
-            float(grid_search.best_score_),
-        )
+            calibration_frames.append(fold_calibration_df)
+            fold_artifact_paths = _write_fold_artifacts(
+                output_dir=resolved_output_dir,
+                outer_fold=outer_fold,
+                prediction_df=prediction_df,
+                fold_metrics_row=fold_metrics_row,
+                best_params_row=best_params_row,
+                calibration_df=fold_calibration_df,
+                fold_runtime_row=fold_runtime_row,
+            )
+            progress_tracker.mark_fold_complete(
+                outer_fold=outer_fold,
+                effective_inner_cv_splits=effective_inner_splits,
+                artifact_paths=fold_artifact_paths,
+                best_score=float(grid_search.best_score_),
+                fold_wall_clock_seconds=float(fold_wall_clock_seconds),
+            )
+            LOGGER.info(
+                "outer_fold=%s complete grid_search=%.2fs total=%.2fs best_score=%.4f",
+                outer_fold,
+                grid_search_seconds,
+                fold_wall_clock_seconds,
+                float(grid_search.best_score_),
+            )
+    except Exception as exc:
+        progress_tracker.mark_failed(phase=current_phase, error=exc, outer_fold=current_outer_fold)
+        raise
 
+    if not all_predictions:
+        raise ValueError("No completed outer-fold artifacts were available to assemble final modeling outputs")
+
+    LOGGER.info("Writing final aggregate artifacts under %s", resolved_output_dir)
     predictions_df = pd.concat(all_predictions, ignore_index=True).sort_values(
         ["outer_fold", GROUP_COLUMN, "cell_id"]
     )
@@ -624,6 +808,7 @@ def run_grouped_grid_search_model(
     calibration_df.to_csv(calibration_curve_path, index=False)
 
     metadata = {
+        "run_id": run_id,
         "model_name": model_name,
         "dataset_path": str(dataset_path),
         "folds_path": str(folds_path) if folds_path is not None else None,
@@ -641,6 +826,11 @@ def run_grouped_grid_search_model(
         "pipeline_cache_root": str(_get_pipeline_cache_base_dir()) if pipeline_cache_enabled else None,
         "pipeline_builder_kwargs": resolved_pipeline_builder_kwargs,
         "data_loading_strategy": data_loading_strategy,
+        "resume": {
+            "resumed_from_existing_output_dir": bool(skipped_completed_folds),
+            "skipped_completed_outer_folds": skipped_completed_folds,
+            "fold_artifacts_dir": str(progress_tracker.fold_artifacts_root),
+        },
         "search_space": {
             "param_candidate_count": int(param_candidate_count),
             "estimated_total_inner_fits": int(estimated_total_inner_fits),
@@ -661,9 +851,18 @@ def run_grouped_grid_search_model(
             "metrics_summary": str(summary_metrics_path),
             "best_params_by_fold": str(best_params_path),
             "calibration_curve": str(calibration_curve_path),
+            "progress": str(progress_tracker.progress_path),
+            "progress_log": str(progress_tracker.progress_log_path),
+            "fold_status": str(progress_tracker.fold_status_path),
+            "sampled_diagnostics": (
+                str(progress_tracker.sampled_diagnostics_path)
+                if sample_rows_per_city is not None and progress_tracker.sampled_diagnostics_path.exists()
+                else None
+            ),
         },
     }
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    progress_tracker.mark_complete()
     LOGGER.info(
         "Completed model=%s preset=%s total_wall_clock=%.2fs metadata=%s",
         model_name,

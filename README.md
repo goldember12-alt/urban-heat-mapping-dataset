@@ -171,6 +171,32 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 
 `--output-dir` is now optional for the tuned modeling CLIs. If you omit it, the CLI auto-generates a unique, readable run directory under the correct model-family root using the preset, fold scope, sample scope, and a timestamp. You can still pass `--output-dir` explicitly to override that behavior, and `--run-label` can add a short human tag to an auto-generated name without building the full path yourself.
 
+Long tuned runs now also write durable mid-run state inside the run output directory:
+
+- `progress.json` = current phase, outer fold, completed inner fits, ETA-style estimates, and the latest tuned params seen
+- `progress_log.csv` = append-only progress history for phase changes and fit completion
+- `fold_status.json` = machine-readable per-fold completion state for restart-safe skipping
+- `fold_artifacts/outer_fold_XX/` = per-fold predictions, metrics, calibration, and runtime payloads written as each fold completes
+- `sample_diagnostics_by_city.csv` = per-city sampled-vs-full hotspot-rate diagnostics when `--sample-rows-per-city` is used
+
+How to monitor a live tuned run:
+
+- watch `progress.json` to confirm the run is still alive and see the current phase plus completed-fit counts
+- inspect `progress_log.csv` if you want a durable timeline of fold starts, tuning updates, and completion boundaries
+- read `fold_status.json` to see which outer folds are already safe to skip on rerun
+
+Current resumability is deliberately coarse-grained and robust:
+
+- rerunning the same command against the same `--output-dir` safely skips outer folds that already finished and have complete per-fold artifacts
+- the code does not try to resume inside a single sklearn fit or halfway through one unfinished outer fold
+- if a run fails, `progress.json`, `progress_log.csv`, and `fold_status.json` preserve the last observed phase and completed folds
+
+Recommended tuning workflow on this workstation:
+
+- use `--sample-rows-per-city` for iteration and broader preset exploration
+- review `sample_diagnostics_by_city.csv` before trusting a sampled run, especially the sampled vs full positive counts and rates
+- reserve full-row runs for final confirmation after the sampled search space and fold scope look stable
+
 CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The regenerated `data_processed/final/final_dataset.csv` was re-audited on 2026-03-26 and now matches the canonical parquet on row count, column names, per-city row counts, hotspot counts, and key null-count checks.
 
 ## Manual Parquet Inspection Pattern

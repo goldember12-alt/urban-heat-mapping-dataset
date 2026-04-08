@@ -118,7 +118,7 @@ def record_model_run(
         metrics = summarize_metrics_for_registry(pd.read_csv(summary_metrics_path))
 
     record: dict[str, Any] = {
-        "run_id": create_run_id(),
+        "run_id": metadata_payload.get("run_id", create_run_id()),
         "timestamp_utc": pd.Timestamp.now("UTC").isoformat(),
         "status": status,
         "model_type": model_type,

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from src.modeling_config import (
+    CITY_NAME_COLUMN,
     DEFAULT_FEATURE_COLUMNS,
     DEFAULT_FINAL_DATASET_PATH,
     DEFAULT_FOLDS_CSV_PATH,
@@ -181,34 +182,273 @@ def _sample_csv_rows_by_city(
     city_ids: Sequence[int],
     sample_rows_per_city: int,
     random_state: int,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     city_id_set = {int(city_id) for city_id in city_ids}
     rng = np.random.default_rng(int(random_state))
-    sampled_parts: dict[int, pd.DataFrame] = {}
+    sampled_parts: dict[tuple[int, int], pd.DataFrame] = {}
+    city_stats: dict[int, dict[str, object]] = {}
 
     for chunk in pd.read_csv(dataset_path, usecols=list(columns), chunksize=250_000):
         filtered = chunk.loc[chunk[GROUP_COLUMN].isin(city_id_set)].copy()
         if filtered.empty:
             continue
 
+        normalized_target = normalize_binary_target(filtered[TARGET_COLUMN], column_name=TARGET_COLUMN)
+        valid_mask = normalized_target.notna()
+        filtered = filtered.loc[valid_mask].copy()
+        if filtered.empty:
+            continue
+        filtered[TARGET_COLUMN] = normalized_target.loc[valid_mask].astype("int8")
         filtered["_sample_priority"] = rng.random(len(filtered))
         for city_id, city_chunk in filtered.groupby(GROUP_COLUMN, sort=False, dropna=False):
             normalized_city_id = int(city_id)
-            existing = sampled_parts.get(normalized_city_id)
-            combined = city_chunk if existing is None else pd.concat([existing, city_chunk], ignore_index=True)
-            sampled_parts[normalized_city_id] = combined.nsmallest(
-                int(sample_rows_per_city),
-                columns="_sample_priority",
+            city_summary = city_stats.setdefault(
+                normalized_city_id,
+                {
+                    GROUP_COLUMN: normalized_city_id,
+                    CITY_NAME_COLUMN: city_chunk[CITY_NAME_COLUMN].iloc[0] if CITY_NAME_COLUMN in city_chunk.columns else None,
+                    "full_row_count": 0,
+                    "full_positive_count": 0,
+                },
             )
+            city_summary["full_row_count"] = int(city_summary["full_row_count"]) + int(len(city_chunk))
+            city_summary["full_positive_count"] = int(city_summary["full_positive_count"]) + int(
+                city_chunk[TARGET_COLUMN].sum()
+            )
+            for target_value, target_chunk in city_chunk.groupby(TARGET_COLUMN, sort=False, dropna=False):
+                key = (normalized_city_id, int(target_value))
+                existing = sampled_parts.get(key)
+                combined = target_chunk if existing is None else pd.concat([existing, target_chunk], ignore_index=True)
+                sampled_parts[key] = combined.nsmallest(
+                    int(sample_rows_per_city),
+                    columns="_sample_priority",
+                )
 
-    final_parts = []
+    final_parts: list[pd.DataFrame] = []
+    diagnostic_rows: list[dict[str, object]] = []
     for city_id in [int(city_id) for city_id in city_ids]:
-        city_sample = sampled_parts.get(city_id)
-        if city_sample is None:
+        city_summary = city_stats.get(city_id)
+        if city_summary is None:
             continue
-        final_parts.append(city_sample.drop(columns="_sample_priority").reset_index(drop=True))
+        positive_take, negative_take, strategy = _allocate_city_sample_sizes(
+            full_row_count=int(city_summary["full_row_count"]),
+            full_positive_count=int(city_summary["full_positive_count"]),
+            sample_rows_per_city=int(sample_rows_per_city),
+        )
+        positive_reservoir = sampled_parts.get((city_id, 1))
+        negative_reservoir = sampled_parts.get((city_id, 0))
+        positive_sample = (
+            positive_reservoir.nsmallest(positive_take, columns="_sample_priority")
+            if positive_reservoir is not None and positive_take > 0
+            else pd.DataFrame(columns=list(columns) + ["_sample_priority"])
+        )
+        negative_sample = (
+            negative_reservoir.nsmallest(negative_take, columns="_sample_priority")
+            if negative_reservoir is not None and negative_take > 0
+            else pd.DataFrame(columns=list(columns) + ["_sample_priority"])
+        )
+        city_sample = pd.concat([positive_sample, negative_sample], ignore_index=True)
+        if not city_sample.empty:
+            final_parts.append(city_sample.drop(columns="_sample_priority").reset_index(drop=True))
+        sampled_positive_count = int(city_sample[TARGET_COLUMN].sum()) if not city_sample.empty else 0
+        sampled_row_count = int(len(city_sample))
+        full_row_count = int(city_summary["full_row_count"])
+        full_positive_count = int(city_summary["full_positive_count"])
+        diagnostic_rows.append(
+            {
+                GROUP_COLUMN: city_id,
+                CITY_NAME_COLUMN: city_summary.get(CITY_NAME_COLUMN),
+                "sampling_strategy": strategy,
+                "full_row_count": full_row_count,
+                "full_positive_count": full_positive_count,
+                "sampled_row_count": sampled_row_count,
+                "sampled_positive_count": sampled_positive_count,
+                "full_positive_rate": (full_positive_count / full_row_count) if full_row_count else np.nan,
+                "sampled_positive_rate": (sampled_positive_count / sampled_row_count) if sampled_row_count else np.nan,
+            }
+        )
 
-    return pd.concat(final_parts, ignore_index=True) if final_parts else pd.DataFrame(columns=list(columns))
+    sampled_df = pd.concat(final_parts, ignore_index=True) if final_parts else pd.DataFrame(columns=list(columns))
+    diagnostics_df = pd.DataFrame(diagnostic_rows)
+    if not diagnostics_df.empty:
+        diagnostics_df = diagnostics_df.sort_values(GROUP_COLUMN).reset_index(drop=True)
+    return sampled_df, diagnostics_df
+
+
+def _allocate_city_sample_sizes(
+    *,
+    full_row_count: int,
+    full_positive_count: int,
+    sample_rows_per_city: int,
+) -> tuple[int, int, str]:
+    sample_size = min(int(sample_rows_per_city), int(full_row_count))
+    if sample_size <= 0 or full_row_count <= 0:
+        return 0, 0, "empty"
+
+    full_negative_count = int(full_row_count) - int(full_positive_count)
+    if full_positive_count <= 0 or full_negative_count <= 0:
+        return min(sample_size, full_positive_count), min(sample_size, full_negative_count), "uniform_single_class"
+
+    positive_take = int(round(sample_size * (full_positive_count / full_row_count)))
+    positive_take = max(1, positive_take)
+    negative_take = sample_size - positive_take
+    if negative_take <= 0:
+        negative_take = 1
+        positive_take = sample_size - negative_take
+
+    positive_take = min(positive_take, full_positive_count)
+    negative_take = min(negative_take, full_negative_count)
+
+    allocated = positive_take + negative_take
+    if allocated < sample_size:
+        remaining = sample_size - allocated
+        positive_room = full_positive_count - positive_take
+        take_more_positive = min(remaining, positive_room)
+        positive_take += take_more_positive
+        remaining -= take_more_positive
+        negative_room = full_negative_count - negative_take
+        negative_take += min(remaining, negative_room)
+
+    return positive_take, negative_take, "target_rate_stratified"
+
+
+def _sample_city_frame_with_diagnostics(
+    city_df: pd.DataFrame,
+    *,
+    sample_rows_per_city: int,
+    random_state: int,
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    normalized_target = normalize_binary_target(city_df[TARGET_COLUMN], column_name=TARGET_COLUMN)
+    valid_mask = normalized_target.notna()
+    valid_city_df = city_df.loc[valid_mask].copy().reset_index(drop=True)
+    valid_city_df[TARGET_COLUMN] = normalized_target.loc[valid_mask].astype("int8").reset_index(drop=True)
+    if city_df.empty:
+        return pd.DataFrame(columns=city_df.columns), {
+            GROUP_COLUMN: np.nan,
+            CITY_NAME_COLUMN: None,
+            "sampling_strategy": "empty",
+            "full_row_count": 0,
+            "full_positive_count": 0,
+            "sampled_row_count": 0,
+            "sampled_positive_count": 0,
+            "full_positive_rate": np.nan,
+            "sampled_positive_rate": np.nan,
+        }
+    city_id = int(valid_city_df[GROUP_COLUMN].iloc[0]) if not valid_city_df.empty else int(city_df[GROUP_COLUMN].iloc[0])
+    city_name = (
+        valid_city_df[CITY_NAME_COLUMN].iloc[0]
+        if CITY_NAME_COLUMN in valid_city_df.columns and not valid_city_df.empty
+        else (city_df[CITY_NAME_COLUMN].iloc[0] if CITY_NAME_COLUMN in city_df.columns and not city_df.empty else None)
+    )
+    full_row_count = int(len(valid_city_df))
+    full_positive_count = int(valid_city_df[TARGET_COLUMN].sum()) if full_row_count else 0
+
+    if full_row_count <= int(sample_rows_per_city):
+        sampled_df = valid_city_df.copy()
+        strategy = "all_rows"
+    else:
+        positive_take, negative_take, strategy = _allocate_city_sample_sizes(
+            full_row_count=full_row_count,
+            full_positive_count=full_positive_count,
+            sample_rows_per_city=int(sample_rows_per_city),
+        )
+        if strategy == "uniform_single_class":
+            sampled_df = valid_city_df.sample(
+                n=min(int(sample_rows_per_city), full_row_count),
+                random_state=int(random_state) + city_id,
+            )
+        else:
+            positives = valid_city_df.loc[valid_city_df[TARGET_COLUMN] == 1].sample(
+                n=positive_take,
+                random_state=int(random_state) + city_id,
+            )
+            negatives = valid_city_df.loc[valid_city_df[TARGET_COLUMN] == 0].sample(
+                n=negative_take,
+                random_state=int(random_state) + city_id + 10_000,
+            )
+            sampled_df = pd.concat([positives, negatives], ignore_index=True).sample(
+                frac=1.0,
+                random_state=int(random_state) + city_id + 20_000,
+            )
+    sampled_df = sampled_df.reset_index(drop=True)
+    sampled_row_count = int(len(sampled_df))
+    sampled_positive_count = int(sampled_df[TARGET_COLUMN].sum()) if sampled_row_count else 0
+    diagnostics = {
+        GROUP_COLUMN: city_id,
+        CITY_NAME_COLUMN: city_name,
+        "sampling_strategy": strategy,
+        "full_row_count": full_row_count,
+        "full_positive_count": full_positive_count,
+        "sampled_row_count": sampled_row_count,
+        "sampled_positive_count": sampled_positive_count,
+        "full_positive_rate": (full_positive_count / full_row_count) if full_row_count else np.nan,
+        "sampled_positive_rate": (sampled_positive_count / sampled_row_count) if sampled_row_count else np.nan,
+    }
+    return sampled_df, diagnostics
+
+
+def load_sampled_modeling_rows_with_diagnostics(
+    dataset_path: Path = DEFAULT_FINAL_DATASET_PATH,
+    feature_columns: Sequence[str] | None = None,
+    city_ids: Sequence[int] | None = None,
+    sample_rows_per_city: int | None = None,
+    random_state: int = 42,
+    extra_columns: Sequence[str] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load a bounded per-city modeling sample plus per-city signal-preservation diagnostics."""
+    if sample_rows_per_city is None:
+        raise ValueError("sample_rows_per_city is required to build sampled modeling diagnostics")
+    if city_ids is None:
+        raise ValueError("sample_rows_per_city requires an explicit list of city_ids")
+
+    resolved_dataset_path = dataset_path.resolve()
+    if resolved_dataset_path.suffix.lower() == ".csv" and resolved_dataset_path not in _WARNED_CSV_DATASET_PATHS:
+        LOGGER.warning(
+            "Using CSV modeling input %s. CSV support is a compatibility fallback and must not be assumed row-equivalent to the canonical parquet without an explicit audit.",
+            resolved_dataset_path,
+        )
+        _WARNED_CSV_DATASET_PATHS.add(resolved_dataset_path)
+
+    available_columns = get_final_dataset_columns(dataset_path=dataset_path)
+    validate_required_final_columns(available_columns)
+    selected_columns = get_selected_modeling_columns(feature_columns=feature_columns, extra_columns=extra_columns)
+    validate_model_feature_columns(
+        feature_columns=DEFAULT_FEATURE_COLUMNS if feature_columns is None else feature_columns,
+        available_columns=available_columns,
+    )
+
+    if dataset_path.suffix.lower() == ".csv":
+        sampled_df, diagnostics_df = _sample_csv_rows_by_city(
+            dataset_path=dataset_path,
+            columns=selected_columns,
+            city_ids=city_ids,
+            sample_rows_per_city=int(sample_rows_per_city),
+            random_state=int(random_state),
+        )
+        return sampled_df.reset_index(drop=True), diagnostics_df
+
+    sampled_parts: list[pd.DataFrame] = []
+    diagnostic_rows: list[dict[str, object]] = []
+    for city_id in [int(value) for value in city_ids]:
+        city_df = _read_dataset_subset(
+            dataset_path=dataset_path,
+            columns=selected_columns,
+            city_ids=[city_id],
+        )
+        city_sample, diagnostics = _sample_city_frame_with_diagnostics(
+            city_df=city_df,
+            sample_rows_per_city=int(sample_rows_per_city),
+            random_state=int(random_state),
+        )
+        if not city_sample.empty:
+            sampled_parts.append(city_sample)
+        diagnostic_rows.append(diagnostics)
+
+    sampled_df = pd.concat(sampled_parts, ignore_index=True) if sampled_parts else pd.DataFrame(columns=selected_columns)
+    diagnostics_df = pd.DataFrame(diagnostic_rows)
+    if not diagnostics_df.empty:
+        diagnostics_df = diagnostics_df.sort_values(GROUP_COLUMN).reset_index(drop=True)
+    return sampled_df, diagnostics_df
 
 
 def load_modeling_rows(
@@ -239,27 +479,14 @@ def load_modeling_rows(
     if sample_rows_per_city is None:
         df = _read_dataset_subset(dataset_path=dataset_path, columns=selected_columns, city_ids=city_ids)
     else:
-        if city_ids is None:
-            raise ValueError("sample_rows_per_city requires an explicit list of city_ids")
-        if dataset_path.suffix.lower() == ".csv":
-            df = _sample_csv_rows_by_city(
-                dataset_path=dataset_path,
-                columns=selected_columns,
-                city_ids=city_ids,
-                sample_rows_per_city=sample_rows_per_city,
-                random_state=random_state,
-            )
-        else:
-            parts: list[pd.DataFrame] = []
-            for city_id in city_ids:
-                city_df = _read_dataset_subset(dataset_path=dataset_path, columns=selected_columns, city_ids=[int(city_id)])
-                if len(city_df) > sample_rows_per_city:
-                    city_df = city_df.sample(
-                        n=sample_rows_per_city,
-                        random_state=int(random_state) + int(city_id),
-                    )
-                parts.append(city_df)
-            df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=selected_columns)
+        df, _ = load_sampled_modeling_rows_with_diagnostics(
+            dataset_path=dataset_path,
+            feature_columns=feature_columns,
+            city_ids=city_ids,
+            sample_rows_per_city=sample_rows_per_city,
+            random_state=random_state,
+            extra_columns=extra_columns,
+        )
 
     if TARGET_COLUMN in df.columns and not df.empty:
         validate_binary_target(df, target_column=TARGET_COLUMN)

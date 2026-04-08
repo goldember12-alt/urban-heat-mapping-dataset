@@ -82,6 +82,7 @@ Honest implementation status:
 - The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
 - A full canonical modeling run on the real final dataset is still recorded as pending in `docs/chat_handoff.md`
 - `README.md` is now the canonical definition of `smoke` versus `full`, including how those presets should and should not be described in methodology/results language
+- The tuned sklearn runners now persist mid-run progress plus fold-level state so interrupted runs can be resumed at the outer-fold boundary
 
 ## Candidate Feature Contract
 
@@ -156,6 +157,29 @@ Current training scripts already:
 - fit preprocessing only on training cities
 - tune only within training cities
 - save held-out-city predictions and evaluation summaries
+
+## Practical Run Monitoring And Resume
+
+Tuned runner output directories now include:
+
+- `progress.json`
+- `progress_log.csv`
+- `fold_status.json`
+- `fold_artifacts/outer_fold_XX/`
+- `sample_diagnostics_by_city.csv` when `--sample-rows-per-city` is used
+
+Operational guidance:
+
+- monitor `progress.json` during a live run for the current phase, outer fold, completed inner fits, and rough remaining time
+- use `fold_status.json` to see which outer folds already completed successfully
+- rerunning the same model command against the same `--output-dir` skips completed outer folds when their per-fold artifacts are present
+- resumability is intentionally limited to the outer-fold boundary; the code does not attempt to resume inside one unfinished sklearn fit
+
+Recommended tuning workflow:
+
+- use sampled runs first for search-space iteration and broader fold coverage
+- inspect `sample_diagnostics_by_city.csv` to make sure sampled positive counts and rates still reflect the full city-level hotspot signal
+- use full-row runs later for final confirmation once the sampled run looks methodologically stable
 
 Recommended implementation order:
 

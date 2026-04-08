@@ -33,6 +33,7 @@ Implemented in code:
   - random forest in an sklearn `Pipeline`
 - The tuned sklearn runners now share an explicit feature-type contract and coerce categorical columns before categorical imputation/encoding, which fixes the mixed `land_cover_class` / `climate_group` preprocessing failure that previously surfaced as `could not convert string to float: 'hot_arid'`.
 - The tuned sklearn runners now also expose explicit `smoke` and `full` tuning presets, preload sampled city rows once per run, enable safe per-fold sklearn pipeline caching, and emit concise timing/search-space diagnostics in logs plus `run_metadata.json`.
+- The tuned sklearn runners now also persist practical long-run state in each run directory: `progress.json`, `progress_log.csv`, `fold_status.json`, per-fold artifact snapshots under `fold_artifacts/`, and `sample_diagnostics_by_city.csv` for sampled runs. Completed outer folds are now safe to skip on rerun when those per-fold artifacts exist.
 - The modeling import path is now decoupled from `src.feature_assembly` / `geopandas` by a lightweight `src.final_dataset_contract` module, so focused modeling tests and CLIs can import without pulling the full geospatial stack.
 - The modeling data loader is now parquet-first by default, while still supporting explicit CSV compatibility inputs including deterministic chunked per-city sampling when that fallback path is intentionally used.
 - The rebuilt repo-local `.venv` is now the standard interpreter for this repo, reads the canonical `final_dataset.parquet` and `city_outer_folds.parquet` cleanly through both `pandas` and low-level `pyarrow`, and both smoke modeling CLIs have been manually verified end to end against those parquet artifacts.
@@ -86,6 +87,11 @@ Standardization status:
 
 As of 2026-03-26:
 
+- 2026-04-07 modeling practicality checkpoint:
+  - `.\.venv\Scripts\python.exe -m py_compile src\modeling_progress.py src\modeling_data.py src\modeling_runner.py src\modeling_run_registry.py tests\test_modeling_runner.py`
+  - `.\.venv\Scripts\python.exe -m pytest tests\test_modeling_contract.py tests\test_modeling_runner.py -q`
+  - Result: `31 passed`
+  - Coverage added in this checkpoint includes durable progress artifacts, fold-level completion tracking, outer-fold resume/skip behavior, and sampled signal-preservation diagnostics
 - 2026-04-07 scratch-script guidance doc update:
   - No tests were run because this checkpoint only updated modeling documentation and handoff notes.
 - Preflight provenance/registry regression checks after the CSV refresh and command-capture update:
@@ -329,6 +335,7 @@ Implemented:
 - `src.run_random_forest` trains the grouped random-forest model with the same held-out-city discipline and writes outputs under `outputs/modeling/random_forest/`.
 - `src.run_logistic_saga` and `src.run_random_forest` now use the same explicit shared feature-type contract for tuned preprocessing, with categorical columns coerced safely ahead of `SimpleImputer` / encoder steps.
 - `src.run_logistic_saga` and `src.run_random_forest` now default to `--tuning-preset smoke`, preserve `--tuning-preset full`, record per-fold timing/search-space metadata, and reuse sampled city rows across folds instead of reloading them fold by fold.
+- `src.run_logistic_saga` and `src.run_random_forest` now also expose durable live-run monitoring artifacts and coarse outer-fold resumability through `progress.json`, `progress_log.csv`, `fold_status.json`, and per-fold output snapshots.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -350,6 +357,7 @@ Test-verified:
 Not manually verified in the latest checkpoint:
 
 - No full canonical all-fold modeling run has been recorded yet for `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` on the full `71,394,894`-row dataset beyond the smoke presets.
+- The new outer-fold resume path and sampled diagnostics were test-verified in this checkpoint but were not manually exercised yet on a real interrupted overnight run.
 - No pyarrow downgrade or alternate-version experiment was needed in this checkpoint because the current rebuilt `.venv` already reads both real parquet artifacts successfully.
 
 Manually verified:
@@ -649,16 +657,17 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-The repo is now ready for the first overnight benchmark run, with one remaining operational caution: keep output-dir names short and continue using the serial sandbox-safe job settings that were already verified here.
+Use the new monitoring and outer-fold resume support for a practical two-stage benchmark workflow instead of jumping straight to an unsampled all-fold run.
 
 Recommended order:
 
-- Run logistic SAGA first:
+- Start with a sampled logistic search:
   - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0,1,2,3,4 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\full_f01234`
-- Then run random forest:
+- Monitor the run in `outputs\modeling\ls\full_f01234\progress.json`, `progress_log.csv`, `fold_status.json`, and `sample_diagnostics_by_city.csv`.
+- If the run is interrupted, rerun the same command against the same `--output-dir`; completed folds should now be skipped automatically.
+- After the sampled diagnostics and best-parameter pattern look stable, launch the corresponding full-row confirmation run with the same short output-dir discipline.
+- Apply the same sampled-first, full-row-second pattern to random forest:
   - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0,1,2,3,4 --tuning-preset full --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\rf\full_f01234`
-
-If more risk control is desired, split those same commands into fold batches such as `0,1` then `2,3` then `4` while keeping the same short-root naming pattern.
 
 
 
@@ -683,11 +692,21 @@ If more risk control is desired, split those same commands into fold batches suc
 - `outputs/modeling/run_registry.jsonl`
 - `outputs/modeling/baselines/`
 - `outputs/modeling/logistic_saga/`
+- `outputs/modeling/logistic_saga/<run_dir>/progress.json`
+- `outputs/modeling/logistic_saga/<run_dir>/progress_log.csv`
+- `outputs/modeling/logistic_saga/<run_dir>/fold_status.json`
+- `outputs/modeling/logistic_saga/<run_dir>/fold_artifacts/`
+- `outputs/modeling/logistic_saga/<run_dir>/sample_diagnostics_by_city.csv` for sampled tuned runs
 - `outputs/modeling/logistic_saga/parquet_verify/`
 - `outputs/modeling/logistic_saga/pb_smk_f01/`
 - `outputs/modeling/logistic_saga/parquet_benchmark_smoke_folds01/` (failed long-path attempt recorded only for provenance)
 - `outputs/modeling/ls/pf0/`
 - `outputs/modeling/random_forest/`
+- `outputs/modeling/random_forest/<run_dir>/progress.json`
+- `outputs/modeling/random_forest/<run_dir>/progress_log.csv`
+- `outputs/modeling/random_forest/<run_dir>/fold_status.json`
+- `outputs/modeling/random_forest/<run_dir>/fold_artifacts/`
+- `outputs/modeling/random_forest/<run_dir>/sample_diagnostics_by_city.csv` for sampled tuned runs
 - `outputs/modeling/random_forest/parquet_verify/`
 - `outputs/modeling/random_forest/pb_smk_f01/`
 - `outputs/storage/`
@@ -714,7 +733,7 @@ If more risk control is desired, split those same commands into fold batches suc
 - The bounded `full` logistic dry run also completed, but it reproduced the same non-fatal `joblib` cache warnings and several logistic `ConvergenceWarning` messages; those warnings did not block outputs or registry logging, but they remain the main overnight-run caveat.
 - The first broader logistic benchmark also exposed a Windows path-length limit when long output-dir names were combined with cache subdirectories; the runner now uses shorter cache-dir names, but future benchmark output dirs should still stay concise.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
-- The current sklearn-based first-pass runners may still need a scaling strategy or dedicated sampled dataset if full-canonical runtime or memory is too heavy on a workstation.
+- The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but full-canonical runtime and memory may still require fold batching and disciplined overnight scheduling on this workstation.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
