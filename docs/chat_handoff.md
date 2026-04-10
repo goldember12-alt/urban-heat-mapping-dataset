@@ -37,6 +37,7 @@ Implemented in code:
 - The modeling import path is now decoupled from `src.feature_assembly` / `geopandas` by a lightweight `src.final_dataset_contract` module, so focused modeling tests and CLIs can import without pulling the full geospatial stack.
 - The modeling data loader is now parquet-first by default, while still supporting explicit CSV compatibility inputs including deterministic chunked per-city sampling when that fallback path is intentionally used.
 - The rebuilt repo-local `.venv` is now the standard interpreter for this repo, reads the canonical `final_dataset.parquet` and `city_outer_folds.parquet` cleanly through both `pandas` and low-level `pyarrow`, and both smoke modeling CLIs have been manually verified end to end against those parquet artifacts.
+- The shared Windows bootstrap script now works around a Python 3.12 temp-directory ACL issue seen in this Codex sandbox: `tempfile.mkdtemp()` creates `0o700` directories that become unwritable to the active `CodexSandboxUsers` identity, so `bootstrap.ps1` now routes `ensurepip` and `pip` through a helper that creates temp dirs with inherited ACLs instead.
 - The tuned modeling runner now creates its per-fold cache directories with plain `Path.mkdir()` instead of `tempfile.TemporaryDirectory`, which avoids Windows temp-directory permission failures seen in this Codex session.
 - Final-dataset assembly now writes parquet and CSV via atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` with row count, column count, per-city row counts, artifact paths/sizes, and an explicit shared-dataframe provenance flag.
 - The regenerated `data_processed/final/final_dataset.csv` has now been re-audited against the canonical parquet and matches on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
@@ -87,6 +88,13 @@ Standardization status:
 
 As of 2026-03-26:
 
+- 2026-04-10 shared-venv bootstrap repair:
+  - `powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -SkipInstall`
+  - Result: success; created `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pip --version`
+  - Result: success; patched bootstrap now upgrades the shared venv to a working `pip` install (currently `26.0.1`)
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -c "import pandas, geopandas, shapely, pyproj, rasterio, rioxarray, xarray, numpy, matplotlib, requests, scipy, sklearn, pyogrio, pyarrow, pytest; print('import smoke OK')"`
+  - Result: success
 - 2026-04-07 modeling practicality checkpoint:
   - `.\.venv\Scripts\python.exe -m py_compile src\modeling_progress.py src\modeling_data.py src\modeling_runner.py src\modeling_run_registry.py tests\test_modeling_runner.py`
   - `.\.venv\Scripts\python.exe -m pytest tests\test_modeling_contract.py tests\test_modeling_runner.py -q`
