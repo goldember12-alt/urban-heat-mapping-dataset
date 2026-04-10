@@ -26,39 +26,125 @@
   "inner_cv_splits_requested": 4,
   "estimated_total_inner_fits": 400,
   "run_started_at_utc": "2026-04-08T04:47:23.587290+00:00",
-  "last_updated_utc": "2026-04-08T04:47:44.378615+00:00",
-  "completed_outer_folds": [],
-  "remaining_outer_folds": [
+  "last_updated_utc": "2026-04-08T06:11:49.427625+00:00",
+  "completed_outer_folds": [
     0,
     1,
     2,
     3,
     4
   ],
+  "remaining_outer_folds": [],
   "folds": {
     "0": {
-      "status": "running",
+      "status": "completed",
       "started_at_utc": "2026-04-08T04:47:43.825447+00:00",
-      "last_updated_utc": "2026-04-08T04:47:43.825459+00:00",
+      "last_updated_utc": "2026-04-08T05:03:42.331001+00:00",
       "effective_inner_cv_splits": 4,
       "estimated_inner_fit_count": 80,
-      "completed_inner_fits": 0,
+      "completed_inner_fits": 80,
       "train_row_count": 240000,
       "test_row_count": 60000,
       "train_city_count": 24,
-      "test_city_count": 6
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-08T05:03:42.331015+00:00",
+      "best_inner_cv_average_precision": 0.1510019943527481,
+      "fold_wall_clock_seconds": 958.3050489000016,
+      "artifact_paths": {
+        "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_00\\heldout_predictions.parquet",
+        "fold_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_00\\fold_metrics.json",
+        "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_00\\best_params.json",
+        "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_00\\calibration_curve.csv",
+        "runtime": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_00\\runtime.json"
+      }
     },
     "1": {
-      "status": "pending"
+      "status": "completed",
+      "started_at_utc": "2026-04-08T05:03:42.396388+00:00",
+      "last_updated_utc": "2026-04-08T05:20:56.758768+00:00",
+      "effective_inner_cv_splits": 4,
+      "estimated_inner_fit_count": 80,
+      "completed_inner_fits": 80,
+      "train_row_count": 240000,
+      "test_row_count": 60000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-08T05:20:56.758777+00:00",
+      "best_inner_cv_average_precision": 0.15216939629819576,
+      "fold_wall_clock_seconds": 1034.2327173999947,
+      "artifact_paths": {
+        "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_01\\heldout_predictions.parquet",
+        "fold_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_01\\fold_metrics.json",
+        "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_01\\best_params.json",
+        "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_01\\calibration_curve.csv",
+        "runtime": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_01\\runtime.json"
+      }
     },
     "2": {
-      "status": "pending"
+      "status": "completed",
+      "started_at_utc": "2026-04-08T05:20:56.820121+00:00",
+      "last_updated_utc": "2026-04-08T05:40:10.069803+00:00",
+      "effective_inner_cv_splits": 4,
+      "estimated_inner_fit_count": 80,
+      "completed_inner_fits": 80,
+      "train_row_count": 240000,
+      "test_row_count": 60000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-08T05:40:10.069816+00:00",
+      "best_inner_cv_average_precision": 0.15235998528508893,
+      "fold_wall_clock_seconds": 1153.0938025000069,
+      "artifact_paths": {
+        "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_02\\heldout_predictions.parquet",
+        "fold_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_02\\fold_metrics.json",
+        "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_02\\best_params.json",
+        "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_02\\calibration_curve.csv",
+        "runtime": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_02\\runtime.json"
+      }
     },
     "3": {
-      "status": "pending"
+      "status": "completed",
+      "started_at_utc": "2026-04-08T05:40:10.127102+00:00",
+      "last_updated_utc": "2026-04-08T05:55:59.855207+00:00",
+      "effective_inner_cv_splits": 4,
+      "estimated_inner_fit_count": 80,
+      "completed_inner_fits": 80,
+      "train_row_count": 240000,
+      "test_row_count": 60000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-08T05:55:59.855229+00:00",
+      "best_inner_cv_average_precision": 0.15297298234686485,
+      "fold_wall_clock_seconds": 949.2001248999877,
+      "artifact_paths": {
+        "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_03\\heldout_predictions.parquet",
+        "fold_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_03\\fold_metrics.json",
+        "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_03\\best_params.json",
+        "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_03\\calibration_curve.csv",
+        "runtime": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_03\\runtime.json"
+      }
     },
     "4": {
-      "status": "pending"
+      "status": "completed",
+      "started_at_utc": "2026-04-08T05:56:00.030864+00:00",
+      "last_updated_utc": "2026-04-08T06:11:48.979149+00:00",
+      "effective_inner_cv_splits": 4,
+      "estimated_inner_fit_count": 80,
+      "completed_inner_fits": 80,
+      "train_row_count": 240000,
+      "test_row_count": 60000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-08T06:11:48.979161+00:00",
+      "best_inner_cv_average_precision": 0.15720555091029098,
+      "fold_wall_clock_seconds": 948.903554199991,
+      "artifact_paths": {
+        "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_04\\heldout_predictions.parquet",
+        "fold_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_04\\fold_metrics.json",
+        "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_04\\best_params.json",
+        "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_04\\calibration_curve.csv",
+        "runtime": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s10000_samplecurve-10k_2026-04-08_004723\\fold_artifacts\\outer_fold_04\\runtime.json"
+      }
     }
   },
   "last_error": null

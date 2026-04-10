@@ -1,0 +1,31 @@
+model_name,outer_fold,city_id,city_name,climate_group,row_count,positive_count,prevalence,pr_auc,recall_at_top_10pct
+logistic_saga,0,2,Tucson,hot_arid,10000,1000,0.1,0.12203784691794076,0.083
+logistic_saga,0,9,Bakersfield,hot_arid,10000,1000,0.1,0.10203167033501648,0.112
+logistic_saga,0,13,Richmond,hot_humid,10000,1000,0.1,0.2598588254261412,0.318
+logistic_saga,0,15,Tampa,hot_humid,10000,1000,0.1,0.2232913569705853,0.266
+logistic_saga,0,18,Atlanta,hot_humid,10000,1000,0.1,0.22666303287833456,0.281
+logistic_saga,0,24,San Jose,mild_cool,10000,1000,0.1,0.17272946977479126,0.155
+logistic_saga,1,6,Denver,hot_arid,10000,1000,0.1,0.1843146041394517,0.209
+logistic_saga,1,7,Salt Lake City,hot_arid,10000,1000,0.1,0.16554221682414738,0.185
+logistic_saga,1,8,Fresno,hot_arid,10000,1000,0.1,0.1714595179813055,0.24
+logistic_saga,1,22,Portland,mild_cool,10000,1000,0.1,0.3133201706380266,0.37
+logistic_saga,1,27,Chicago,mild_cool,10000,1000,0.1,0.2798238862959019,0.309
+logistic_saga,1,28,Minneapolis,mild_cool,10000,1000,0.1,0.12096648144975673,0.147
+logistic_saga,2,1,Phoenix,hot_arid,10000,1000,0.1,0.14531697135515795,0.155
+logistic_saga,2,10,Reno,hot_arid,10000,1000,0.1,0.18389730915524022,0.229
+logistic_saga,2,11,Houston,hot_humid,10000,1000,0.1,0.12509128330106833,0.145
+logistic_saga,2,12,Columbia,hot_humid,10000,1000,0.1,0.1282542133208501,0.14
+logistic_saga,2,17,Jacksonville,hot_humid,10000,1000,0.1,0.23825485559833542,0.295
+logistic_saga,2,21,Seattle,mild_cool,10000,1000,0.1,0.22789973981475872,0.294
+logistic_saga,3,3,Las Vegas,hot_arid,10000,1000,0.1,0.08645124253336958,0.049
+logistic_saga,3,14,New Orleans,hot_humid,10000,1000,0.1,0.14817246925043842,0.149
+logistic_saga,3,16,Miami,hot_humid,10000,1000,0.1,0.14797948579445527,0.159
+logistic_saga,3,19,Charlotte,hot_humid,10000,1000,0.1,0.14408920495210542,0.169
+logistic_saga,3,23,San Francisco,mild_cool,10000,1000,0.1,0.12261818165817166,0.12
+logistic_saga,3,30,Boston,mild_cool,10000,1000,0.1,0.20800239251215968,0.245
+logistic_saga,4,4,Albuquerque,hot_arid,10000,1000,0.1,0.13606149326997094,0.095
+logistic_saga,4,5,El Paso,hot_arid,10000,1000,0.1,0.08825466752748479,0.043
+logistic_saga,4,20,Nashville,hot_humid,10000,1000,0.1,0.4576716389515618,0.5
+logistic_saga,4,25,Los Angeles,mild_cool,10000,1000,0.1,0.1308337573568517,0.122
+logistic_saga,4,26,San Diego,mild_cool,10000,1000,0.1,0.13825240658251267,0.156
+logistic_saga,4,29,Detroit,mild_cool,10000,1000,0.1,0.1778392216436765,0.211

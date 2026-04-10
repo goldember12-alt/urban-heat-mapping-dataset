@@ -1,0 +1,2 @@
+model_name,outer_fold_count,heldout_city_count,heldout_row_count,heldout_positive_count,heldout_prevalence,pooled_pr_auc,mean_fold_pr_auc,mean_city_pr_auc,pooled_recall_at_top_10pct,mean_fold_recall_at_top_10pct
+logistic_saga,5,30,600000,60001,0.10000166666666667,0.14565982014039672,0.1601934563127925,0.179635186112296,0.17088048532524458,0.19683001277671303

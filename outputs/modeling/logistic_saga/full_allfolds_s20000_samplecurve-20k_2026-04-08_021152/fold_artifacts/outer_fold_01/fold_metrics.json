@@ -1,0 +1,21 @@
+{
+  "model_name": "logistic_saga",
+  "outer_fold": 1,
+  "train_city_count": 24,
+  "test_city_count": 6,
+  "train_row_count": 480000,
+  "test_row_count": 120000,
+  "test_positive_count": 12000,
+  "test_prevalence": 0.1,
+  "pr_auc": 0.19660942709993673,
+  "recall_at_top_10pct": 0.2525,
+  "inner_cv_splits": 4,
+  "best_inner_cv_average_precision": 0.15108593184687003,
+  "param_candidate_count": 20,
+  "estimated_inner_fit_count": 80,
+  "data_load_seconds": 0.09523469999840017,
+  "preprocess_build_seconds": 6.900000153109431e-05,
+  "preprocess_probe_fit_transform_seconds": 1.5158702000044286,
+  "grid_search_seconds": 2060.177426800001,
+  "fold_wall_clock_seconds": 2061.9403816999984
+}

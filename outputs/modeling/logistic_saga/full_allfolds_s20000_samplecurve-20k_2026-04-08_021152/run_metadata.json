@@ -1,0 +1,193 @@
+{
+  "run_id": "360da7558d0d479d81d9ceaaba9b87c8",
+  "model_name": "logistic_saga",
+  "dataset_path": "data_processed\\final\\final_dataset.parquet",
+  "folds_path": "data_processed\\modeling\\city_outer_folds.csv",
+  "output_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152",
+  "selected_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "tuning_preset": "full",
+  "scoring": "average_precision",
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "sample_rows_per_city": 20000,
+  "random_state": 42,
+  "inner_cv_splits_requested": 4,
+  "grid_search_n_jobs": 1,
+  "model_n_jobs": null,
+  "pipeline_cache_enabled": true,
+  "pipeline_cache_root": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\.t\\j",
+  "pipeline_builder_kwargs": {
+    "max_iter": 4000,
+    "tol": 0.0005
+  },
+  "data_loading_strategy": "sampled_city_preload",
+  "resume": {
+    "resumed_from_existing_output_dir": false,
+    "skipped_completed_outer_folds": [],
+    "fold_artifacts_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\fold_artifacts"
+  },
+  "search_space": {
+    "param_candidate_count": 20,
+    "estimated_total_inner_fits": 400,
+    "requested_outer_fold_count": 5
+  },
+  "timing_seconds": {
+    "contract_enforcement": 0.002106700005242601,
+    "fold_table_load": 0.007083199991029687,
+    "sampled_city_preload": 17.90434570000798,
+    "total_wall_clock": 9395.75113759999
+  },
+  "fold_runtime": [
+    {
+      "outer_fold": 0,
+      "train_row_count": 480000,
+      "test_row_count": 120000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "inner_cv_splits": 4,
+      "param_candidate_count": 20,
+      "estimated_inner_fit_count": 80,
+      "data_load_seconds": 0.09107429999858141,
+      "preprocess_build_seconds": 9.950000094249845e-05,
+      "preprocess_probe_fit_transform_seconds": 0.9464315999939572,
+      "preprocess_output_row_count": 480000,
+      "preprocess_output_feature_count": 21,
+      "preprocess_output_density": 0.2857142857142857,
+      "grid_search_seconds": 1825.3256005000003,
+      "fold_wall_clock_seconds": 1826.4658984999987
+    },
+    {
+      "outer_fold": 1,
+      "train_row_count": 480000,
+      "test_row_count": 120000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "inner_cv_splits": 4,
+      "param_candidate_count": 20,
+      "estimated_inner_fit_count": 80,
+      "data_load_seconds": 0.09523469999840017,
+      "preprocess_build_seconds": 6.900000153109431e-05,
+      "preprocess_probe_fit_transform_seconds": 1.5158702000044286,
+      "preprocess_output_row_count": 480000,
+      "preprocess_output_feature_count": 21,
+      "preprocess_output_density": 0.2857142857142857,
+      "grid_search_seconds": 2060.177426800001,
+      "fold_wall_clock_seconds": 2061.9403816999984
+    },
+    {
+      "outer_fold": 2,
+      "train_row_count": 480000,
+      "test_row_count": 120000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "inner_cv_splits": 4,
+      "param_candidate_count": 20,
+      "estimated_inner_fit_count": 80,
+      "data_load_seconds": 0.06382359999406617,
+      "preprocess_build_seconds": 4.1400009649805725e-05,
+      "preprocess_probe_fit_transform_seconds": 0.6946099000051618,
+      "preprocess_output_row_count": 480000,
+      "preprocess_output_feature_count": 21,
+      "preprocess_output_density": 0.2857142857142857,
+      "grid_search_seconds": 2078.123526500014,
+      "fold_wall_clock_seconds": 2078.980143099994
+    },
+    {
+      "outer_fold": 3,
+      "train_row_count": 480000,
+      "test_row_count": 120000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "inner_cv_splits": 4,
+      "param_candidate_count": 20,
+      "estimated_inner_fit_count": 80,
+      "data_load_seconds": 0.07635009998921305,
+      "preprocess_build_seconds": 4.25000034738332e-05,
+      "preprocess_probe_fit_transform_seconds": 0.8204753999889363,
+      "preprocess_output_row_count": 480000,
+      "preprocess_output_feature_count": 21,
+      "preprocess_output_density": 0.2857142857142857,
+      "grid_search_seconds": 1750.3724078999949,
+      "fold_wall_clock_seconds": 1751.3677068999968
+    },
+    {
+      "outer_fold": 4,
+      "train_row_count": 480000,
+      "test_row_count": 120000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "inner_cv_splits": 4,
+      "param_candidate_count": 20,
+      "estimated_inner_fit_count": 80,
+      "data_load_seconds": 0.06587319998652674,
+      "preprocess_build_seconds": 5.5500015150755644e-05,
+      "preprocess_probe_fit_transform_seconds": 0.999842900026124,
+      "preprocess_output_row_count": 480000,
+      "preprocess_output_feature_count": 21,
+      "preprocess_output_density": 0.2857142857142857,
+      "grid_search_seconds": 1653.3271487000166,
+      "fold_wall_clock_seconds": 1654.5374456999998
+    }
+  ],
+  "param_grid": [
+    {
+      "model__C": [
+        0.01,
+        0.1,
+        1.0,
+        10.0
+      ],
+      "model__l1_ratio": [
+        0.0
+      ]
+    },
+    {
+      "model__C": [
+        0.01,
+        0.1,
+        1.0,
+        10.0
+      ],
+      "model__l1_ratio": [
+        1.0
+      ]
+    },
+    {
+      "model__C": [
+        0.01,
+        0.1,
+        1.0,
+        10.0
+      ],
+      "model__l1_ratio": [
+        0.2,
+        0.5,
+        0.8
+      ]
+    }
+  ],
+  "output_files": {
+    "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\heldout_predictions.parquet",
+    "metrics_by_fold": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\metrics_by_fold.csv",
+    "metrics_by_city": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\metrics_by_city.csv",
+    "metrics_summary": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\metrics_summary.csv",
+    "best_params_by_fold": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\best_params_by_fold.csv",
+    "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\calibration_curve.csv",
+    "progress": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\progress.json",
+    "progress_log": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\progress_log.csv",
+    "fold_status": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\fold_status.json",
+    "sampled_diagnostics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152\\sample_diagnostics_by_city.csv"
+  }
+}

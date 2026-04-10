@@ -1,0 +1,38 @@
+{
+  "run_id": "360da7558d0d479d81d9ceaaba9b87c8",
+  "output_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152",
+  "model_family": "logistic_saga",
+  "tuning_preset": "full",
+  "phase": "complete",
+  "outer_fold_index": null,
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "candidate_count": 20,
+  "inner_cv_split_count_requested": 4,
+  "current_inner_cv_split_count": null,
+  "estimated_total_inner_fits": 400,
+  "completed_inner_fits": 400,
+  "completed_candidates": 100,
+  "elapsed_wall_time_seconds": 9396.419036388397,
+  "average_seconds_per_completed_fit": 23.491047590970993,
+  "eta_seconds": 0.0,
+  "current_params": null,
+  "completed_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "remaining_outer_folds": [],
+  "current_outer_fold_completed_inner_fits": 0,
+  "current_outer_fold_estimated_inner_fits": null,
+  "last_updated_utc": "2026-04-08T08:48:28.555150+00:00",
+  "note": "run_complete",
+  "sample_rows_per_city": 20000
+}
