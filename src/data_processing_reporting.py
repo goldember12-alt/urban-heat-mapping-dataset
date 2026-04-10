@@ -12,6 +12,7 @@ import pandas as pd
 
 from src.city_processing import city_output_paths, city_slug, city_stem, load_city_record
 from src.config import (
+    DATA_PROCESSING_BATCH_OUTPUTS,
     DATA_PROCESSING_FIGURES,
     DATA_PROCESSING_OUTPUTS,
     MODELING_FIGURES,
@@ -249,7 +250,24 @@ def _load_analysis_table(choice: DatasetChoice, city: pd.Series) -> pd.DataFrame
     return df
 
 
-def _load_feature_geometry(city: pd.Series, project_root: Path = PROJECT_ROOT) -> gpd.GeoDataFrame:
+def _build_centroid_geometry(df: pd.DataFrame, city_name: str) -> gpd.GeoDataFrame:
+    if not {"centroid_lon", "centroid_lat"}.issubset(df.columns):
+        raise ValueError(f"Cannot build fallback geometry for {city_name}: centroid columns are missing.")
+    centroid_df = df.dropna(subset=["centroid_lon", "centroid_lat"]).copy()
+    if centroid_df.empty:
+        raise ValueError(f"Cannot build fallback geometry for {city_name}: centroid columns are empty.")
+    return gpd.GeoDataFrame(
+        centroid_df,
+        geometry=gpd.points_from_xy(centroid_df["centroid_lon"], centroid_df["centroid_lat"]),
+        crs="EPSG:4326",
+    )
+
+
+def _load_feature_geometry(
+    city: pd.Series,
+    analysis_df: pd.DataFrame | None = None,
+    project_root: Path = PROJECT_ROOT,
+) -> gpd.GeoDataFrame:
     processed_dir = project_root / "data_processed"
     geometry_path = expected_city_feature_output_paths(
         city=city,
@@ -257,9 +275,25 @@ def _load_feature_geometry(city: pd.Series, project_root: Path = PROJECT_ROOT) -
         intermediate_dir=processed_dir / "intermediate",
     ).city_features_gpkg_path
     if not geometry_path.exists():
+        if analysis_df is not None:
+            logger.warning("City geometry file missing for %s; building fallback point geometry from centroid columns.", city["city_name"])
+            return _build_centroid_geometry(analysis_df, city_name=str(city["city_name"]))
         raise FileNotFoundError(f"City geometry file not found: {geometry_path}")
-    gdf = gpd.read_file(geometry_path)
+    try:
+        gdf = gpd.read_file(geometry_path)
+    except Exception as exc:
+        if analysis_df is not None:
+            logger.warning(
+                "City geometry file could not be read for %s (%s); building fallback point geometry from centroid columns.",
+                city["city_name"],
+                exc,
+            )
+            return _build_centroid_geometry(analysis_df, city_name=str(city["city_name"]))
+        raise
     if gdf.empty:
+        if analysis_df is not None:
+            logger.warning("City geometry file is empty for %s; building fallback point geometry from centroid columns.", city["city_name"])
+            return _build_centroid_geometry(analysis_df, city_name=str(city["city_name"]))
         raise ValueError(f"City geometry file is empty: {geometry_path}")
     return gdf
 
@@ -541,6 +575,8 @@ def _save_correlation_figure(corr_df: pd.DataFrame, output_path: Path, city_name
 
 def _save_hotspot_map(gdf: gpd.GeoDataFrame, study_area: gpd.GeoDataFrame, output_path: Path, city_name: str) -> None:
     plot_gdf = gdf.copy()
+    if study_area.crs != plot_gdf.crs:
+        study_area = study_area.to_crs(plot_gdf.crs)
     plot_gdf["hotspot_10pct"] = plot_gdf["hotspot_10pct"].astype("boolean")
     centroids = plot_gdf.geometry.centroid
     background = gpd.GeoDataFrame(
@@ -782,7 +818,8 @@ def _write_markdown(
         "",
         f"- The {city_name}-only per-city feature parquet was chosen over the merged final dataset when it was available because it is the direct analysis-ready output for this city and already reflects the row-drop rules used by the pipeline.",
         "- Supporting CSV tables and PNG figures for this summary were generated deterministically by the companion CLI.",
-        "- Markdown and tables live under `outputs/data_processing/`, while figures live under `figures/data_processing/`; `outputs/modeling/` and `figures/modeling/` are reserved for later ML/evaluation artifacts.",
+        "- City markdown and tables live under `outputs/data_processing/city_summaries/`, batch summary tables live under `outputs/data_processing/batch_reports/`, and figures live under `figures/data_processing/city_summaries/`.",
+        "- `outputs/modeling/` and `figures/modeling/` remain reserved for ML/evaluation artifacts.",
     ]
     paths.markdown_path.parent.mkdir(parents=True, exist_ok=True)
     paths.markdown_path.write_text("\n".join(content) + "\n", encoding="utf-8")
@@ -791,6 +828,7 @@ def _write_markdown(
 def generate_city_data_report(
     city_name: str | None = None,
     city_id: int | None = None,
+    city_record: pd.Series | None = None,
     markdown_path: Path | None = None,
     tables_dir: Path | None = None,
     figures_dir: Path | None = None,
@@ -799,7 +837,7 @@ def generate_city_data_report(
     figures_root: Path = DATA_PROCESSING_FIGURES,
 ) -> CityReportResult:
     """Build one city's markdown summary, supporting tables, and figures."""
-    city = load_city_record(city_name=city_name, city_id=city_id)
+    city = city_record.copy() if city_record is not None else load_city_record(city_name=city_name, city_id=city_id)
     city_name_value = str(city["city_name"])
     paths = resolve_city_report_paths(
         city=city,
@@ -818,7 +856,7 @@ def generate_city_data_report(
 
     choice = choose_city_dataset(city=city, project_root=project_root)
     df = _load_analysis_table(choice, city=city)
-    gdf = _load_feature_geometry(city=city, project_root=project_root)
+    gdf = _load_feature_geometry(city=city, analysis_df=df, project_root=project_root)
     study_area = _load_study_area(city=city, project_root=project_root)
     unfiltered_df, intermediate_filtered_df = _load_preprocessing_inputs(city=city, project_root=project_root)
 
@@ -909,10 +947,12 @@ def generate_all_city_data_reports(
     continue_on_error: bool = True,
     outputs_root: Path = DATA_PROCESSING_OUTPUTS,
     figures_root: Path = DATA_PROCESSING_FIGURES,
+    batch_outputs_root: Path = DATA_PROCESSING_BATCH_OUTPUTS,
 ) -> BatchReportResult:
     """Generate data-processing reports for all configured cities or a selected subset."""
     outputs_root.mkdir(parents=True, exist_ok=True)
     figures_root.mkdir(parents=True, exist_ok=True)
+    batch_outputs_root.mkdir(parents=True, exist_ok=True)
     MODELING_OUTPUTS.mkdir(parents=True, exist_ok=True)
     MODELING_FIGURES.mkdir(parents=True, exist_ok=True)
 
@@ -927,7 +967,7 @@ def generate_all_city_data_reports(
         logger.info("Generating data-processing report for city_id=%s city_name=%s", city_id_value, city_name_value)
         try:
             result = generate_city_data_report(
-                city_id=city_id_value,
+                city_record=city,
                 outputs_root=outputs_root,
                 figures_root=figures_root,
             )
@@ -963,7 +1003,7 @@ def generate_all_city_data_reports(
                 raise
 
     summary = pd.DataFrame(rows)
-    summary_path = outputs_root / "data_processing_report_summary.csv"
+    summary_path = batch_outputs_root / "data_processing_report_summary.csv"
     summary.to_csv(summary_path, index=False)
     logger.info("Wrote data-processing report batch summary to %s", summary_path)
     return BatchReportResult(summary=summary, summary_path=summary_path)

@@ -14,8 +14,8 @@ from src.data_processing_reporting import (
 
 def test_resolve_city_report_paths_uses_split_data_processing_roots(tmp_path: Path) -> None:
     city = pd.Series({"city_id": 1, "city_name": "Phoenix", "state": "AZ"})
-    outputs_root = tmp_path / "outputs" / "data_processing"
-    figures_root = tmp_path / "figures" / "data_processing"
+    outputs_root = tmp_path / "outputs" / "data_processing" / "city_summaries"
+    figures_root = tmp_path / "figures" / "data_processing" / "city_summaries"
 
     paths = resolve_city_report_paths(city=city, outputs_root=outputs_root, figures_root=figures_root)
 
@@ -33,7 +33,12 @@ def test_generate_all_city_data_reports_writes_batch_summary(monkeypatch, tmp_pa
     )
     calls: list[int] = []
 
-    def fake_generate_city_data_report(city_id: int, outputs_root: Path, figures_root: Path) -> CityReportResult:
+    def fake_generate_city_data_report(
+        city_record: pd.Series,
+        outputs_root: Path,
+        figures_root: Path,
+    ) -> CityReportResult:
+        city_id = int(city_record["city_id"])
         calls.append(city_id)
         city = cities.loc[cities["city_id"] == city_id].iloc[0].copy()
         stem = f"{city_id:02d}_{city['city_name'].lower()}_{city['state'].lower()}"
@@ -60,12 +65,14 @@ def test_generate_all_city_data_reports_writes_batch_summary(monkeypatch, tmp_pa
 
     result = generate_all_city_data_reports(
         city_ids=[2],
-        outputs_root=tmp_path / "outputs" / "data_processing",
-        figures_root=tmp_path / "figures" / "data_processing",
+        outputs_root=tmp_path / "outputs" / "data_processing" / "city_summaries",
+        figures_root=tmp_path / "figures" / "data_processing" / "city_summaries",
+        batch_outputs_root=tmp_path / "outputs" / "data_processing" / "batch_reports",
     )
 
     assert isinstance(result, BatchReportResult)
     assert calls == [2]
     assert result.summary["city_id"].tolist() == [2]
     assert result.summary["status"].tolist() == ["ok"]
+    assert result.summary_path == tmp_path / "outputs" / "data_processing" / "batch_reports" / "data_processing_report_summary.csv"
     assert result.summary_path.exists()

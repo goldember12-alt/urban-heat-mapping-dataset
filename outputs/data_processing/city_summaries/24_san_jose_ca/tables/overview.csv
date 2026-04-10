@@ -1,0 +1,9 @@
+metric,value
+Primary San Jose analysis file,data_processed\city_features\24_san_jose_ca_features.parquet
+Dataset choice rationale,Canonical per-city filtered output intended for downstream modeling.
+Observations,817627
+Variables,16
+Unit of analysis,One filtered 30 m grid cell in the buffered San Jose study area
+Geometry / CRS,Cell polygons stored in EPSG:32610; centroids stored as WGS84 lon/lat
+Projected spatial extent,"[566430, 4114230, 614130, 4149090]"
+Study-area buffer,"2,000 m around the Census urban area"

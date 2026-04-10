@@ -1,0 +1,9 @@
+variable,missing_n,missing_pct,non_missing_n
+dist_to_water_m,0,0.0,2946162
+elevation_m,0,0.0,2946162
+hotspot_10pct,0,0.0,2946162
+impervious_pct,0,0.0,2946162
+land_cover_class,0,0.0,2946162
+lst_median_may_aug,0,0.0,2946162
+n_valid_ecostress_passes,0,0.0,2946162
+ndvi_median_may_aug,0,0.0,2946162

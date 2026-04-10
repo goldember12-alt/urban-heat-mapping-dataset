@@ -1,8 +1,0 @@
-variable_name,meaning,type_unit,why_it_matters
-lst_median_may_aug,Median daytime land surface temperature across May-Aug ECOSTRESS observations.,continuous; ECOSTRESS LST units from source raster,"Primary heat outcome for regression, classification, and hotspot analysis."
-hotspot_10pct,Indicator for cells at or above the Phoenix-specific 90th percentile of LST.,binary flag,Natural target for hotspot classification and spatial risk mapping.
-impervious_pct,NLCD impervious surface share for the 30 m cell.,continuous; percent,Core urban form exposure tied to heat retention and built intensity.
-ndvi_median_may_aug,Median warm-season greenness index from Landsat/AppEEARS NDVI layers.,continuous; NDVI index,Vegetation is a likely protective predictor against elevated surface temperatures.
-dist_to_water_m,Distance from the cell to the nearest mapped hydro feature.,continuous; meters,Captures proximity to possible local cooling influences and riparian structure.
-land_cover_class,NLCD land cover class code for the cell.,categorical; NLCD class,"Summarizes surface type and helps separate developed, barren, and vegetated cells."
-n_valid_ecostress_passes,Count of valid ECOSTRESS observations contributing to the LST median.,count,Important quality-control covariate because low temporal coverage can weaken inference.

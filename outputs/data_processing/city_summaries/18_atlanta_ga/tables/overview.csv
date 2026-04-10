@@ -1,0 +1,9 @@
+metric,value
+Primary Atlanta analysis file,data_processed\city_features\18_atlanta_ga_features.parquet
+Dataset choice rationale,Canonical per-city filtered output intended for downstream modeling.
+Observations,7081699
+Variables,16
+Unit of analysis,One filtered 30 m grid cell in the buffered Atlanta study area
+Geometry / CRS,Cell polygons stored in EPSG:32616; centroids stored as WGS84 lon/lat
+Projected spatial extent,"[694260, 3684210, 796800, 3797940]"
+Study-area buffer,"2,000 m around the Census urban area"

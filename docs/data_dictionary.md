@@ -340,7 +340,7 @@ Honest status note:
 
 ### Figures
 
-- `figures/data_processing/<city_stem>/` contains per-city data-processing report figures
+- `figures/data_processing/city_summaries/<city_stem>/` contains per-city data-processing report figures
 - Current per-city data-processing figure set includes:
   - `<city_slug>_key_distributions.png`
   - `<city_slug>_land_cover_composition.png`
@@ -351,9 +351,9 @@ Honest status note:
 
 ### Report-style outputs
 
-- `outputs/data_processing/<city_stem>/<city_slug>_data_summary.md` stores the markdown summary for one city
-- `outputs/data_processing/<city_stem>/tables/` stores supporting CSV tables for that city summary
-- `outputs/data_processing/data_processing_report_summary.csv` stores the latest batch run status across requested cities
+- `outputs/data_processing/city_summaries/<city_stem>/<city_slug>_data_summary.md` stores the markdown summary for one city
+- `outputs/data_processing/city_summaries/<city_stem>/tables/` stores supporting CSV tables for that city summary
+- `outputs/data_processing/batch_reports/data_processing_report_summary.csv` stores the latest batch run status across requested cities
 - `outputs/modeling/` stores the current first-pass modeling metrics tables, held-out predictions, calibration tables, and run metadata
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
-- Legacy Phoenix-only root-level outputs may still exist from pre-refactor runs, but the reporting code now writes new data-processing summaries only to the split stage-specific structure above
+- `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary

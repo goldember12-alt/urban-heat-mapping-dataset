@@ -1,0 +1,9 @@
+metric,value
+Primary Albuquerque analysis file,data_processed\city_features\04_albuquerque_nm_features.parquet
+Dataset choice rationale,Canonical per-city filtered output intended for downstream modeling.
+Observations,1336755
+Variables,14
+Unit of analysis,One filtered 30 m grid cell in the buffered Albuquerque study area
+Geometry / CRS,Cell polygons stored in EPSG:32613; centroids stored as WGS84 lon/lat
+Projected spatial extent,"[335070, 3866340, 372120, 3917310]"
+Study-area buffer,"2,000 m around the Census urban area"

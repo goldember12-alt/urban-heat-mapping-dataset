@@ -1,0 +1,4 @@
+candidate,path,exists,reason
+per_city_feature_output,C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\data_processed\city_features\29_detroit_mi_features.parquet,True,Canonical per-city filtered output intended for downstream modeling.
+intermediate_filtered_output,C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\data_processed\intermediate\city_features\29_detroit_mi_features_filtered.parquet,True,Filtered intermediate table with the same post-rule rows but not the primary published output.
+merged_final_dataset,C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\data_processed\final\final_dataset.parquet,True,Merged cross-city dataset that may contain this city's rows but is broader than the city-only deliverable.

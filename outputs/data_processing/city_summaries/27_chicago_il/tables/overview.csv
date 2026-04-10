@@ -1,0 +1,9 @@
+metric,value
+Primary Chicago analysis file,data_processed\city_features\27_chicago_il_features.parquet
+Dataset choice rationale,Canonical per-city filtered output intended for downstream modeling.
+Observations,6722963
+Variables,16
+Unit of analysis,One filtered 30 m grid cell in the buffered Chicago study area
+Geometry / CRS,Cell polygons stored in EPSG:32616; centroids stored as WGS84 lon/lat
+Projected spatial extent,"[362340, 4577190, 499230, 4704990]"
+Study-area buffer,"2,000 m around the Census urban area"

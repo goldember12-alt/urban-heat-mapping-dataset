@@ -115,10 +115,10 @@ Key outputs:
 - `data_processed/intermediate/city_features/`
 - `data_processed/city_features/*.gpkg`
 - `data_processed/city_features/*.parquet`
-- `outputs/data_processing/<city_stem>/<city_slug>_data_summary.md`
-- `outputs/data_processing/<city_stem>/tables/*.csv`
-- `figures/data_processing/<city_stem>/*.png`
-- `outputs/data_processing/data_processing_report_summary.csv`
+- `outputs/data_processing/city_summaries/<city_stem>/<city_slug>_data_summary.md`
+- `outputs/data_processing/city_summaries/<city_stem>/tables/*.csv`
+- `figures/data_processing/city_summaries/<city_stem>/*.png`
+- `outputs/data_processing/batch_reports/data_processing_report_summary.csv`
 
 Main entrypoints:
 
@@ -132,7 +132,7 @@ Operational status:
 
 - Full-stack orchestration has been manually verified for Phoenix, Tucson, Las Vegas, and Albuquerque
 - Full 30-city completion is still limited by acquisition/runtime rather than missing code paths
-- Report-style city summaries now use split roots by stage: data-processing artifacts under `outputs/data_processing/` and `figures/data_processing/`, with `outputs/modeling/` and `figures/modeling/` reserved for later ML/evaluation deliverables
+- Report-style city summaries now use dedicated sub-roots: per-city artifacts under `outputs/data_processing/city_summaries/` and `figures/data_processing/city_summaries/`, batch status tables under `outputs/data_processing/batch_reports/`, and separate modeling roots under `outputs/modeling/` and `figures/modeling/`
 
 ## 5. Final Dataset Assembly
 

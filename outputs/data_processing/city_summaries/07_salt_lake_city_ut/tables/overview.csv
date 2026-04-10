@@ -1,0 +1,9 @@
+metric,value
+Primary Salt Lake City analysis file,data_processed\city_features\07_salt_lake_city_ut_features.parquet
+Dataset choice rationale,Canonical per-city filtered output intended for downstream modeling.
+Observations,863557
+Variables,16
+Unit of analysis,One filtered 30 m grid cell in the buffered Salt Lake City study area
+Geometry / CRS,Cell polygons stored in EPSG:32612; centroids stored as WGS84 lon/lat
+Projected spatial extent,"[406140, 4479540, 434370, 4520790]"
+Study-area buffer,"2,000 m around the Census urban area"

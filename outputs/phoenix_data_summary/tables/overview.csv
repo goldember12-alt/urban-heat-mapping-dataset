@@ -1,9 +1,0 @@
-metric,value
-Primary Phoenix analysis file,data_processed\city_features\01_phoenix_az_features.parquet
-Dataset choice rationale,Canonical Phoenix-only filtered output intended for downstream modeling.
-Observations,4735561
-Variables,14
-Unit of analysis,One filtered 30 m grid cell in the buffered Phoenix study area
-Geometry / CRS,Cell polygons stored in EPSG:32612; centroids stored as WGS84 lon/lat
-Projected spatial extent,"[362550, 3662520, 458400, 3752910]"
-Study-area buffer,"2,000 m around the Census urban area"

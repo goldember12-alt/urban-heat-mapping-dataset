@@ -1,0 +1,5 @@
+stage,n_rows,share_of_unfiltered_pct
+unfiltered_input_rows,1243292,100.0
+dropped_open_water_rows,8954,0.7201847997091593
+dropped_lt3_ecostress_pass_rows,218,0.017534094967232156
+final_filtered_rows,863557,69.45729563127568

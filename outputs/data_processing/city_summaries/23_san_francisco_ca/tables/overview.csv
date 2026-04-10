@@ -1,0 +1,9 @@
+metric,value
+Primary San Francisco analysis file,data_processed\city_features\23_san_francisco_ca_features.parquet
+Dataset choice rationale,Canonical per-city filtered output intended for downstream modeling.
+Observations,1466276
+Variables,16
+Unit of analysis,One filtered 30 m grid cell in the buffered San Francisco study area
+Geometry / CRS,Cell polygons stored in EPSG:32610; centroids stored as WGS84 lon/lat
+Projected spatial extent,"[531600, 4141500, 597600, 4222200]"
+Study-area buffer,"2,000 m around the Census urban area"

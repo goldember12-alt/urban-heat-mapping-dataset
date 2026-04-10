@@ -19,8 +19,8 @@ Canonical outputs:
 - `data_processed/final/final_dataset.csv`
 - one per-city feature GeoPackage and parquet in `data_processed/city_features/`
 - modeling handoff artifacts in `data_processed/modeling/`
-- data-processing report outputs in `outputs/data_processing/<city_stem>/`
-- data-processing figures in `figures/data_processing/<city_stem>/`
+- data-processing report outputs in `outputs/data_processing/city_summaries/<city_stem>/`
+- data-processing figures in `figures/data_processing/city_summaries/<city_stem>/`
 - first-pass ML outputs in `outputs/modeling/`
 - reserved modeling figures in `figures/modeling/`
 
@@ -109,8 +109,8 @@ Planned next, not yet implemented as full production code:
 - `docs/`: project-facing documentation
 - `data_raw/`: immutable downloaded source data
 - `data_processed/`: processed artifacts organized by project phase
-- `figures/`: figure outputs split into `figures/data_processing/` for preprocessing-era reports and `figures/modeling/` for ML/evaluation deliverables, plus a small number of legacy/global inspection plots
-- `outputs/`: report-style deliverables split into `outputs/data_processing/` for preprocessing-era city summaries, `outputs/modeling/` for ML/evaluation tables and prediction artifacts, plus storage-management outputs
+- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables
+- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts, and `outputs/storage/` for storage-management outputs
 
 Important `data_processed/` subdirectories:
 
@@ -124,6 +124,14 @@ Important `data_processed/` subdirectories:
 - `final/`
 - `modeling/`
 - `orchestration/`
+
+Recommended top-level navigation:
+
+1. Start with `README.md` for the project overview and runnable entrypoints.
+2. Use `data_processed/` for canonical machine-readable artifacts by workflow stage.
+3. Use `outputs/` for report-style tables and markdown deliverables.
+4. Use `figures/` for visual deliverables only.
+5. Use `docs/` for workflow, schema, modeling, and handoff guidance.
 
 ## Python Environment
 

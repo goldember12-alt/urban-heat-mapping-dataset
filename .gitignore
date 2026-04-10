@@ -14,6 +14,7 @@ notebooks/.ipynb_checkpoints/
 
 # Pytest
 .pytest_cache/
+.pytest_tmp_feature/
 
 # OS / editor
 .DS_Store
@@ -30,5 +31,8 @@ figures/
 
 src/__pycache__/
 tests/__pycache__/
+.codex_tmp/
+.cleanup_pending_manual_delete/
+.t/
 *.pyc
 *.bak.codex
