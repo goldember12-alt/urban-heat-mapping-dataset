@@ -38,12 +38,15 @@ Implemented in code:
 - The modeling data loader is now parquet-first by default, while still supporting explicit CSV compatibility inputs including deterministic chunked per-city sampling when that fallback path is intentionally used.
 - The rebuilt repo-local `.venv` is now the standard interpreter for this repo, reads the canonical `final_dataset.parquet` and `city_outer_folds.parquet` cleanly through both `pandas` and low-level `pyarrow`, and both smoke modeling CLIs have been manually verified end to end against those parquet artifacts.
 - The shared Windows bootstrap script now works around a Python 3.12 temp-directory ACL issue seen in this Codex sandbox: `tempfile.mkdtemp()` creates `0o700` directories that become unwritable to the active `CodexSandboxUsers` identity, so `bootstrap.ps1` now routes `ensurepip` and `pip` through a helper that creates temp dirs with inherited ACLs instead.
-- The tuned modeling runner now creates its per-fold cache directories with plain `Path.mkdir()` instead of `tempfile.TemporaryDirectory`, which avoids Windows temp-directory permission failures seen in this Codex session.
+- The pytest harness now works around the same Windows temp-directory ACL behavior without writing temp artifacts into the repo: `tests/conftest.py` patches pytest temp-root creation plus `tempfile.mkdtemp()` on Windows to use short external roots under `C:\Users\golde\.tmp\pytest-STAT5630_FinalProject_DataProcessing\`, which restores reliable `tmp_path` setup/cleanup while keeping repo-local temp/cache folders out of normal test runs.
+- The tuned modeling runner now creates its per-fold cache directories with plain `Path.mkdir()` under the external cache root `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\modeling-cache\` instead of repo-local temp folders or `tempfile.TemporaryDirectory`, which avoids Windows temp-directory permission failures and keeps modeling-cache churn out of the repo.
+- Pytest cacheprovider is now disabled via `pytest.ini`, so routine test runs no longer recreate `.pytest_cache` in the repo while still using the external temp roots above.
 - Final-dataset assembly now writes parquet and CSV via atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` with row count, column count, per-city row counts, artifact paths/sizes, and an explicit shared-dataframe provenance flag.
 - The regenerated `data_processed/final/final_dataset.csv` has now been re-audited against the canonical parquet and matches on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
+- Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
@@ -88,6 +91,37 @@ Standardization status:
 
 As of 2026-03-26:
 
+- 2026-04-11 pytest Windows temp-dir repair:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_feature_assembly.py tests/test_modeling_runner.py -q`
+  - Result: `35 passed`
+  - Coverage in this checkpoint includes the previously failing feature-assembly temp-root cleanup path, default pytest temp roots without `--basetemp`, tmp-path-heavy modeling runner tests, and the new external temp/cache routing under `C:\Users\golde\.tmp\pytest-STAT5630_FinalProject_DataProcessing\`.
+- 2026-04-11 pytest/repo-cleanliness and tuned-runner parity checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_feature_assembly.py tests/test_modeling_runner.py -q`
+  - Result: `40 passed`
+  - Scope of this checkpoint:
+    - confirm pytest temp and cache artifacts stay under `C:\Users\golde\.tmp\pytest-STAT5630_FinalProject_DataProcessing\` instead of reappearing in the repo
+    - confirm the tuned modeling runner uses the external cache root under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\modeling-cache\`
+    - extend resumability/progress/sampled-diagnostics tests so random forest is covered alongside logistic SAGA
+  - Verification notes:
+    - repo-local stale `.pytest_cache\` and `.t\` folders were not touched during the rerun
+    - active pytest temp output was observed under `C:\Users\golde\.tmp\pytest-STAT5630_FinalProject_DataProcessing\`
+    - the tuned modeling cache root was exercised under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\modeling-cache\`
+- 2026-04-11 benchmark-ladder standardization checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - Result: `32 passed`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_tuning_history`
+  - Result: success; refreshed `outputs/modeling/tuning_history.csv` and `outputs/modeling/tuning_history_annotations.csv`
+  - Coverage in this checkpoint includes the new random-forest-specific tuning-history contract descriptors plus the shared sampled benchmark ladder conventions used for retained benchmark annotations.
+- 2026-04-11 practical RF staged-workflow checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_modeling_runner.py -q`
+  - Result: `35 passed`
+  - Scope of this checkpoint:
+    - added the random-forest-only `frontier` preset and model-specific preset validation/help text
+    - verified that RF `frontier` metadata and tuning-history descriptors remain legible in the shared runner / registry workflow
+    - updated docs so logistic sampled `full` remains the retained baseline path while RF now escalates from `smoke` to `frontier` to `full`
+  - Live runtime evidence captured during this checkpoint:
+    - an observed in-progress RF `full` all-fold sampled `5000` rows-per-city run under `outputs/modeling/random_forest/full_allfolds_s5000_samplecurve-5k_2026-04-11_145823/` reported `81` candidates, `4` inner grouped-CV splits, `5` outer folds, and `1620` serial inner fits
+    - at `79` completed fits, `progress.json` reported about `4549.86s` elapsed and about `88751s` ETA, which implies roughly `24-30` hours total wall clock on this workstation
 - 2026-04-10 shared-venv bootstrap repair:
   - `powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -SkipInstall`
   - Result: success; created `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe`
@@ -359,12 +393,14 @@ Test-verified:
 - Baseline-modeling coverage is included in `tests/test_model_baselines.py`.
 - First-pass grouped sklearn modeling coverage is included in `tests/test_modeling_contract.py` and `tests/test_modeling_runner.py`.
 - Modeling-path regression coverage now also locks in parquet-preferred fold resolution plus CLI parquet-first help/default guidance.
+- Random-forest parity coverage now also locks in the same smoke-preset metadata, sampled preload, progress logging, resumability, and sampled-diagnostics behavior already exercised for logistic SAGA.
+- Random-forest tuning-history descriptors now identify the staged `smoke`, `frontier`, and `full` grid families explicitly instead of collapsing everything into a generic-grid label, which brings RF run-history drift tracking closer to the existing logistic standard.
 - Data-processing report path generation and batch city iteration coverage are included in `tests/test_data_processing_reporting.py`.
-- The latest targeted regression result is `36 passed` for AppEEARS client/acquisition, full-stack orchestration, and support-layer vector normalization hardening.
+- The latest targeted modeling regression result is `35 passed` for the staged RF preset/config/help/history pass in `tests/test_modeling_runner.py`.
 
 Not manually verified in the latest checkpoint:
 
-- No full canonical all-fold modeling run has been recorded yet for `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` on the full `71,394,894`-row dataset beyond the smoke presets.
+- No full canonical all-fold modeling run has been recorded yet for `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` on the full `71,394,894`-row dataset, and sampled all-fold runs remain the practical benchmark path on this workstation.
 - The new outer-fold resume path and sampled diagnostics were test-verified in this checkpoint but were not manually exercised yet on a real interrupted overnight run.
 - No pyarrow downgrade or alternate-version experiment was needed in this checkpoint because the current rebuilt `.venv` already reads both real parquet artifacts successfully.
 
@@ -665,17 +701,16 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Use the new monitoring and outer-fold resume support for a practical two-stage benchmark workflow instead of jumping straight to an unsampled all-fold run.
+Run the cheap RF Stage A comparison first, not the expensive RF `full` search.
 
 Recommended order:
 
-- Start with a sampled logistic search:
-  - `.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0,1,2,3,4 --tuning-preset full --grid-search-n-jobs 1 --output-dir outputs\modeling\ls\full_f01234`
-- Monitor the run in `outputs\modeling\ls\full_f01234\progress.json`, `progress_log.csv`, `fold_status.json`, and `sample_diagnostics_by_city.csv`.
-- If the run is interrupted, rerun the same command against the same `--output-dir`; completed folds should now be skipped automatically.
-- After the sampled diagnostics and best-parameter pattern look stable, launch the corresponding full-row confirmation run with the same short output-dir discipline.
-- Apply the same sampled-first, full-row-second pattern to random forest:
-  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --outer-folds 0,1,2,3,4 --tuning-preset full --grid-search-n-jobs 1 --model-n-jobs 1 --output-dir outputs\modeling\rf\full_f01234`
+- Start with RF `smoke` on all folds at `5000` rows per city:
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --run-label nonlinear-check`
+- Only if that retained RF smoke checkpoint looks materially better than the sampled logistic baseline should the next step be RF `frontier`:
+  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset frontier --grid-search-n-jobs 1 --model-n-jobs 1 --run-label frontier-check`
+- Reserve RF `full` for expensive confirmation only if the `frontier` run still looks worth the extra cost.
+- When a retained RF checkpoint is completed, refresh `tuning_history.csv` and mark the retained decision run as `benchmark` in `tuning_history_annotations.csv`.
 
 
 
@@ -734,14 +769,15 @@ Recommended order:
 - Full all-city raw hydro acquisition/clipping has not been executed yet.
 - Full support-layer prep has not yet been materialized beyond the first four completed cities.
 - Full all-city AppEEARS acquisition has not been executed yet; current completed coverage is Phoenix, Tucson, Las Vegas, and Albuquerque.
-- No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset.
+- No full canonical run of `src.run_modeling_baselines`, `src.run_logistic_saga`, or `src.run_random_forest` has been recorded yet on the real `71,394,894`-row final dataset, and that is not the expected routine benchmark path on the current workstation.
 - The old parquet failure signatures are not reproducible in the rebuilt `.venv`; canonical parquet reads and parquet-backed smoke runs are now verified on `pandas 3.0.1` plus `pyarrow 23.0.1`.
 - The rebuilt `.venv` smoke runs still required `--grid-search-n-jobs 1` and, for random forest, `--model-n-jobs 1` because the Windows sandbox still makes serial execution the stable path here.
-- The smoke runs completed, but `joblib` pipeline-cache writes still emitted non-fatal warnings under the current Windows workspace paths, so cache effectiveness is not yet fully verified.
+- The smoke runs completed, but the external pipeline-cache path should be re-verified after the latest move out of the repo before treating cache behavior as fully settled.
 - The bounded `full` logistic dry run also completed, but it reproduced the same non-fatal `joblib` cache warnings and several logistic `ConvergenceWarning` messages; those warnings did not block outputs or registry logging, but they remain the main overnight-run caveat.
 - The first broader logistic benchmark also exposed a Windows path-length limit when long output-dir names were combined with cache subdirectories; the runner now uses shorter cache-dir names, but future benchmark output dirs should still stay concise.
+- A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
-- The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but full-canonical runtime and memory may still require fold batching and disciplined overnight scheduling on this workstation.
+- The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.

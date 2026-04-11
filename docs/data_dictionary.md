@@ -331,6 +331,10 @@ Held-out prediction table columns:
 - one row per logged modeling run
 - lightweight manual fields only
 - a durable place to label runs as validation, exploratory, benchmark, superseded, or similar without editing generated metadata
+- on this workstation, the intended convention is:
+  - `validation` for smoke or one-fold workflow checks
+  - `exploratory` for partial-scope, legacy-contract, or abandoned search paths
+  - `benchmark` for retained decision checkpoints, including the logistic sampled-full baseline ladder and any retained random-forest stage outputs
 
 Honest status note:
 

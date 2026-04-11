@@ -233,6 +233,15 @@ def _describe_search_contract(
         )
         return version, descriptor
 
+    if model_type == "random_forest":
+        forest_contract_slug, forest_contract_text = _describe_random_forest_contract(param_grid)
+        version = f"{model_type}__{preset or 'custom'}__{forest_contract_slug}__cv{inner_cv_splits or 'na'}__pc{param_candidate_count or 'na'}"
+        descriptor = (
+            f"random_forest preset={preset or 'custom'}; {forest_contract_text}; "
+            f"inner_cv={inner_cv_splits or 'na'}; candidates={param_candidate_count or 'na'}"
+        )
+        return version, descriptor
+
     version = f"{model_type}__{preset or 'custom'}__generic_grid__cv{inner_cv_splits or 'na'}__pc{param_candidate_count or 'na'}"
     descriptor = (
         f"{model_type} preset={preset or 'custom'}; generic param grid; "
@@ -265,6 +274,48 @@ def _describe_logistic_contract(param_grid: list[dict[str, Any]]) -> tuple[str, 
     if has_elasticnet and not (has_l2 or has_l1):
         return "elasticnet_only", "elastic-net-only grid"
     return "custom_l1_ratio_grid", "custom l1_ratio grid"
+
+
+def _describe_random_forest_contract(param_grid: list[dict[str, Any]]) -> tuple[str, str]:
+    expected_smoke_grid = {
+        "model__n_estimators": {200},
+        "model__max_depth": {10, None},
+        "model__max_features": {"sqrt"},
+        "model__min_samples_leaf": {1, 5},
+    }
+    expected_frontier_grid = {
+        "model__n_estimators": {200, 300},
+        "model__max_depth": {10, 20},
+        "model__max_features": {"sqrt"},
+        "model__min_samples_leaf": {1, 5},
+    }
+    expected_full_grid = {
+        "model__n_estimators": {100, 300, 500},
+        "model__max_depth": {10, 20, None},
+        "model__max_features": {"sqrt", 0.5, None},
+        "model__min_samples_leaf": {1, 5, 10},
+    }
+
+    observed_grid: dict[str, set[Any]] = {}
+    for candidate in param_grid:
+        if not isinstance(candidate, dict):
+            continue
+        for param_name, raw_values in candidate.items():
+            values = raw_values if isinstance(raw_values, list) else [raw_values]
+            observed_values = observed_grid.setdefault(param_name, set())
+            observed_values.update(values)
+
+    if observed_grid == expected_smoke_grid:
+        return "depth_feature_leaf_smoke", "depth/feature/leaf smoke grid"
+    if observed_grid == expected_frontier_grid:
+        return "targeted_frontier", "targeted frontier grid around the smoke-winning RF region"
+    if observed_grid == expected_full_grid:
+        return "depth_feature_leaf_full", "depth/feature/leaf full grid"
+
+    expected_rf_keys = set(expected_smoke_grid)
+    if set(observed_grid) == expected_rf_keys:
+        return "depth_feature_leaf_custom", "depth/feature/leaf custom grid"
+    return "custom_rf_grid", "custom random-forest grid"
 
 
 def _add_frontier_fields(history_df: pd.DataFrame) -> pd.DataFrame:

@@ -8,7 +8,8 @@ from src.modeling_config import (
     DEFAULT_FEATURE_COLUMNS,
     DEFAULT_FINAL_DATASET_PATH,
     DEFAULT_TUNING_PRESET,
-    VALID_TUNING_PRESETS,
+    get_tuning_preset_help_text,
+    get_valid_tuning_presets,
 )
 from src.modeling_output_naming import resolve_model_output_dir
 from src.modeling_run_registry import build_cli_command, record_model_run
@@ -77,9 +78,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tuning-preset",
-        choices=VALID_TUNING_PRESETS,
+        choices=get_valid_tuning_presets("random_forest"),
         default=DEFAULT_TUNING_PRESET,
-        help="Use 'smoke' for the bounded default verification search or 'full' for the broader tuning search.",
+        help=get_tuning_preset_help_text("random_forest"),
     )
     return parser
 

@@ -29,6 +29,7 @@ from src.modeling_progress import (
 )
 from src.modeling_run_registry import build_cli_command, infer_run_registry_path, record_model_run
 from src.modeling_tuning_history import (
+    _describe_search_contract,
     infer_tuning_history_annotations_path,
     infer_tuning_history_path,
     refresh_tuning_history_artifacts,
@@ -151,6 +152,41 @@ def _build_mixed_type_feature_fixture() -> tuple[pd.DataFrame, pd.Series]:
     )
     y = pd.Series([0, 0, 0, 1, 1, 1], dtype="int8")
     return X, y
+
+
+def _minimal_param_grid_for(model_name: str) -> list[dict[str, object]]:
+    if model_name == "logistic_saga":
+        return [{"model__C": [0.1], "model__l1_ratio": [0.0]}]
+    if model_name == "random_forest":
+        return [
+            {
+                "model__n_estimators": [10],
+                "model__max_depth": [3],
+                "model__max_features": ["sqrt"],
+                "model__min_samples_leaf": [1],
+            }
+        ]
+    raise ValueError(f"Unsupported model_name: {model_name}")
+
+
+def _runner_for(model_name: str):
+    if model_name == "logistic_saga":
+        return run_logistic_saga_model
+    if model_name == "random_forest":
+        return run_random_forest_model
+    raise ValueError(f"Unsupported model_name: {model_name}")
+
+
+def _output_dir_for(workspace_tmp_path: Path, model_name: str) -> Path:
+    return workspace_tmp_path / "outputs" / "modeling" / model_name
+
+
+def _runner_extra_kwargs_for(model_name: str) -> dict[str, object]:
+    if model_name == "logistic_saga":
+        return {}
+    if model_name == "random_forest":
+        return {"model_n_jobs": 1}
+    raise ValueError(f"Unsupported model_name: {model_name}")
 
 
 def test_run_modeling_baselines_writes_expected_artifacts(workspace_tmp_path: Path):
@@ -497,45 +533,129 @@ def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     logistic_smoke = get_model_tuning_spec("logistic_saga", "smoke")
     logistic_full = get_model_tuning_spec("logistic_saga", "full")
     forest_smoke = get_model_tuning_spec("random_forest", "smoke")
+    forest_frontier = get_model_tuning_spec("random_forest", "frontier")
     forest_full = get_model_tuning_spec("random_forest", "full")
 
     assert len(list(ParameterGrid(logistic_smoke.param_grid))) < len(list(ParameterGrid(logistic_full.param_grid)))
-    assert len(list(ParameterGrid(forest_smoke.param_grid))) < len(list(ParameterGrid(forest_full.param_grid)))
+    assert len(list(ParameterGrid(forest_smoke.param_grid))) < len(list(ParameterGrid(forest_frontier.param_grid)))
+    assert len(list(ParameterGrid(forest_frontier.param_grid))) < len(list(ParameterGrid(forest_full.param_grid)))
     assert logistic_smoke.inner_cv_splits < logistic_full.inner_cv_splits
-    assert forest_smoke.inner_cv_splits < forest_full.inner_cv_splits
+    assert forest_smoke.inner_cv_splits <= forest_frontier.inner_cv_splits
+    assert forest_frontier.inner_cv_splits <= forest_full.inner_cv_splits
     assert all("model__penalty" not in candidate for candidate in logistic_smoke.param_grid)
     assert all("model__penalty" not in candidate for candidate in logistic_full.param_grid)
     assert _logistic_penalty_families_from_grid(logistic_smoke.param_grid) == {"l2", "l1", "elasticnet"}
     assert _logistic_penalty_families_from_grid(logistic_full.param_grid) == {"l2", "l1", "elasticnet"}
 
 
-def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(workspace_tmp_path: Path):
+@pytest.mark.parametrize(
+    ("model_name", "preset_name", "expected_contract_slug", "expected_contract_text"),
+    [
+        ("logistic_saga", "smoke", "l1_ratio_family_complete", "family-complete"),
+        ("logistic_saga", "full", "l1_ratio_family_complete", "family-complete"),
+        ("random_forest", "smoke", "depth_feature_leaf_smoke", "smoke grid"),
+        ("random_forest", "frontier", "targeted_frontier", "targeted frontier"),
+        ("random_forest", "full", "depth_feature_leaf_full", "full grid"),
+    ],
+)
+def test_tuning_history_contract_descriptors_identify_current_benchmark_grids(
+    model_name: str, preset_name: str, expected_contract_slug: str, expected_contract_text: str
+):
+    tuning_spec = get_model_tuning_spec(model_name, preset_name)
+    candidate_count = len(list(ParameterGrid(tuning_spec.param_grid)))
+
+    search_contract_version, search_contract_descriptor = _describe_search_contract(
+        model_type=model_name,
+        preset=preset_name,
+        inner_cv_splits=tuning_spec.inner_cv_splits,
+        param_candidate_count=candidate_count,
+        param_grid=list(tuning_spec.param_grid),
+    )
+
+    assert expected_contract_slug in search_contract_version
+    assert expected_contract_text in search_contract_descriptor
+
+
+def test_random_forest_frontier_metadata_and_history_reflect_staged_preset(workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
-    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "random_forest"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
-    result = run_logistic_saga_model(
+    result = run_random_forest_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        tuning_preset="frontier",
+        grid_search_n_jobs=1,
+        model_n_jobs=1,
+    )
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    record_model_run(
+        model_type="random_forest",
+        preset="frontier",
+        command="python -m src.run_random_forest --tuning-preset frontier",
+        output_dir=output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=[0],
+        grid_search_n_jobs=1,
+        model_n_jobs=1,
+        summary_metrics_path=result.summary_metrics_path,
+        metadata_path=result.metadata_path,
+        status="success",
+    )
+    registry_path = infer_run_registry_path(output_dir)
+    history_df = pd.read_csv(infer_tuning_history_path(registry_path), dtype="string").fillna("")
+
+    assert metadata["tuning_preset"] == "frontier"
+    assert metadata["search_space"]["param_candidate_count"] == len(
+        list(ParameterGrid(get_model_tuning_spec("random_forest", "frontier").param_grid))
+    )
+    assert metadata["inner_cv_splits_requested"] == get_model_tuning_spec("random_forest", "frontier").inner_cv_splits
+    assert history_df.loc[0, "preset"] == "frontier"
+    assert "targeted_frontier" in history_df.loc[0, "search_contract_version"]
+    assert "targeted frontier" in history_df.loc[0, "search_contract_descriptor"]
+
+
+def test_logistic_cli_rejects_random_forest_only_frontier_preset():
+    with pytest.raises(SystemExit):
+        build_logistic_arg_parser().parse_args(["--tuning-preset", "frontier"])
+
+
+@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(
+    model_name: str, workspace_tmp_path: Path
+):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = _output_dir_for(workspace_tmp_path, model_name)
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = _runner_for(model_name)(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
         grid_search_n_jobs=1,
+        **_runner_extra_kwargs_for(model_name),
     )
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
-    expected_candidates = len(list(ParameterGrid(get_model_tuning_spec("logistic_saga", "smoke").param_grid)))
+    tuning_spec = get_model_tuning_spec(model_name, "smoke")
+    expected_candidates = len(list(ParameterGrid(tuning_spec.param_grid)))
 
     assert metadata["tuning_preset"] == "smoke"
-    assert metadata["inner_cv_splits_requested"] == get_model_tuning_spec("logistic_saga", "smoke").inner_cv_splits
+    assert metadata["model_name"] == model_name
+    assert metadata["inner_cv_splits_requested"] == tuning_spec.inner_cv_splits
     assert metadata["pipeline_cache_enabled"] is True
     assert metadata["pipeline_cache_root"] == str(_get_pipeline_cache_base_dir())
-    assert metadata["pipeline_builder_kwargs"] == {
-        "max_iter": DEFAULT_LOGISTIC_MAX_ITER,
-        "tol": DEFAULT_LOGISTIC_TOL,
-    }
     assert metadata["data_loading_strategy"] == "per_outer_fold_load"
     assert metadata["search_space"]["param_candidate_count"] == expected_candidates
     assert metadata["search_space"]["estimated_total_inner_fits"] == expected_candidates * 2
@@ -543,12 +663,24 @@ def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(workspa
     assert metadata["fold_runtime"][0]["inner_cv_splits"] == 2
     assert metadata["fold_runtime"][0]["preprocess_output_feature_count"] >= len(DEFAULT_FEATURE_COLUMNS)
     assert metadata["fold_runtime"][0]["grid_search_seconds"] >= 0.0
+    if model_name == "logistic_saga":
+        assert metadata["model_n_jobs"] is None
+        assert metadata["pipeline_builder_kwargs"] == {
+            "max_iter": DEFAULT_LOGISTIC_MAX_ITER,
+            "tol": DEFAULT_LOGISTIC_TOL,
+        }
+    else:
+        assert metadata["model_n_jobs"] == 1
+        assert metadata["pipeline_builder_kwargs"] == {}
 
 
-def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path):
+@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+def test_sampled_tuned_runs_preload_city_rows_once(
+    model_name: str, monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path
+):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
-    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    output_dir = _output_dir_for(workspace_tmp_path, model_name)
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
@@ -578,15 +710,16 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("src.modeling_runner.load_sampled_modeling_rows_with_diagnostics", counting_load_sampled_rows)
     monkeypatch.setattr("src.modeling_runner.load_outer_fold_data", fail_load_outer_fold_data)
 
-    result = run_logistic_saga_model(
+    result = _runner_for(model_name)(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
         sample_rows_per_city=5,
-        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        param_grid=_minimal_param_grid_for(model_name),
         grid_search_n_jobs=1,
+        **_runner_extra_kwargs_for(model_name),
     )
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
@@ -597,21 +730,23 @@ def test_sampled_tuned_runs_preload_city_rows_once(monkeypatch: pytest.MonkeyPat
     assert metadata["timing_seconds"]["sampled_city_preload"] is not None
 
 
-def test_tuned_runner_writes_progress_and_fold_status_artifacts(workspace_tmp_path: Path):
+@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+def test_tuned_runner_writes_progress_and_fold_status_artifacts(model_name: str, workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
-    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    output_dir = _output_dir_for(workspace_tmp_path, model_name)
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
-    run_logistic_saga_model(
+    _runner_for(model_name)(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
-        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        param_grid=_minimal_param_grid_for(model_name),
         grid_search_n_jobs=1,
+        **_runner_extra_kwargs_for(model_name),
     )
 
     progress = json.loads((output_dir / PROGRESS_FILENAME).read_text(encoding="utf-8"))
@@ -630,21 +765,25 @@ def test_tuned_runner_writes_progress_and_fold_status_artifacts(workspace_tmp_pa
     assert Path(fold_status["folds"]["0"]["artifact_paths"]["predictions"]).exists()
 
 
-def test_tuned_runner_rerun_skips_completed_folds(monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path):
+@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+def test_tuned_runner_rerun_skips_completed_folds(
+    model_name: str, monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path
+):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
-    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    output_dir = _output_dir_for(workspace_tmp_path, model_name)
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
-    run_logistic_saga_model(
+    _runner_for(model_name)(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
-        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        param_grid=_minimal_param_grid_for(model_name),
         grid_search_n_jobs=1,
+        **_runner_extra_kwargs_for(model_name),
     )
 
     load_calls: list[int] = []
@@ -657,14 +796,15 @@ def test_tuned_runner_rerun_skips_completed_folds(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("src.modeling_runner.load_outer_fold_data", counting_load_outer_fold_data)
 
-    result = run_logistic_saga_model(
+    result = _runner_for(model_name)(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0, 1],
-        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        param_grid=_minimal_param_grid_for(model_name),
         grid_search_n_jobs=1,
+        **_runner_extra_kwargs_for(model_name),
     )
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
@@ -676,22 +816,24 @@ def test_tuned_runner_rerun_skips_completed_folds(monkeypatch: pytest.MonkeyPatc
     assert list(fold_metrics["outer_fold"]) == [0, 1]
 
 
-def test_sampled_tuned_runs_write_signal_preservation_diagnostics(workspace_tmp_path: Path):
+@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+def test_sampled_tuned_runs_write_signal_preservation_diagnostics(model_name: str, workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
-    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    output_dir = _output_dir_for(workspace_tmp_path, model_name)
     _build_imbalanced_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
-    result = run_logistic_saga_model(
+    result = _runner_for(model_name)(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         selected_outer_folds=[0],
         sample_rows_per_city=4,
-        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        param_grid=_minimal_param_grid_for(model_name),
         grid_search_n_jobs=1,
+        **_runner_extra_kwargs_for(model_name),
     )
 
     diagnostics_path = output_dir / SAMPLED_DIAGNOSTICS_FILENAME
@@ -745,6 +887,9 @@ def test_tuned_runner_clis_default_to_explicit_smoke_preset():
     assert logistic_args.inner_cv_splits is None
     assert forest_args.inner_cv_splits is None
 
+    forest_frontier_args = build_random_forest_arg_parser().parse_args(["--tuning-preset", "frontier"])
+    assert forest_frontier_args.tuning_preset == "frontier"
+
 
 def test_tuned_runner_cli_help_reflects_parquet_first_defaults_and_csv_fallback():
     logistic_help = build_logistic_arg_parser().format_help()
@@ -755,4 +900,8 @@ def test_tuned_runner_cli_help_reflects_parquet_first_defaults_and_csv_fallback(
         assert "compatibility fallback only" in help_text
         assert "prefers city_outer_folds.parquet" in help_text
         assert "bounded default verification" in help_text
-        assert "broader tuning search" in help_text
+
+    assert "broader tuning search" in logistic_help
+    assert "cheap nonlinear comparison against logistic" in forest_help
+    assert "targeted follow-up search" in forest_help
+    assert "confirmation only after earlier RF stages justify it" in forest_help

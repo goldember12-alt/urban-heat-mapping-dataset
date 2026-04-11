@@ -69,9 +69,10 @@ DEFAULT_INNER_CV_SPLITS = 4
 SMOKE_INNER_CV_SPLITS = 3
 DEFAULT_CALIBRATION_BINS = 10
 TUNING_PRESET_SMOKE = "smoke"
+TUNING_PRESET_FRONTIER = "frontier"
 TUNING_PRESET_FULL = "full"
 DEFAULT_TUNING_PRESET = TUNING_PRESET_SMOKE
-VALID_TUNING_PRESETS = (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
+VALID_TUNING_PRESETS = (TUNING_PRESET_SMOKE, TUNING_PRESET_FRONTIER, TUNING_PRESET_FULL)
 
 # sklearn 1.8 deprecates explicit LogisticRegression penalty values. When penalty
 # is left at its default sentinel, l1_ratio selects the effective family:
@@ -119,6 +120,15 @@ RANDOM_FOREST_SMOKE_PARAM_GRID = [
         "model__min_samples_leaf": [1, 5],
     }
 ]
+RANDOM_FOREST_FRONTIER_INNER_CV_SPLITS = SMOKE_INNER_CV_SPLITS
+RANDOM_FOREST_FRONTIER_PARAM_GRID = [
+    {
+        "model__n_estimators": [200, 300],
+        "model__max_depth": [10, 20],
+        "model__max_features": ["sqrt"],
+        "model__min_samples_leaf": [1, 5],
+    }
+]
 RANDOM_FOREST_FULL_PARAM_GRID = [
     {
         "model__n_estimators": [100, 300, 500],
@@ -135,6 +145,30 @@ class ModelTuningSpec:
     preset_name: str
     inner_cv_splits: int
     param_grid: list[dict[str, object]]
+
+
+def get_valid_tuning_presets(model_name: str) -> tuple[str, ...]:
+    """Return the supported tuning presets for one model family."""
+    normalized_model_name = model_name.strip().lower()
+    if normalized_model_name == "logistic_saga":
+        return (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
+    if normalized_model_name == "random_forest":
+        return (TUNING_PRESET_SMOKE, TUNING_PRESET_FRONTIER, TUNING_PRESET_FULL)
+    raise ValueError(f"Unsupported tuning-preset request for model family: {model_name}")
+
+
+def get_tuning_preset_help_text(model_name: str) -> str:
+    """Return model-specific CLI help text for staged tuning presets."""
+    normalized_model_name = model_name.strip().lower()
+    if normalized_model_name == "logistic_saga":
+        return "Use 'smoke' for the bounded default verification search or 'full' for the broader tuning search."
+    if normalized_model_name == "random_forest":
+        return (
+            "Use 'smoke' for the bounded default verification path and cheap nonlinear comparison against logistic, "
+            "'frontier' for a targeted follow-up search around the promising RF region, or 'full' for expensive "
+            "confirmation only after earlier RF stages justify it."
+        )
+    raise ValueError(f"Unsupported tuning-preset help request for model family: {model_name}")
 
 
 def get_first_pass_feature_columns() -> list[str]:
@@ -168,8 +202,9 @@ def get_model_tuning_spec(model_name: str, preset_name: str = DEFAULT_TUNING_PRE
     """Return the tuning search-space preset for a supported model."""
     normalized_model_name = model_name.strip().lower()
     normalized_preset = preset_name.strip().lower()
-    if normalized_preset not in VALID_TUNING_PRESETS:
-        valid_text = ", ".join(VALID_TUNING_PRESETS)
+    valid_presets = get_valid_tuning_presets(normalized_model_name)
+    if normalized_preset not in valid_presets:
+        valid_text = ", ".join(valid_presets)
         raise ValueError(f"Unsupported tuning preset '{preset_name}'. Expected one of: {valid_text}")
 
     if normalized_model_name == "logistic_saga":
@@ -191,6 +226,12 @@ def get_model_tuning_spec(model_name: str, preset_name: str = DEFAULT_TUNING_PRE
                 preset_name=normalized_preset,
                 inner_cv_splits=SMOKE_INNER_CV_SPLITS,
                 param_grid=list(RANDOM_FOREST_SMOKE_PARAM_GRID),
+            )
+        if normalized_preset == TUNING_PRESET_FRONTIER:
+            return ModelTuningSpec(
+                preset_name=normalized_preset,
+                inner_cv_splits=RANDOM_FOREST_FRONTIER_INNER_CV_SPLITS,
+                param_grid=list(RANDOM_FOREST_FRONTIER_PARAM_GRID),
             )
         return ModelTuningSpec(
             preset_name=normalized_preset,

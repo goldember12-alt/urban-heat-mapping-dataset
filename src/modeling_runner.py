@@ -68,7 +68,7 @@ from src.modeling_run_registry import create_run_id
 
 LOGGER = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PIPELINE_CACHE_ROOT = PROJECT_ROOT / ".t" / "j"
+PIPELINE_CACHE_ROOT = Path.home() / ".tmp" / f"{PROJECT_ROOT.name}" / "modeling-cache"
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,7 @@ def _split_feature_types(feature_columns: Sequence[str]) -> tuple[list[str], lis
 
 
 def _get_pipeline_cache_base_dir() -> Path:
-    """Return a short workspace-local cache root to stay under Windows path-length limits."""
+    """Return a short external cache root to stay under Windows path-length limits and keep the repo clean."""
     PIPELINE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     return PIPELINE_CACHE_ROOT
 

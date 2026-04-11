@@ -60,13 +60,13 @@ Verified status:
 - The canonical modeling-prep stage has been manually verified on the real `final_dataset.parquet`
 - Parquet-backed logistic SAGA and random-forest smoke runs have been manually verified in the rebuilt repo-local `.venv` using the canonical parquet artifacts
 - The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
-- A full all-fold canonical modeling run on the real `71,394,894`-row dataset has not yet been recorded in the handoff log
+- A full all-fold canonical modeling run on the real `71,394,894`-row dataset has not been recorded and is not the practical benchmark path on this workstation; the current benchmark-grade path is sampled all-fold evaluation, typically capped at `5,000-20,000` rows per city
 
 Planned next, not yet implemented as full production code:
 
 - Held-out-city spatial sanity figures and residual/error maps under `figures/modeling/`
 - Final train-on-all-cities packaging for apply-to-new-cities workflows
-- Scaling strategy for full canonical runs if workstation memory/runtime becomes the bottleneck
+- Higher-capacity benchmarking and figure-generation expansion after the sampled all-fold modeling ladder is better documented
 
 ## Project Lifecycle
 
@@ -203,7 +203,7 @@ Recommended tuning workflow on this workstation:
 
 - use `--sample-rows-per-city` for iteration and broader preset exploration
 - review `sample_diagnostics_by_city.csv` before trusting a sampled run, especially the sampled vs full positive counts and rates
-- reserve full-row runs for final confirmation after the sampled search space and fold scope look stable
+- treat sampled all-fold runs as the standard benchmark path on this workstation; only consider fuller-row confirmation later if hardware, scope, or runtime constraints change
 
 CSV inputs remain supported for compatibility or recovery workflows, but they are secondary paths. The regenerated `data_processed/final/final_dataset.csv` was re-audited on 2026-03-26 and now matches the canonical parquet on row count, column names, per-city row counts, hotspot counts, and key null-count checks.
 
@@ -274,7 +274,7 @@ Current artifact-provenance note:
 
 ## Modeling Presets
 
-This README is the canonical definition of `smoke` versus `full`.
+This README is the canonical definition of the staged tuned-model workflow on this workstation.
 
 `smoke` means:
 
@@ -282,30 +282,41 @@ This README is the canonical definition of `smoke` versus `full`.
 - smaller search spaces and fewer inner grouped-CV splits than `full`
 - intended for environment verification, pipeline regression checks, artifact-path validation, and modest benchmarking increments
 - appropriate when confirming that parquet inputs, folds, preprocessing, and metric outputs behave correctly
-- not appropriate to cite as a benchmark-quality final result or as the project's main tuned-model estimate
+- for random forest, the default first-pass nonlinear comparison against the retained logistic baseline
+- not appropriate to cite as a final tuned-model estimate on its own
+
+`frontier` means:
+
+- a random-forest-only targeted preset between `smoke` and `full`
+- a bounded follow-up search around the plausible smoke-winning RF region
+- intended only after RF `smoke` shows enough promise to justify another pass
+- designed to answer whether a modestly broader RF search changes the practical comparison against logistic
 
 `full` means:
 
-- the broader tuning preset for more serious benchmark runs after inputs, provenance, and logging are stable
+- the broadest explicit tuned search still kept in code
 - larger search spaces and more inner grouped-CV splits than `smoke`
-- intended for better-faith model comparison and methodology/results tables, subject to compute limits and explicit run logging
+- for logistic SAGA, the practical sampled benchmark path on this workstation
+- for random forest, an expensive confirmation step that should only be used after `smoke` or `frontier` already suggests RF may materially outperform logistic
 
 Why `smoke` is the default CLI preset:
 
 - the canonical dataset is large enough that an unrestricted default search is too expensive for routine verification
 - most day-to-day work in this repo needs to validate the grouped modeling contract, not immediately launch the heaviest search
-- using `smoke` by default makes accidental broad runs less likely while preserving a documented path to `full`
+- using `smoke` by default makes accidental broad runs less likely while preserving documented escalation paths when the early evidence justifies them
 
 How to describe them in methods/results writing:
 
-- `smoke` results are verification runs or bounded benchmark checkpoints
-- `full` results are the ones to prefer for substantive model-performance discussion once they are actually executed and logged
+- logistic `full` sampled runs are the retained linear baseline path
+- random-forest `smoke` runs are the first nonlinear comparison checkpoint
+- random-forest `frontier` runs are targeted follow-up searches, not automatic second defaults
+- random-forest `full` runs are high-cost confirmation checks, not the normal iteration path
 - always report the preset used, plus any sample cap, outer-fold subset, and job-count constraints
 
 The current preset sizes in code are:
 
 - logistic SAGA: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `full=20` candidates with `4` inner grouped-CV splits
-- random forest: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `full=81` candidates with `4` inner grouped-CV splits
+- random forest: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `frontier=8` candidates with `3` inner grouped-CV splits; `full=81` candidates with `4` inner grouped-CV splits
 
 ## Run Registry
 
@@ -336,6 +347,68 @@ You can rebuild the tuning-history artifacts from the registry at any time with:
 ```powershell
 .\.venv\Scripts\python.exe -m src.run_modeling_tuning_history
 ```
+
+## Practical Benchmark Workflow
+
+Use logistic SAGA and random forest differently on this workstation.
+
+Retained logistic baseline ladder:
+
+- use `--tuning-preset full`
+- use all outer folds
+- keep `--grid-search-n-jobs 1`
+- use sample caps at `5000`, `10000`, and `20000` rows per city
+- use `--run-label samplecurve-5k`, `samplecurve-10k`, and `samplecurve-20k`
+
+Recommended logistic baseline commands:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset full --grid-search-n-jobs 1 --run-label samplecurve-5k
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 10000 --tuning-preset full --grid-search-n-jobs 1 --run-label samplecurve-10k
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 20000 --tuning-preset full --grid-search-n-jobs 1 --run-label samplecurve-20k
+```
+
+Staged random-forest workflow:
+
+Stage A:
+
+- run RF `smoke` on all folds at `5000` rows per city as the cheap nonlinear comparison against logistic
+- recommended first command:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --run-label nonlinear-check
+```
+
+Stage B:
+
+- only if RF `smoke` looks materially better than logistic, run RF `frontier`
+- keep the same sampled `5000` rows-per-city slice first so the wider RF search is still interpretable
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset frontier --grid-search-n-jobs 1 --model-n-jobs 1 --run-label frontier-check
+```
+
+Stage C:
+
+- only if RF `frontier` still looks meaningfully better and the winning region is stable, run RF `full`
+- treat this as expensive confirmation, not the routine next click
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset full --grid-search-n-jobs 1 --model-n-jobs 1 --run-label confirm-check
+```
+
+Stopping guidance:
+
+- stop expanding RF search if RF `smoke` does not materially beat the retained logistic baseline
+- stop at RF `frontier` if the broader search does not produce a meaningful gain or the winning region looks stable already
+- stop increasing RF sample size if runtime grows much faster than PR AUC or top-10% recall improves
+- when RF does justify more work, prefer changing one dimension at a time: preset first, then sample size
+
+Run-history conventions for `tuning_history_annotations.csv`:
+
+- `validation` = setup checks, one-fold checks, or artifact verification runs
+- `exploratory` = partial-scope runs, legacy contracts, and abandoned search paths
+- `benchmark` = retained comparison checkpoints used to justify go / no-go decisions, including logistic sampled-full rungs and any retained RF stage outputs
 
 Current sandbox-verified modeling commands:
 

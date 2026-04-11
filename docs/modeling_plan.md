@@ -80,7 +80,7 @@ Honest implementation status:
 
 - The modeling-prep stage has been manually verified on the real 30-city final dataset
 - The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
-- A full canonical modeling run on the real final dataset is still recorded as pending in `docs/chat_handoff.md`
+- A full canonical modeling run on the real final dataset is not currently the practical benchmark path on this workstation; sampled all-fold runs, typically up to `20,000` rows per city, are the meaningful comparison path to record in `docs/chat_handoff.md`
 - `README.md` is now the canonical definition of `smoke` versus `full`, including how those presets should and should not be described in methodology/results language
 - The tuned sklearn runners now persist mid-run progress plus fold-level state so interrupted runs can be resumed at the outer-fold boundary
 
@@ -177,9 +177,36 @@ Operational guidance:
 
 Recommended tuning workflow:
 
-- use sampled runs first for search-space iteration and broader fold coverage
+- treat logistic sampled `full` runs as the retained linear baseline path
+- use random-forest sampled `smoke` first for the cheap nonlinear comparison against logistic
 - inspect `sample_diagnostics_by_city.csv` to make sure sampled positive counts and rates still reflect the full city-level hotspot signal
-- use full-row runs later for final confirmation once the sampled run looks methodologically stable
+- treat sampled all-fold runs as the standard benchmark path on this workstation; reserve any fuller-row confirmation for narrower scopes or future hardware
+
+Practical staged random-forest workflow on this workstation:
+
+- Stage A: RF `smoke` at `5000` rows per city on all folds for the first nonlinear comparison
+- Stage B: RF `frontier` only if Stage A looks materially better than logistic
+- Stage C: RF `full` only if Stage B still looks promising enough to justify expensive confirmation
+- keep `--grid-search-n-jobs 1` and `--model-n-jobs 1` for RF on this hardware
+- do not broaden both search space and sample size at the same time unless there is already a retained RF result that justifies it
+
+Retained logistic sampled baseline ladder:
+
+- logistic SAGA still uses the sampled `full` ladder at `5000`, `10000`, and `20000` rows per city
+- use `--run-label samplecurve-5k`, `samplecurve-10k`, and `samplecurve-20k` for that retained baseline ladder
+
+Run-history conventions for the ladder:
+
+- `validation` = smoke or one-fold workflow checks
+- `exploratory` = partial-scope, legacy-contract, or abandoned runs that are useful context but not retained checkpoints
+- `benchmark` = retained decision checkpoints used for cross-model comparison and later figures
+
+Stopping guidance:
+
+- stop expanding RF search if RF `smoke` does not materially beat logistic on the same sampled evaluation slice
+- stop at RF `frontier` if the best region looks stable and the broader search does not add meaningful gain
+- stop increasing RF sample size if runtime grows faster than practical performance gains
+- use `tuning_history.csv` plus `tuning_history_annotations.csv` to record those stop / escalate decisions explicitly for later writeup
 
 Recommended implementation order:
 
