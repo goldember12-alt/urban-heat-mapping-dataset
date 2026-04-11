@@ -1,0 +1,6 @@
+model_name,outer_fold,inner_cv_splits,best_inner_cv_average_precision,best_params_json
+random_forest,0,3,0.14786166470244447,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 200}"
+random_forest,1,3,0.1572028177045536,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 300}"
+random_forest,2,3,0.16664920170624134,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 300}"
+random_forest,3,3,0.15094441764118907,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 200}"
+random_forest,4,3,0.15307851934369923,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 300}"

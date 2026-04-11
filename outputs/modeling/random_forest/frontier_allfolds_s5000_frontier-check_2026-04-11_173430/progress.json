@@ -1,0 +1,38 @@
+{
+  "run_id": "c8543fe79ab54f278b8d1a6a8ff5f2d0",
+  "output_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\random_forest\\frontier_allfolds_s5000_frontier-check_2026-04-11_173430",
+  "model_family": "random_forest",
+  "tuning_preset": "frontier",
+  "phase": "complete",
+  "outer_fold_index": null,
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "candidate_count": 8,
+  "inner_cv_split_count_requested": 3,
+  "current_inner_cv_split_count": null,
+  "estimated_total_inner_fits": 120,
+  "completed_inner_fits": 120,
+  "completed_candidates": 40,
+  "elapsed_wall_time_seconds": 5831.418207645416,
+  "average_seconds_per_completed_fit": 48.59515173037847,
+  "eta_seconds": 0.0,
+  "current_params": null,
+  "completed_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "remaining_outer_folds": [],
+  "current_outer_fold_completed_inner_fits": 0,
+  "current_outer_fold_estimated_inner_fits": null,
+  "last_updated_utc": "2026-04-11T23:11:41.697752+00:00",
+  "note": "run_complete",
+  "sample_rows_per_city": 5000
+}

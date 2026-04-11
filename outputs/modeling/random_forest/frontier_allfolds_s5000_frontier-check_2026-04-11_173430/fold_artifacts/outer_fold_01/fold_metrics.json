@@ -1,0 +1,21 @@
+{
+  "model_name": "random_forest",
+  "outer_fold": 1,
+  "train_city_count": 24,
+  "test_city_count": 6,
+  "train_row_count": 120000,
+  "test_row_count": 30000,
+  "test_positive_count": 3000,
+  "test_prevalence": 0.1,
+  "pr_auc": 0.15975424621867318,
+  "recall_at_top_10pct": 0.20866666666666667,
+  "inner_cv_splits": 3,
+  "best_inner_cv_average_precision": 0.1572028177045536,
+  "param_candidate_count": 8,
+  "estimated_inner_fit_count": 24,
+  "data_load_seconds": 0.10068430000683293,
+  "preprocess_build_seconds": 0.000109999964479357,
+  "preprocess_probe_fit_transform_seconds": 0.41592310002306476,
+  "grid_search_seconds": 1130.657245499955,
+  "fold_wall_clock_seconds": 1131.3471730999881
+}
