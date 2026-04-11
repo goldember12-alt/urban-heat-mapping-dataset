@@ -1,0 +1,11 @@
+model_name,scope_name,scope_value,bin_index,predicted_probability_mean,observed_positive_rate
+random_forest,outer_fold,1,0,0.014876811062992405,0.060333333333333336
+random_forest,outer_fold,1,1,0.02843702787483195,0.07333333333333333
+random_forest,outer_fold,1,2,0.04214443202993463,0.078
+random_forest,outer_fold,1,3,0.05632173426685274,0.068
+random_forest,outer_fold,1,4,0.06408032157507187,0.06766666666666667
+random_forest,outer_fold,1,5,0.07103340212302352,0.08466666666666667
+random_forest,outer_fold,1,6,0.08227074654230436,0.09966666666666667
+random_forest,outer_fold,1,7,0.1009555333515072,0.12
+random_forest,outer_fold,1,8,0.1362100718535278,0.139
+random_forest,outer_fold,1,9,0.22704515030111297,0.20933333333333334
