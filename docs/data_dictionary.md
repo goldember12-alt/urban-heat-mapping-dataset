@@ -352,7 +352,7 @@ Honest status note:
   - `<city_slug>_land_cover_composition.png`
   - `<city_slug>_key_correlations.png`
   - `<city_slug>_hotspot_map.png`
-- `figures/modeling/` is the intended root for held-out prediction, calibration, and map-oriented modeling figures as that stage expands
+- `figures/modeling/` is the root for held-out prediction, calibration, and map-oriented modeling figures
 - A small number of legacy/global inspection figures may still exist directly under `figures/` from earlier checkpoints
 
 ### Report-style outputs
@@ -364,6 +364,24 @@ Honest status note:
 - `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
 - `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons and city-level RF-vs-logistic error summaries
 - `figures/modeling/reporting/` stores benchmark comparison figures and city-level metric-delta plots derived from retained modeling runs
+- `outputs/modeling/reporting/heldout_city_maps/` stores retained-run held-out map reporting artifacts such as:
+  - `heldout_city_maps.md`
+  - `heldout_city_map_selection.csv`
+  - `heldout_city_map_points.parquet`
+  - `heldout_city_map_city_summary.csv`
+- `figures/modeling/heldout_city_maps/` stores representative held-out-city map triptychs with predicted-hotspot, true-hotspot, and categorical error panels such as:
+  - `denver_heldout_map_triptych.png`
+  - `atlanta_heldout_map_triptych.png`
+  - `detroit_heldout_map_triptych.png`
+- `outputs/modeling/final_train/` stores bounded final-train transfer packages derived from retained benchmark selections, currently including:
+  - `random_forest_frontier_s5000_all_cities_transfer_package/model.joblib`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/feature_contract.json`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/preprocessing_manifest.json`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/selected_hyperparameters.json`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/hyperparameter_selection_summary.csv`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/training_city_summary.csv`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/training_sample_diagnostics.csv`
+  - `random_forest_frontier_s5000_all_cities_transfer_package/transfer_package_metadata.json`
 - `outputs/modeling/supplemental/within_city/` stores exploratory within-city markdown summaries plus bounded contrast artifacts such as:
   - `within_city_contrast_summary.md`
   - `tables/within_city_selected_cities.csv`

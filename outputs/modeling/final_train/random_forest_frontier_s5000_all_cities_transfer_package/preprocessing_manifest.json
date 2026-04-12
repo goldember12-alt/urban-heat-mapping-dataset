@@ -1,0 +1,41 @@
+{
+  "model_name": "random_forest",
+  "selected_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "feature_type_map": {
+    "impervious_pct": "numeric",
+    "elevation_m": "numeric",
+    "dist_to_water_m": "numeric",
+    "ndvi_median_may_aug": "numeric",
+    "land_cover_class": "categorical",
+    "climate_group": "categorical"
+  },
+  "numeric_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug"
+  ],
+  "categorical_feature_columns": [
+    "land_cover_class",
+    "climate_group"
+  ],
+  "preprocessing_steps": {
+    "numeric": [
+      "coerce_numeric",
+      "median_imputer"
+    ],
+    "categorical": [
+      "coerce_categorical",
+      "most_frequent_imputer",
+      "ordinal_encoder_unknown=-1"
+    ]
+  },
+  "pipeline_builder_kwargs": {}
+}

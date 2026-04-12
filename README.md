@@ -53,6 +53,8 @@ Implemented now:
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
+- Retained-run benchmark reporting plus representative held-out-city map exports under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`
+- Bounded final-train transfer packaging under `outputs/modeling/final_train/`, reusing the retained six-feature benchmark contract rather than creating a new benchmark path
 - Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast, a separate logistic-only spatial-block within-city sensitivity, and retained-run interpretation exports that keep logistic coefficients and RF held-out permutation importance primary while adding appendix-style cross-check tables
 
 Verified status:
@@ -65,8 +67,6 @@ Verified status:
 
 Planned next, not yet implemented as full production code:
 
-- Held-out-city spatial sanity figures and residual/error maps under `figures/modeling/`
-- Final train-on-all-cities packaging for apply-to-new-cities workflows
 - Any further benchmark expansion only if a later doc-backed decision says the added runtime is worth it on this workstation
 
 ## Project Lifecycle
@@ -101,7 +101,7 @@ Planned next, not yet implemented as full production code:
 ### 5. Modeling And Evaluation
 
 - Implemented now: first-pass baselines plus grouped logistic SAGA and random forest runners
-- Next stage: richer evaluation figures plus final-train packaging, while the bounded supplemental within-city, spatial-sensitivity, and feature-importance layer remains appendix-style support for the canonical cross-city benchmark
+- Implemented now: retained benchmark reporting, representative held-out-city map exports, and bounded final-train packaging, while the supplemental within-city, spatial-sensitivity, and feature-importance layer remains appendix-style support for the canonical cross-city benchmark
 
 ## Repo Layout
 
@@ -110,8 +110,8 @@ Planned next, not yet implemented as full production code:
 - `docs/`: project-facing documentation
 - `data_raw/`: immutable downloaded source data
 - `data_processed/`: processed artifacts organized by project phase
-- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables including `reporting/` and `supplemental/`
-- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts including `reporting/` and `supplemental/`, and `outputs/storage/` for storage-management outputs
+- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables including `reporting/`, `heldout_city_maps/`, and `supplemental/`
+- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts including `reporting/`, `final_train/`, and `supplemental/`, and `outputs/storage/` for storage-management outputs
 
 Important `data_processed/` subdirectories:
 
@@ -165,7 +165,9 @@ These are the most important current entrypoints. The workflow doc lists how the
 .\.venv\Scripts\python.exe -m src.run_logistic_saga
 .\.venv\Scripts\python.exe -m src.run_random_forest
 .\.venv\Scripts\python.exe -m src.run_modeling_reporting
+.\.venv\Scripts\python.exe -m src.run_modeling_spatial_reporting
 .\.venv\Scripts\python.exe -m src.run_modeling_supplemental
+.\.venv\Scripts\python.exe -m src.run_modeling_transfer_package
 ```
 
 AppEEARS-dependent commands read credentials from environment variables only. See the workflow doc for the acquisition contract and expected raw-output locations.
@@ -182,12 +184,16 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 
 `src.run_modeling_reporting` builds report-ready comparison artifacts from retained modeling runs, writing markdown and derived CSV tables under `outputs/modeling/reporting/` plus benchmark figures under `figures/modeling/reporting/`.
 
+`src.run_modeling_spatial_reporting` builds representative held-out-city predicted-hotspot, true-hotspot, and categorical error map triptychs from retained held-out predictions, writing selection tables and point-level parquet exports under `outputs/modeling/reporting/heldout_city_maps/` plus map figures under `figures/modeling/heldout_city_maps/`.
+
 `src.run_modeling_supplemental` builds the bounded supplemental layer under `outputs/modeling/supplemental/` and `figures/modeling/supplemental/`. It keeps the city-held-out cross-city benchmark as the canonical story while adding:
 
 - a `Reno` / `Charlotte` / `Detroit` within-city exploratory contrast with repeated stratified `80/20` splits
 - an opt-in `--run-within-city-spatial` logistic-only spatial-block within-city sensitivity under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants as a harder supplemental contrast rather than a replacement for held-out-city transfer
 - retained-run logistic coefficient exports from the sampled `20,000`-row linear reference, with held-out permutation importance added only as a cross-check
 - retained-run random-forest held-out permutation importance from the retained `frontier` reference, with impurity importance exported only as secondary/debug appendix output
+
+`src.run_modeling_transfer_package` fits the retained benchmark-selected model on all 30 cities at the retained sample cap and writes a bounded transfer-oriented package under `outputs/modeling/final_train/`, including `model.joblib`, a preprocessing manifest, the six-feature contract, selected hyperparameters, and training metadata. This package supports later transfer workflows but does not replace the canonical city-held-out benchmark framing.
 
 `--output-dir` is now optional for the tuned modeling CLIs. If you omit it, the CLI auto-generates a unique, readable run directory under the correct model-family root using the preset, fold scope, sample scope, and a timestamp. You can still pass `--output-dir` explicitly to override that behavior, and `--run-label` can add a short human tag to an auto-generated name without building the full path yourself.
 

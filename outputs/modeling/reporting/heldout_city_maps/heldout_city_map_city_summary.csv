@@ -1,0 +1,4 @@
+city_id,city_name,climate_group,outer_fold,row_count,predicted_hotspot_count,true_hotspot_count,true_positive_count,false_positive_count,false_negative_count,true_negative_count
+6,Denver,hot_arid,1,5000,500,500,100,400,400,4100
+18,Atlanta,hot_humid,0,5000,500,500,119,381,381,4119
+29,Detroit,mild_cool,4,5000,500,500,95,405,405,4095

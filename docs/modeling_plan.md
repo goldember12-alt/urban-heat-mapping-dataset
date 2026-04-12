@@ -79,6 +79,8 @@ Current implemented evaluation outputs:
 - per-fold best-parameter summaries for tuned models
 - city-level RF-vs-logistic error comparison tables by city and climate group
 - benchmark comparison markdown and benchmark figures under the modeling reporting layer
+- representative held-out-city predicted-hotspot, true-hotspot, and categorical error maps under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`
+- a bounded final-train transfer package under `outputs/modeling/final_train/` that reuses the retained six-feature benchmark selection without changing the canonical evaluation methodology
 - supplemental within-city contrast markdown/tables/figures under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`
 - supplemental retained-run interpretation tables/figures under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`
 
@@ -129,11 +131,12 @@ Implemented supporting evaluation:
 - calibration-curve tables
 - held-out-city comparison tables
 
-Planned next evaluation additions:
+Implemented post-benchmark deliverables:
 
-- predicted hotspot maps
-- true hotspot maps
-- residual or error maps
+- representative held-out-city predicted hotspot maps
+- representative held-out-city true hotspot maps
+- representative held-out-city categorical residual or error maps
+- a bounded final-train transfer package based on the retained benchmark-selected model
 
 ## Relationship To Future Scripts
 

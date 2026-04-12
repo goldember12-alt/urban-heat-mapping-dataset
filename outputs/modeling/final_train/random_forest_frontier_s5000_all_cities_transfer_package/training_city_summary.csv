@@ -1,0 +1,31 @@
+city_id,city_name,climate_group,row_count,hotspot_positive_count,hotspot_prevalence
+1,Phoenix,hot_arid,5000,500,0.1
+2,Tucson,hot_arid,5000,500,0.1
+3,Las Vegas,hot_arid,5000,500,0.1
+4,Albuquerque,hot_arid,5000,500,0.1
+5,El Paso,hot_arid,5000,500,0.1
+6,Denver,hot_arid,5000,500,0.1
+7,Salt Lake City,hot_arid,5000,500,0.1
+8,Fresno,hot_arid,5000,500,0.1
+9,Bakersfield,hot_arid,5000,500,0.1
+10,Reno,hot_arid,5000,500,0.1
+11,Houston,hot_humid,5000,500,0.1
+12,Columbia,hot_humid,5000,500,0.1
+13,Richmond,hot_humid,5000,500,0.1
+14,New Orleans,hot_humid,5000,500,0.1
+15,Tampa,hot_humid,5000,500,0.1
+16,Miami,hot_humid,5000,500,0.1
+17,Jacksonville,hot_humid,5000,500,0.1
+18,Atlanta,hot_humid,5000,500,0.1
+19,Charlotte,hot_humid,5000,500,0.1
+20,Nashville,hot_humid,5000,500,0.1
+21,Seattle,mild_cool,5000,500,0.1
+22,Portland,mild_cool,5000,500,0.1
+23,San Francisco,mild_cool,5000,500,0.1
+24,San Jose,mild_cool,5000,500,0.1
+25,Los Angeles,mild_cool,5000,500,0.1
+26,San Diego,mild_cool,5000,500,0.1
+27,Chicago,mild_cool,5000,500,0.1
+28,Minneapolis,mild_cool,5000,500,0.1
+29,Detroit,mild_cool,5000,500,0.1
+30,Boston,mild_cool,5000,500,0.1

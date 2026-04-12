@@ -46,6 +46,9 @@ Implemented in code:
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - `outputs/modeling/reporting/` now exists as the repo-local home for broader markdown modeling summaries that synthesize retained run artifacts into report-ready comparison notes without changing the canonical workflow/methodology docs.
 - The modeling reporting layer now also includes a dedicated CLI, `src.run_modeling_reporting`, which materializes benchmark comparison tables, city-level RF-vs-logistic error summaries, and benchmark figures from retained modeling runs under `outputs/modeling/reporting/`, `outputs/modeling/reporting/tables/`, and `figures/modeling/reporting/`.
+- The canonical merged dataset on disk is now the 30-city artifact described by `data_processed/final/final_dataset_artifact_summary.json`: `71,394,894` rows, `14` columns, and `30` source city-feature parquet files incorporated into `data_processed/final/final_dataset.parquet`.
+- A dedicated held-out-city spatial reporting layer is now implemented in `src.modeling_spatial_reporting` plus `src.run_modeling_spatial_reporting`. It reuses retained held-out prediction artifacts to write representative predicted-hotspot, true-hotspot, and categorical error map triptychs under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` without rerunning the benchmark ladder.
+- A bounded final-train transfer-packaging layer is now implemented in `src.modeling_transfer_package` plus `src.run_modeling_transfer_package`. It reuses retained benchmark metadata plus per-fold best-parameter summaries to fit one transfer-oriented package under `outputs/modeling/final_train/`, keeping the six-feature contract fixed and keeping this packaging path separate from held-out-city benchmark evaluation.
 - The bounded supplemental modeling layer is now implemented in `src.modeling_supplemental` plus `src.run_modeling_supplemental`. It writes exploratory within-city contrast artifacts under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, and retained-run interpretation artifacts under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`. The primary interpretation artifacts remain logistic coefficients and RF held-out permutation importance, with logistic held-out permutation exported only as a cross-check and RF impurity exported only as secondary/debug appendix output.
 - Phase 1 of the supplemental follow-up is now implemented: the within-city exploratory layer adds a `city_prevalence_baseline` context row to the repeat/summary/contrast artifacts, writes the companion recall contrast figure `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`, and keeps the canonical cross-city held-out benchmark narrative unchanged.
 - Pass 3 of the supplemental follow-up is now implemented as a separate harder within-city sensitivity layer: `src.run_modeling_supplemental --run-within-city-spatial` writes logistic-only spatial-block artifacts under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants for the same `Reno` / `Charlotte` / `Detroit` trio while keeping the canonical cross-city city-held-out benchmark unchanged.
@@ -91,11 +94,20 @@ Standardization status:
 - Support-layer acquisition/prep is standardized in code around deterministic per-city raw-input paths plus deterministic prepared outputs.
 - Data-processing reporting is standardized in code for all configured cities and no longer treats Phoenix as a special one-off output path.
 - Reusable upstream caches for support-layer acquisition now live under `data_raw/cache/`.
-- The current remaining blocker for broader scaling is data volume, long wall-clock runtime, and remaining city-specific source variability across the unfinished cities, not missing orchestration code paths.
+- The current remaining blocker for broader scaling is benchmark/runtime cost on this workstation plus the fact that the older raw-acquisition readiness summaries do not reflect the now-complete 30-city merged dataset state.
 
 ## Testing Status
 
-As of 2026-03-26:
+As of 2026-04-12:
+
+- 2026-04-12 held-out map export and final-train packaging checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_spatial_reporting.py src\run_modeling_spatial_reporting.py src\modeling_transfer_package.py src\run_modeling_transfer_package.py tests\test_modeling_spatial_reporting.py tests\test_modeling_transfer_package.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_reporting.py tests\test_modeling_transfer_package.py -q`
+  - Result: `7 passed in 35.32s`
+  - Coverage in this checkpoint includes:
+    - deterministic representative-city selection, held-out predicted/true/error map export, and map-report artifact writing
+    - deterministic final-train package naming, consensus hyperparameter selection from retained fold winners, and fitted transfer-package artifact generation
 
 - 2026-04-12 supplemental follow-up Phase 1 checkpoint:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
@@ -440,7 +452,10 @@ Implemented:
 - `src.run_logistic_saga` and `src.run_random_forest` now use the same explicit shared feature-type contract for tuned preprocessing, with categorical columns coerced safely ahead of `SimpleImputer` / encoder steps.
 - `src.run_logistic_saga` and `src.run_random_forest` now default to `--tuning-preset smoke`, preserve `--tuning-preset full`, record per-fold timing/search-space metadata, and reuse sampled city rows across folds instead of reloading them fold by fold.
 - `src.run_logistic_saga` and `src.run_random_forest` now also expose durable live-run monitoring artifacts and coarse outer-fold resumability through `progress.json`, `progress_log.csv`, `fold_status.json`, and per-fold output snapshots.
+- `src.run_modeling_reporting` refreshes retained benchmark comparison tables/markdown/figures without rerunning the underlying benchmark checkpoints.
+- `src.run_modeling_spatial_reporting` materializes representative held-out-city predicted-hotspot, true-hotspot, and categorical error map triptychs from retained prediction artifacts under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`.
 - `src.run_modeling_supplemental` materializes the bounded supplemental within-city, optional within-city spatial sensitivity, and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
+- `src.run_modeling_transfer_package` fits the retained benchmark-selected model on all cities at the retained sample cap and writes the transfer-oriented package under `outputs/modeling/final_train/`.
 - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance` was rerun on 2026-04-12 and refreshed the exploratory within-city summary, tables, predictions parquet, metadata, and both contrast figures, including `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
@@ -470,6 +485,38 @@ Not manually verified in the latest checkpoint:
 - No pyarrow downgrade or alternate-version experiment was needed in this checkpoint because the current rebuilt `.venv` already reads both real parquet artifacts successfully.
 
 Manually verified:
+
+- 2026-04-12 held-out map reporting and final-train packaging:
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_reporting`.
+  - Result: success; refreshed:
+    - `outputs/modeling/reporting/cross_city_benchmark_report.md`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
+    - `figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png`
+    - `figures/modeling/reporting/cross_city_benchmark_report_runtime_vs_pr_auc.png`
+    - `figures/modeling/reporting/cross_city_benchmark_report_city_metric_deltas.png`
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_reporting`.
+  - Result: success; wrote:
+    - `outputs/modeling/reporting/heldout_city_maps/heldout_city_maps.md`
+    - `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_selection.csv`
+    - `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_points.parquet`
+    - `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_city_summary.csv`
+    - `figures/modeling/heldout_city_maps/denver_heldout_map_triptych.png`
+    - `figures/modeling/heldout_city_maps/atlanta_heldout_map_triptych.png`
+    - `figures/modeling/heldout_city_maps/detroit_heldout_map_triptych.png`
+  - Confirmed the representative held-out map selector chose `Denver`, `Atlanta`, and `Detroit` as the nearest-median RF frontier cities for `hot_arid`, `hot_humid`, and `mild_cool`.
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_transfer_package`.
+  - Result: success in about `169.5s`; wrote:
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/model.joblib`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/feature_contract.json`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/preprocessing_manifest.json`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/selected_hyperparameters.json`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/hyperparameter_selection_summary.csv`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/training_city_summary.csv`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/training_sample_diagnostics.csv`
+    - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/transfer_package_metadata.json`
+  - Confirmed the bounded transfer package reused the retained RF frontier checkpoint, selected `300` trees with `max_depth=10`, `min_samples_leaf=5`, `max_features="sqrt"` as the modal fold winner, and fit on `150,000` sampled rows across all `30` cities with hotspot prevalence preserved at `0.10`.
 
 - 2026-04-07 scratch-script guidance checkpoint:
   - Reviewed a partner logistic-regression draft against the live repo modeling contract and confirmed the key corrections needed were methodological rather than new pipeline code.
@@ -781,26 +828,29 @@ Currently materialized on disk:
 
 Explicit blocker statement:
 
-- The prior manual blocker for standardized DEM/NLCD/hydro population is resolved in code.
-- The current practical blocker for broader scaling is running the same pipeline for the remaining 26 unfinished cities and waiting for large official downloads and AppEEARS bundles to complete.
-- The current operational risks are heavy NLCD/NHDPlus I/O, OneDrive-backed workspace churn on large files, and city-specific source quirks that have not yet been observed outside the first four completed cities.
-- Overnight `core_city` runs now have one real-city proof point in Phoenix, but the study-area metadata refresh has not yet been applied across the other completed cities.
+- The 30-city merged modeling dataset and the 30 per-city feature parquet inputs already exist on disk and are no longer an open assembly blocker.
+- The main practical blocker is now benchmark/runtime cost on this workstation for any broader full-row modeling expansion beyond the retained sampled benchmark path.
+- Some older raw-acquisition and preflight summaries in this handoff still reflect earlier partial-city operational checkpoints rather than the current merged-dataset disk state; treat those as historical pipeline notes, not as the current final-dataset coverage summary.
 
 ## Immediate Next Step
 
-Preserve the current cross-city logistic SAGA versus random-forest reporting story as the canonical benchmark layer, and use the new supplemental artifacts for interpretation/writeup without reopening routine benchmark expansion.
+Preserve the current cross-city logistic SAGA versus random-forest reporting story as the canonical benchmark layer, and use the retained reporting, held-out map exports, transfer package, and supplemental artifacts to support writeup without reopening routine benchmark expansion.
 
 Recommended order:
 
 - Keep the retained cross-city reference runs fixed:
   - logistic sampled `full` at `5000`, `10000`, and `20000` rows per city
   - RF `smoke` and RF `frontier` at `5000` rows per city
+- Use `outputs/modeling/reporting/cross_city_benchmark_report.md` plus `figures/modeling/reporting/` for the benchmark narrative and cross-model comparison tables/figures.
+- Use `outputs/modeling/reporting/heldout_city_maps/` plus `figures/modeling/heldout_city_maps/` for representative held-out-city predicted-hotspot, true-hotspot, and categorical error map deliverables.
+- Use `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/` for the bounded transfer-oriented final-train package derived from the retained RF frontier checkpoint.
 - Use `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` as the exploratory contrast source for the easier within-city-versus-cross-city narrative.
 - Use `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/` as the separate harder within-city appendix contrast when discussing how performance changes under deterministic spatial holdouts inside the same city.
 - Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
-- If another reporting refresh is needed later, rerun `src.run_modeling_reporting` first and then rerun `src.run_modeling_supplemental` so the nearest-median city selector and retained reference joins stay synchronized.
+- If another reporting refresh is needed later, rerun `src.run_modeling_reporting`, then `src.run_modeling_spatial_reporting`, then `src.run_modeling_supplemental` so retained reference tables and representative-city joins stay synchronized.
 - Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
-- Pass 3 spatial-block sensitivity is now implemented; any later within-city follow-up should stay bounded, keep the six-feature contract fixed, and avoid reopening routine cross-city benchmark expansion.
+- Keep the transfer package labeled as transfer-oriented packaging derived from the retained benchmark choice, not as a replacement benchmark.
+- Any later within-city follow-up should stay bounded, keep the six-feature contract fixed, and avoid reopening routine cross-city benchmark expansion.
 
 
 
@@ -845,10 +895,19 @@ Recommended order:
 - `outputs/modeling/reporting/`
 - `outputs/modeling/reporting/logistic_rf_comparison_summary_2026-04-11.md`
 - `outputs/modeling/reporting/cross_city_benchmark_report.md`
+- `outputs/modeling/reporting/heldout_city_maps/`
+- `outputs/modeling/reporting/heldout_city_maps/heldout_city_maps.md`
+- `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_selection.csv`
+- `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_points.parquet`
+- `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_city_summary.csv`
 - `outputs/modeling/reporting/tables/`
 - `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
 - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
 - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
+- `outputs/modeling/final_train/`
+- `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/`
+- `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/model.joblib`
+- `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/transfer_package_metadata.json`
 - `outputs/modeling/supplemental/`
 - `outputs/modeling/supplemental/within_city/`
 - `outputs/modeling/supplemental/within_city/tables/`
@@ -863,6 +922,10 @@ Recommended order:
 - `figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png`
 - `figures/modeling/reporting/cross_city_benchmark_report_runtime_vs_pr_auc.png`
 - `figures/modeling/reporting/cross_city_benchmark_report_city_metric_deltas.png`
+- `figures/modeling/heldout_city_maps/`
+- `figures/modeling/heldout_city_maps/denver_heldout_map_triptych.png`
+- `figures/modeling/heldout_city_maps/atlanta_heldout_map_triptych.png`
+- `figures/modeling/heldout_city_maps/detroit_heldout_map_triptych.png`
 - `figures/modeling/supplemental/within_city/`
 - `figures/modeling/supplemental/within_city/within_city_pr_auc_contrast.png`
 - `figures/modeling/supplemental/within_city_spatial/`
@@ -890,7 +953,6 @@ Recommended order:
 - The bounded `full` logistic dry run also completed, but it reproduced the same non-fatal `joblib` cache warnings and several logistic `ConvergenceWarning` messages; those warnings did not block outputs or registry logging, but they remain the main overnight-run caveat.
 - The first broader logistic benchmark also exposed a Windows path-length limit when long output-dir names were combined with cache subdirectories; the runner now uses shorter cache-dir names, but future benchmark output dirs should still stay concise.
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
-- Held-out-city map-oriented exports are still not implemented; `figures/modeling/reporting/` now covers benchmark and city-delta figures, but true hotspot maps, predicted hotspot maps, and residual/error maps are still pending.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
 - The supplemental within-city random-split layer, the separate logistic-only within-city spatial sensitivity, and the retained-run feature-importance layer are now implemented; optional follow-on pieces are still open only if later explicitly needed, such as additional within-city split modes or broader benchmark expansion beyond the retained cross-city benchmark plus current bounded supplement.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
@@ -898,16 +960,50 @@ Recommended order:
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
 - The new full-stack city orchestration starts at raw support acquisition, not city boundary/grid generation; city-processing remains a separate prerequisite for cities missing study areas or grids.
 - Additional uncapped city-by-city feature validation beyond the first four completed cities is still pending.
-- Full 30-city end-to-end dataset generation at 30 m remains pending data acquisition/runtime.
 - Raw support acquisition still depends on very large official NLCD and NHDPlus source downloads; long wall-clock times are expected even when the code is behaving correctly.
 - `data_processed/city_grids/` is now a separate major storage hotspot at about `25.09 GB` and will need its own retention/compression review after cache cleanup.
 - Minneapolis still depends on the fresh AppEEARS ECOSTRESS task submitted on 2026-03-23 finishing remotely before city-level feature assembly can complete.
 - The current `city_outer_folds` logic balances cities by row count and city count, not by hotspot prevalence; revisit if stricter target-stratified folds are needed for later modeling experiments.
 - The new baseline-modeling stage has not yet been run end to end on the canonical `final_dataset.parquet`; current verification is synthetic-fixture testing plus the already-completed canonical modeling-prep verification.
 - Legacy Phoenix-only root-level report artifacts under `outputs/phoenix_data_summary*` still exist from pre-refactor runs; the new code writes only to the split stage-specific structure, but the old generated files were not deleted automatically in this checkpoint.
-- Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
+- The new held-out-city map deliverables and bounded application-to-new-cities package are implemented, but broader transfer scoring on truly unseen external cities is still future work.
 
 ## Checkpoint Log
+
+### 2026-04-12 - Checkpoint: Held-Out Map Reporting And Final-Train Packaging
+
+- Date / checkpoint:
+  - 2026-04-12 post-benchmark deliverable pass focused on representative held-out-city maps, bounded final-train packaging, and handoff/doc reconciliation.
+- Change made:
+  - Added `src.modeling_spatial_reporting` plus `src.run_modeling_spatial_reporting` to export representative held-out-city predicted-hotspot, true-hotspot, and categorical error map triptychs from retained benchmark predictions.
+  - Added `src.modeling_transfer_package` plus `src.run_modeling_transfer_package` to fit a bounded transfer-oriented final-train package from the retained RF frontier checkpoint using the fixed six-feature contract and modal fold-winning hyperparameters.
+  - Refreshed `outputs/modeling/reporting/` plus the new `outputs/modeling/reporting/heldout_city_maps/`, `figures/modeling/heldout_city_maps/`, and `outputs/modeling/final_train/` artifacts from real CLI runs.
+  - Reconciled top-level docs and this handoff file with the actual on-disk 30-city final-dataset state.
+- Files touched:
+  - `src/config.py`
+  - `src/modeling_spatial_reporting.py`
+  - `src/run_modeling_spatial_reporting.py`
+  - `src/modeling_transfer_package.py`
+  - `src/run_modeling_transfer_package.py`
+  - `tests/test_modeling_spatial_reporting.py`
+  - `tests/test_modeling_transfer_package.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_reporting`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_reporting`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_transfer_package`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_reporting.py tests\test_modeling_transfer_package.py -q`
+- Test status:
+  - `7 passed in 35.32s` for the new focused reporting/package tests.
+- Manual verification status:
+  - The real held-out map reporting CLI selected `Denver`, `Atlanta`, and `Detroit` as the RF frontier nearest-median benchmark cities and wrote the expected triptych figures.
+  - The real final-train packaging CLI fit a bounded RF frontier transfer package on `150,000` sampled rows across all `30` cities and wrote the expected model artifact plus metadata/manifest files.
+- Next recommended step:
+  - Keep the retained cross-city benchmark fixed, use the new map/package artifacts in reporting or transfer handoff, and avoid treating the transfer package as a new evaluation result.
 
 ### 2026-04-12 - Checkpoint: Supplemental Spatial Sensitivity Pass 3
 
