@@ -65,8 +65,9 @@ Verified status:
 Planned next, not yet implemented as full production code:
 
 - Held-out-city spatial sanity figures and residual/error maps under `figures/modeling/`
+- A bounded supplemental analysis layer for within-city exploratory comparisons and feature-importance summaries, explicitly kept separate from the canonical cross-city benchmark story
 - Final train-on-all-cities packaging for apply-to-new-cities workflows
-- Higher-capacity benchmarking and figure-generation expansion after the sampled all-fold modeling ladder is better documented
+- Any further benchmark expansion only if a later doc-backed decision says the added runtime is worth it on this workstation
 
 ## Project Lifecycle
 
@@ -100,7 +101,7 @@ Planned next, not yet implemented as full production code:
 ### 5. Modeling And Evaluation
 
 - Implemented now: first-pass baselines plus grouped logistic SAGA and random forest runners
-- Next stage: richer evaluation figures, map deliverables, and final-train packaging
+- Next stage: richer evaluation figures plus a bounded supplemental within-city / feature-importance layer, then final-train packaging
 
 ## Repo Layout
 

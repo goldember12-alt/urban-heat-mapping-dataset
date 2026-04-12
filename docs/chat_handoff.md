@@ -50,6 +50,7 @@ Implemented in code:
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
 - First-pass modeling outputs now write to `outputs/modeling/{baselines,logistic_saga,random_forest}/` with metrics tables, held-out predictions, calibration tables, best-parameter summaries for tuned models, run metadata, and feature-contract manifests.
+- The docs now include a bounded next-stage supplemental-analysis plan that keeps cross-city city-held-out evaluation canonical while defining a small within-city exploratory contrast and a separate feature-importance layer under planned `outputs/modeling/supplemental/` and `figures/modeling/supplemental/` roots.
 - AppEEARS AOI export from buffered study areas.
 - AppEEARS API client with environment-only authentication.
 - Resumable AppEEARS acquisition runner for NDVI and ECOSTRESS (`submit`, `poll`, `download`, `retry-incomplete`).
@@ -142,6 +143,9 @@ As of 2026-03-26:
     - canonical reporting-path resolution for modeling report artifacts
     - city-level RF-vs-logistic error table generation and climate-group summaries
     - report-ready markdown plus benchmark figure generation from retained run artifacts
+- 2026-04-11 supplemental-analysis planning doc pass:
+  - No tests were run because this checkpoint only updated planning/documentation for the next bounded supplemental analysis layer.
+  - The retained reporting tables were reviewed directly to choose a representative default within-city trio and to anchor the feature-importance plan to existing retained benchmark runs.
 - 2026-04-10 shared-venv bootstrap repair:
   - `powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -SkipInstall`
   - Result: success; created `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe`
@@ -721,19 +725,21 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Keep the main repo direction on the cross-city logistic SAGA versus random-forest reporting story until the stop / escalate decisions are well documented.
+Preserve the current cross-city logistic SAGA versus random-forest reporting story as the canonical benchmark layer, and move next to the bounded supplemental analysis plan without scheduling more routine benchmark expansion.
 
 Recommended order:
 
-- Keep the retained logistic sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the main linear baseline path for reporting.
-- Use the completed RF `smoke` and RF `frontier` runs at `5000` rows per city as the current nonlinear comparison checkpoints.
-- Review the logistic and RF runs together using pooled PR AUC, mean city PR AUC, recall at top 10%, runtime, and city-level wins/losses before deciding whether RF deserves any more search.
-- Reserve RF `full` for expensive confirmation only if the documented comparison still suggests that the marginal RF gains are important enough to justify day-scale compute.
-- Refresh `tuning_history.csv` and mark retained decision runs in `tuning_history_annotations.csv` so the final report can explain clearly why the RF search stopped or escalated.
-- Treat the following as supplemental additions for the final project, not the repo's primary next direction:
-  - within-city exploratory comparisons on a few representative cities
-  - city-level error analysis and representative hotspot / residual maps
-  - coefficient review for logistic plus first-pass feature-importance summaries for RF
+- Keep the retained cross-city reference runs fixed:
+  - logistic sampled `full` at `5000`, `10000`, and `20000` rows per city
+  - RF `smoke` and RF `frontier` at `5000` rows per city
+- Implement the within-city exploratory supplement for `Reno`, `Charlotte`, and `Detroit`, using `20,000` rows per city, `3` repeated stratified `80/20` splits, and logistic SAGA plus RF `smoke` only.
+- Implement the feature-importance supplement by refitting final outer-fold estimators from the retained logistic `20,000` sampled `full` run and retained RF `frontier` run without rerunning inner tuning.
+- Write the new supplemental artifacts under:
+  - `outputs/modeling/supplemental/within_city/`
+  - `outputs/modeling/supplemental/feature_importance/`
+  - `figures/modeling/supplemental/within_city/`
+  - `figures/modeling/supplemental/feature_importance/`
+- Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
 
 
 
@@ -813,6 +819,7 @@ Recommended order:
 - Held-out-city map-oriented exports are still not implemented; `figures/modeling/reporting/` now covers benchmark and city-delta figures, but true hotspot maps, predicted hotspot maps, and residual/error maps are still pending.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
 - Within-city exploratory comparisons and feature-importance summaries are still optional follow-on additions; they may strengthen the final presentation, but they are not yet the main repo direction.
+- The supplemental within-city and feature-importance layer is now planned concretely in `docs/modeling_plan.md`, but it is not implemented yet.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
@@ -828,6 +835,36 @@ Recommended order:
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-04-11 - Checkpoint: Supplemental Analysis Planning Pass
+
+- Date / checkpoint:
+  - 2026-04-11 bounded planning pass for the next supplemental modeling layer.
+- Change made:
+  - Updated `docs/modeling_plan.md` with a concrete implementation plan for:
+    - a `3`-city within-city exploratory contrast that stays explicitly separate from the canonical held-out-city benchmark
+    - a coefficient/permutation-based feature-importance layer anchored to retained benchmark configurations
+    - recommended supplemental output roots under `outputs/modeling/supplemental/` and `figures/modeling/supplemental/`
+    - a smallest-useful follow-up path that refits final outer-fold estimators from saved `best_params_by_fold.csv` instead of repeating broad tuning runs
+  - Updated `README.md`, `docs/workflow.md`, and `docs/data_dictionary.md` so the new supplemental-analysis plan is reflected consistently in the repo-level docs.
+- Files touched:
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - No code was implemented in this checkpoint; this was a documentation and planning pass only.
+- Test status:
+  - No tests were run because there were no code changes.
+- Manual verification status:
+  - Reviewed the retained reporting tables directly, including:
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
+  - Confirmed the current retained run directories do not store fitted estimator objects, which is why the planned interpretation layer uses a final-estimator refit/export pass instead of a new benchmark search.
+- Immediate Next Step:
+  - Implement the within-city exploratory runner and the interpretation-export mode described in `docs/modeling_plan.md`, then materialize the first supplemental outputs under the planned `outputs/modeling/supplemental/` and `figures/modeling/supplemental/` roots.
 
 ### 2026-03-26 - Checkpoint: Overnight Benchmark Preflight Cleared
 

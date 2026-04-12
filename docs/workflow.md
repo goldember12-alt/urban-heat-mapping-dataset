@@ -11,7 +11,7 @@ This project is best understood as an end-to-end urban heat study, not only as a
 5. Merge the final modeling dataset
 6. Audit the final dataset and create city-held-out folds
 7. Run first-pass held-out-city models
-8. Expand to figures, map deliverables, and final-train packaging
+8. Expand to figures, bounded supplemental analyses, and final-train packaging
 
 ## 1. Study Design And Target Definition
 
@@ -237,7 +237,7 @@ Honest status line:
 
 - The new first-pass modeling layer is test-verified on synthetic grouped-city fixtures, but a full canonical run on the real 30-city dataset has not yet been recorded in `docs/chat_handoff.md`
 
-## 8. Evaluation And Deliverables
+## 8. Evaluation, Supplemental Analyses, And Deliverables
 
 Implemented now:
 
@@ -248,6 +248,13 @@ Implemented now:
 Planned next:
 
 - Predicted hotspot maps, true hotspot maps, and residual/error maps under `figures/modeling/`
+- A bounded supplemental within-city layer that is explicitly labeled exploratory, uses a small representative city subset, and is presented only as a contrast to the canonical held-out-city benchmark
+- A bounded feature-importance layer that reuses retained benchmark configurations and reports predictive reliance carefully without causal claims
+- Planned supplemental report roots:
+  - `outputs/modeling/supplemental/within_city/`
+  - `outputs/modeling/supplemental/feature_importance/`
+  - `figures/modeling/supplemental/within_city/`
+  - `figures/modeling/supplemental/feature_importance/`
 - Final-train-on-all-cities packaging for transfer to new cities
 - Scaling strategy for full-canonical runs if workstation memory/runtime becomes the main blocker
 

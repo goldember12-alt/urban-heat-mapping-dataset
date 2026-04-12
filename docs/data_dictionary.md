@@ -363,5 +363,12 @@ Honest status note:
 - `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
 - `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons and city-level RF-vs-logistic error summaries
 - `figures/modeling/reporting/` stores benchmark comparison figures and city-level metric-delta plots derived from retained modeling runs
+- Reserved next supplemental roots, planned but not yet implemented, are:
+  - `outputs/modeling/supplemental/within_city/` for exploratory within-city markdown summaries and contrast tables
+  - `outputs/modeling/supplemental/within_city/tables/` for supporting within-city CSV tables
+  - `figures/modeling/supplemental/within_city/` for within-city contrast figures
+  - `outputs/modeling/supplemental/feature_importance/` for feature-importance markdown summaries and interpretation tables
+  - `outputs/modeling/supplemental/feature_importance/tables/` for coefficient and permutation-importance CSV tables
+  - `figures/modeling/supplemental/feature_importance/` for ranked-importance and coefficient-summary figures
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary

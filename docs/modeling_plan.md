@@ -131,7 +131,8 @@ Planned next evaluation additions:
 - predicted hotspot maps
 - true hotspot maps
 - residual or error maps
-- optional within-city exploratory comparison tables kept separate from the canonical held-out-city evaluation
+- a bounded within-city exploratory comparison layer kept separate from the canonical held-out-city evaluation
+- a bounded feature-importance layer tied to retained benchmark configurations, not to new broad tuning runs
 
 ## Relationship To Future Scripts
 
@@ -211,34 +212,152 @@ Stopping guidance:
 - stop increasing RF sample size if runtime grows faster than practical performance gains
 - use `tuning_history.csv` plus `tuning_history_annotations.csv` to record those stop / escalate decisions explicitly for later writeup
 
-Reporting-oriented action plan:
+Reporting-oriented status after the current retained runs:
 
-- keep the main modeling line focused first on the existing leakage-safe logistic SAGA and random-forest comparison, because that is the canonical project question
-- finish the retained logistic sampled benchmark ladder at `5000`, `10000`, and `20000` rows per city as the linear reference path for reporting
-- treat RF `smoke` and RF `frontier` at `5000` rows per city as the main nonlinear comparison checkpoints on this workstation
-- escalate to RF `full` only if the pooled metrics, city-level pattern, and tuning-history notes still justify paying for an expensive confirmation run
-- refresh `run_registry.jsonl`, `tuning_history.csv`, and `tuning_history_annotations.csv` after each retained decision run so the report can explain why the RF search was stopped or expanded
-- summarize the current logistic versus RF story using pooled metrics, mean city metrics, runtime, and per-city wins/losses rather than a single headline number
-- add the next modeling deliverables after that comparison story is stable:
-  - pooled comparison tables for logistic versus RF
-  - city-level error analysis by held-out city and climate group
-  - figures under `figures/modeling/` for PR AUC, recall at top 10%, and calibration
+- the main cross-city story is now established from retained outputs: both tuned models beat simple baselines, RF improves pooled metrics somewhat, performance remains moderate and uneven across cities, and cross-city transfer is still difficult
+- keep the city-held-out evaluation as the canonical project methodology and comparison frame for all later supplements
+- keep the retained logistic sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear reference path already used in reporting
+- keep RF `smoke` and RF `frontier` at `5000` rows per city as the retained nonlinear checkpoints already used in reporting
+- do not schedule more routine logistic or RF benchmark expansion now; RF `full` remains a reserved confirmation path only if a later decision explicitly reopens it
 
-Supplemental additions that could strengthen the final project without replacing the main direction:
+## Bounded Supplemental Analysis Plan
 
-- a within-city exploratory comparison on one or a few representative cities using the same feature contract, explicitly labeled as easier and non-canonical
-- city-level hotspot / prediction / residual maps for a small representative set of cities
-- coefficient review for logistic SAGA plus impurity- or permutation-based feature importance for RF, framed as first-pass interpretation rather than causal attribution
-- a short gap-style comparison between within-city and held-out-city performance to show why transferability is the real challenge
-- brief city-family error summaries, such as hot-arid versus hot-humid versus mild-cool differences, if the held-out predictions show clear structure
+Guardrails:
+
+- cross-city city-held-out evaluation remains the canonical methodology, headline benchmark, and main project narrative
+- within-city results must be labeled explicitly as exploratory, easier, and supplemental because training and testing occur inside the same city
+- interpretation outputs must be framed as predictive associations or model reliance under the current feature contract, not as causal effects
+- reuse retained reporting artifacts and retained benchmark configurations wherever possible
+
+Recommended output locations:
+
+- `outputs/modeling/supplemental/within_city/within_city_contrast_summary.md`
+- `outputs/modeling/supplemental/within_city/tables/*.csv`
+- `figures/modeling/supplemental/within_city/*.png`
+- `outputs/modeling/supplemental/feature_importance/feature_importance_summary.md`
+- `outputs/modeling/supplemental/feature_importance/tables/*.csv`
+- `figures/modeling/supplemental/feature_importance/*.png`
+
+### Within-City Exploratory Methodology
+
+Recommended city count:
+
+- `3` cities total, which is large enough to show contrast across climate settings but still small enough for a bounded workstation-friendly supplement
+
+Recommended default city set:
+
+- `Reno` for `hot_arid`
+- `Charlotte` for `hot_humid`
+- `Detroit` for `mild_cool`
+
+Selection rule:
+
+- choose one city per climate group using the existing retained comparison table `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
+- default to the city closest to the current climate-group median logistic PR AUC so the supplemental set is representative rather than cherry-picked toward either easy or extreme-error cities
+- if retained reporting tables are refreshed later, reapply the same nearest-median-per-climate rule instead of hardcoding a new ad hoc trio
+
+Data scope:
+
+- use the same first-pass feature contract as the canonical cross-city models
+- sample up to `20,000` rows per selected city with stratification on `hotspot_10pct`
+- if a selected city has fewer than `20,000` valid rows after filtering, use all available rows
+- keep the sample cap explicit in the final summary so the supplement is not misread as a full-city benchmark
+
+Split strategy:
+
+- use `3` repeated within-city `80/20` stratified train/test splits with fixed random seeds
+- tune only inside each training split
+- keep this intentionally simple and clearly label it as optimistic relative to the held-out-city benchmark because it does not test transfer to unseen cities
+- do not make a spatial-blocked variant the default first implementation; keep that only as an optional appendix if time remains
+
+Models to compare:
+
+- logistic SAGA with the same preprocessing pattern and six-feature contract used in the main pipeline
+- random forest with the same six-feature contract and a bounded `smoke`-sized search only
+- do not run RF `frontier` or RF `full` for the within-city supplement unless a later implementation note finds a concrete reason they are needed
+- optional only if implementation cost is trivial: include one simple within-city baseline such as city prevalence or impervious-only for local context
+
+Metrics to report:
+
+- primary metric: PR AUC
+- supporting metric: recall at top 10% predicted risk
+- optional if already easy to export from the shared helpers: calibration curve tables
+- report mean and standard deviation across the `3` repeats for each city-model pair
+- join the within-city summary to the existing cross-city city-level table so the main presentation is the performance gap between within-city and held-out-city settings
+
+Recommended presentation:
+
+- one markdown summary that starts by restating that cross-city transfer remains canonical and within-city is a contrast case only
+- one city-model contrast table with columns for `city_name`, `climate_group`, `model_family`, `within_city_pr_auc_mean`, `cross_city_pr_auc`, `pr_auc_gap`, `within_city_recall_at_top_10pct_mean`, `cross_city_recall_at_top_10pct`, and `recall_gap`
+- one simple figure such as a dumbbell or slope plot showing within-city versus cross-city PR AUC for each selected city-model pair
+- optional only if time remains: one companion figure for recall at top 10%
+
+### Feature-Importance / Interpretation Methodology
+
+Retained reference runs to use:
+
+- logistic reference run: `outputs/modeling/logistic_saga/full_allfolds_s20000_samplecurve-20k_2026-04-08_021152/`
+- random-forest reference run: `outputs/modeling/random_forest/frontier_allfolds_s5000_frontier-check_2026-04-11_173430/`
+- if future reporting refreshes rename those run directories, use the corresponding retained benchmark rows from `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
+
+Current artifact constraint:
+
+- the retained run directories save metrics, predictions, calibration tables, and `best_params_by_fold.csv`, but they do not currently save fitted estimator objects or exported feature-importance tables
+- because of that, a small follow-up implementation is needed even though no new benchmark search is recommended
+
+Smallest useful follow-up run set:
+
+- do not rerun inner search grids for interpretation
+- instead, add an interpretation-export mode that reads the retained `best_params_by_fold.csv`, refits only the final outer-fold estimator for each fold, and writes interpretation artifacts
+- that keeps the interpretation work to `5` final-model refits for logistic plus `5` final-model refits for RF, rather than repeating the original benchmark tuning ladders
+
+Logistic recommendation:
+
+- use fold-level post-preprocessing coefficients as the primary logistic interpretation artifact
+- export the resolved feature names after preprocessing so numeric features and one-hot categorical levels are visible explicitly
+- summarize each feature with median coefficient, median absolute coefficient rank, and sign consistency across outer folds
+- for categorical levels, report them relative to the encoded reference category rather than pretending they are free-standing causal effects
+- optional only if time remains: add held-out-fold permutation importance for logistic as a comparability check against RF
+
+Random-forest recommendation:
+
+- use permutation importance on the held-out-city rows from each outer fold as the primary RF importance method
+- score permutation importance with PR AUC / average precision drop so the interpretation metric matches the main evaluation story
+- aggregate importance across folds using mean drop, median rank, and fold-to-fold stability
+- do not use impurity-based importance as the main reported result because it is more vulnerable to split-selection bias and can overstate importance under correlated predictors
+- optional only if useful for debugging or appendix material: export impurity importance in a separate table clearly marked as secondary
+
+Interpretation guardrails:
+
+- describe both coefficient summaries and permutation-importance summaries as first-pass model interpretation, not explanation of physical heat causation
+- remind readers that correlated predictors can trade off with one another, especially `impervious_pct`, land-cover encodings, NDVI, and distance-to-water features
+- do not claim that the model importance ranking estimates the effect of changing one urban feature in the real world
+- keep the interpretation section tied to the current six-feature first-pass contract and say explicitly that richer feature sets could change the ranking
+
+Most worth doing first:
+
+- the `3`-city within-city contrast using representative cities and repeated stratified splits
+- logistic coefficient summaries from the retained `20,000`-row sampled `full` benchmark configuration
+- RF held-out-fold permutation importance from the retained `frontier` benchmark configuration
+- one concise markdown summary plus one contrast figure for within-city versus cross-city and one ranked-importance figure
+
+Optional only if time remains:
+
+- a trivial within-city baseline in the supplemental comparison table
+- a second recall-gap figure in addition to the main PR AUC contrast figure
+- logistic permutation importance as a cross-check on the coefficient story
+- spatial-block within-city sensitivity runs for the same `3` cities
+- RF impurity importance in an appendix/debug table only
 
 Recommended implementation order:
 
-1. Continue the retained logistic SAGA versus random-forest comparison until the stop / escalate decisions are documented well enough for reporting
-2. Add held-out-city figure generation under `figures/modeling/`
-3. Add richer calibration/reporting views plus city-level error summaries and maps
-4. Add optional supplemental comparisons such as within-city exploratory runs only after the main cross-city reporting story is stable
-5. Add final-train-on-all-cities packaging for transfer to new cities
+1. Freeze the retained reference runs and benchmark-table row names that the supplemental layer will use, so the new work points back to one stable cross-city reporting snapshot.
+2. Implement the within-city city-selection helper from `cross_city_benchmark_report_city_error_comparison.csv`, defaulting to the nearest-median city in each climate group.
+3. Implement the within-city runner with `3` repeated stratified `80/20` splits, `20,000` rows-per-city cap, and logistic SAGA plus RF `smoke` only.
+4. Write the within-city contrast summary/table/figure under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, explicitly joining against the retained cross-city city-level metrics.
+5. Implement the interpretation-export mode that refits final outer-fold estimators from saved `best_params_by_fold.csv` without rerunning inner tuning.
+6. Export logistic coefficient tables and RF held-out permutation-importance tables under `outputs/modeling/supplemental/feature_importance/tables/`, then write one short markdown summary and one ranked-importance figure.
+7. Update `README.md`, `docs/workflow.md`, `docs/data_dictionary.md`, and `docs/chat_handoff.md` after the implementation pass so the supplemental artifacts and their exploratory status are documented consistently.
 
 Run logging note:
 
