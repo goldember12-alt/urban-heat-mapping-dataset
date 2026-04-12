@@ -73,6 +73,7 @@ DEFAULT_WITHIN_CITY_RF_REFERENCE_RUN_DIR = DEFAULT_RF_SMOKE_RUN_DIR
 DEFAULT_FEATURE_IMPORTANCE_LOGISTIC_RUN_DIR = DEFAULT_LOGISTIC_20K_RUN_DIR
 DEFAULT_FEATURE_IMPORTANCE_RF_RUN_DIR = DEFAULT_RF_FRONTIER_RUN_DIR
 DEFAULT_RF_PERMUTATION_REPEATS = 10
+SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME = "city_prevalence_baseline"
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,7 @@ class WithinCitySupplementResult:
     calibration_curve_path: Path
     metadata_path: Path
     figure_path: Path
+    recall_figure_path: Path
 
 
 @dataclass(frozen=True)
@@ -104,9 +106,13 @@ class FeatureImportanceAnalysisResult:
     logistic_feature_names_path: Path
     logistic_coefficients_by_fold_path: Path
     logistic_coefficients_summary_path: Path
+    logistic_permutation_by_fold_path: Path
+    logistic_permutation_summary_path: Path
     logistic_refit_metrics_path: Path
     rf_permutation_by_fold_path: Path
     rf_permutation_summary_path: Path
+    rf_impurity_by_fold_path: Path
+    rf_impurity_summary_path: Path
     rf_refit_metrics_path: Path
     metadata_path: Path
     figure_path: Path
@@ -348,18 +354,63 @@ def _build_within_city_prediction_frame(
     return prediction_df
 
 
-def plot_within_city_contrast(contrast_df: pd.DataFrame, output_path: Path) -> Path:
-    """Plot within-city versus retained cross-city PR AUC for the selected city-model pairs."""
+def _predict_city_prevalence_baseline(train_df: pd.DataFrame, test_df: pd.DataFrame) -> np.ndarray:
+    prevalence = float(train_df[TARGET_COLUMN].mean())
+    return np.full(len(test_df), prevalence, dtype=np.float64)
+
+
+def _format_within_city_model_short_label(model_name: str) -> str:
+    return {
+        "logistic_saga": "log",
+        "random_forest": "rf",
+        SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME: "prev",
+    }.get(model_name, model_name)
+
+
+def _plot_within_city_metric_contrast(
+    *,
+    contrast_df: pd.DataFrame,
+    output_path: Path,
+    within_metric_column: str,
+    cross_city_metric_column: str,
+    metric_label: str,
+    title: str,
+) -> Path:
+    """Plot within-city versus retained cross-city metric contrasts for comparable pairs."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    ordered = contrast_df.sort_values(["climate_group", "city_name", "model_name"]).reset_index(drop=True)
+    ordered = (
+        contrast_df.loc[
+            contrast_df[within_metric_column].notna() & contrast_df[cross_city_metric_column].notna()
+        ]
+        .sort_values(["climate_group", "city_name", "model_name"])
+        .reset_index(drop=True)
+    )
+    if ordered.empty:
+        fig, ax = plt.subplots(figsize=(10, 3.5), constrained_layout=True)
+        ax.axis("off")
+        ax.text(
+            0.5,
+            0.5,
+            "No comparable retained cross-city rows were available for this exploratory contrast.",
+            ha="center",
+            va="center",
+        )
+        fig.savefig(output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        return output_path
+
     y_positions = np.arange(len(ordered))
-    model_colors = {"logistic_saga": "#2f6c8f", "random_forest": "#9b3d2f"}
+    model_colors = {
+        "logistic_saga": "#2f6c8f",
+        "random_forest": "#9b3d2f",
+        SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME: "#6b7a3a",
+    }
 
     fig, ax = plt.subplots(figsize=(10, 6.5), constrained_layout=True)
     for index, row in ordered.iterrows():
         color = model_colors.get(str(row["model_name"]), "#666666")
-        cross_value = float(row["cross_city_pr_auc"])
-        within_value = float(row["within_city_pr_auc_mean"])
+        cross_value = float(row[cross_city_metric_column])
+        within_value = float(row[within_metric_column])
         ax.plot([cross_value, within_value], [index, index], color=color, linewidth=2, alpha=0.8)
         ax.scatter(cross_value, index, color="white", edgecolor=color, s=65, zorder=3)
         ax.scatter(within_value, index, color=color, edgecolor=color, s=65, zorder=3)
@@ -367,17 +418,41 @@ def plot_within_city_contrast(contrast_df: pd.DataFrame, output_path: Path) -> P
     ax.set_yticks(y_positions)
     ax.set_yticklabels(
         [
-            f"{row.city_name} ({row.climate_group}, {'log' if row.model_name == 'logistic_saga' else 'rf'})"
+            f"{row.city_name} ({row.climate_group}, {_format_within_city_model_short_label(str(row.model_name))})"
             for row in ordered.itertuples(index=False)
         ],
         fontsize=9,
     )
-    ax.set_xlabel("PR AUC")
-    ax.set_title("Exploratory Within-City PR AUC vs Retained Cross-City Benchmark")
+    ax.set_xlabel(metric_label)
+    ax.set_title(title)
     ax.grid(axis="x", alpha=0.25)
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_path
+
+
+def plot_within_city_contrast(contrast_df: pd.DataFrame, output_path: Path) -> Path:
+    """Plot within-city versus retained cross-city PR AUC for the selected city-model pairs."""
+    return _plot_within_city_metric_contrast(
+        contrast_df=contrast_df,
+        output_path=output_path,
+        within_metric_column="within_city_pr_auc_mean",
+        cross_city_metric_column="cross_city_pr_auc",
+        metric_label="PR AUC",
+        title="Exploratory Within-City PR AUC vs Retained Cross-City Benchmark",
+    )
+
+
+def plot_within_city_recall_contrast(contrast_df: pd.DataFrame, output_path: Path) -> Path:
+    """Plot within-city versus retained cross-city recall at top 10% for comparable pairs."""
+    return _plot_within_city_metric_contrast(
+        contrast_df=contrast_df,
+        output_path=output_path,
+        within_metric_column="within_city_recall_at_top_10pct_mean",
+        cross_city_metric_column="cross_city_recall_at_top_10pct",
+        metric_label="Recall At Top 10% Predicted Risk",
+        title="Exploratory Within-City Recall vs Retained Cross-City Benchmark",
+    )
 
 
 def generate_within_city_supplemental_artifacts(
@@ -414,6 +489,16 @@ def generate_within_city_supplemental_artifacts(
         random_state=int(random_state),
     )
     sampled_rows_df = drop_missing_target_rows(sampled_rows_df)
+    model_specs = [
+        ("logistic_saga", logistic_tuning_preset),
+        ("random_forest", random_forest_tuning_preset),
+        (SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME, None),
+    ]
+    LOGGER.info(
+        "Running exploratory within-city supplement for %s cities and %s model rows",
+        len(city_selection_df),
+        len(model_specs),
+    )
 
     prediction_frames: list[pd.DataFrame] = []
     split_metric_rows: list[dict[str, Any]] = []
@@ -438,20 +523,29 @@ def generate_within_city_supplemental_artifacts(
             train_df = city_df.iloc[train_index].reset_index(drop=True)
             test_df = city_df.iloc[test_index].reset_index(drop=True)
 
-            for model_name, tuning_preset in (
-                ("logistic_saga", logistic_tuning_preset),
-                ("random_forest", random_forest_tuning_preset),
-            ):
-                estimator, best_score, best_params, effective_inner_splits = _fit_within_city_model(
-                    model_name=model_name,
-                    feature_columns=feature_columns,
-                    train_df=train_df,
-                    random_state=int(split_seed),
-                    tuning_preset=tuning_preset,
-                    grid_search_n_jobs=int(grid_search_n_jobs),
-                    model_n_jobs=model_n_jobs if model_name == "random_forest" else None,
+            for model_name, tuning_preset in model_specs:
+                LOGGER.info(
+                    "Within-city supplemental fit: city=%s repeat=%s model=%s",
+                    city_row.city_name,
+                    repeat_id,
+                    model_name,
                 )
-                probabilities = estimator.predict_proba(test_df[list(feature_columns)])[:, 1]
+                if model_name == SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME:
+                    probabilities = _predict_city_prevalence_baseline(train_df=train_df, test_df=test_df)
+                    best_score = float("nan")
+                    best_params: dict[str, Any] = {}
+                    effective_inner_splits = None
+                else:
+                    estimator, best_score, best_params, effective_inner_splits = _fit_within_city_model(
+                        model_name=model_name,
+                        feature_columns=feature_columns,
+                        train_df=train_df,
+                        random_state=int(split_seed),
+                        tuning_preset=str(tuning_preset),
+                        grid_search_n_jobs=int(grid_search_n_jobs),
+                        model_n_jobs=model_n_jobs if model_name == "random_forest" else None,
+                    )
+                    probabilities = estimator.predict_proba(test_df[list(feature_columns)])[:, 1]
                 prediction_df = _build_within_city_prediction_frame(
                     test_df=test_df,
                     probabilities=probabilities,
@@ -474,7 +568,7 @@ def generate_within_city_supplemental_artifacts(
                         "model_name": model_name,
                         "repeat_id": int(repeat_id),
                         "split_seed": int(split_seed),
-                        "tuning_preset": tuning_preset,
+                        "tuning_preset": tuning_preset if tuning_preset is not None else "not_applicable",
                         "sample_rows_per_city_cap": int(sample_rows_per_city),
                         "effective_city_row_count": int(len(city_df)),
                         "train_row_count": int(len(train_df)),
@@ -484,7 +578,9 @@ def generate_within_city_supplemental_artifacts(
                         "pr_auc": float(metrics["pr_auc"]),
                         "recall_at_top_10pct": float(metrics["recall_at_top_10pct"]),
                         "best_inner_cv_average_precision": float(best_score),
-                        "effective_inner_cv_splits": int(effective_inner_splits),
+                        "effective_inner_cv_splits": (
+                            int(effective_inner_splits) if effective_inner_splits is not None else np.nan
+                        ),
                     }
                 )
                 best_param_rows.append(
@@ -495,7 +591,7 @@ def generate_within_city_supplemental_artifacts(
                         "model_name": model_name,
                         "repeat_id": int(repeat_id),
                         "split_seed": int(split_seed),
-                        "tuning_preset": tuning_preset,
+                        "tuning_preset": tuning_preset if tuning_preset is not None else "not_applicable",
                         "best_params_json": json.dumps(best_params, sort_keys=True),
                         "best_inner_cv_average_precision": float(best_score),
                     }
@@ -573,6 +669,7 @@ def generate_within_city_supplemental_artifacts(
     predictions_path = paths.output_dir / "within_city_predictions.parquet"
     calibration_curve_path = paths.tables_dir / "within_city_calibration_curve.csv"
     figure_path = paths.figures_dir / "within_city_pr_auc_contrast.png"
+    recall_figure_path = paths.figures_dir / "within_city_recall_contrast.png"
     summary_markdown_path = paths.output_dir / "within_city_contrast_summary.md"
 
     city_selection_df.to_csv(city_selection_path, index=False)
@@ -584,6 +681,7 @@ def generate_within_city_supplemental_artifacts(
     predictions_df.to_parquet(predictions_path, index=False)
     calibration_curve_df.to_csv(calibration_curve_path, index=False)
     plot_within_city_contrast(contrast_df=contrast_df, output_path=figure_path)
+    plot_within_city_recall_contrast(contrast_df=contrast_df, output_path=recall_figure_path)
 
     average_gaps_df = (
         contrast_df.groupby("model_name", dropna=False)
@@ -598,6 +696,7 @@ def generate_within_city_supplemental_artifacts(
         "",
         "This supplement is exploratory and easier than the canonical project benchmark because training and testing both occur inside the same city.",
         "The main project narrative remains the cross-city city-held-out benchmark.",
+        f"`{SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME}` is a within-city-only contextual baseline and is not part of the canonical cross-city baseline suite.",
         "",
         "## Selected Cities",
         "",
@@ -652,6 +751,7 @@ def generate_within_city_supplemental_artifacts(
         ),
         "",
         f"Figure: `{figure_path}`",
+        f"Figure: `{recall_figure_path}`",
         "",
     ]
     summary_markdown_path.write_text("\n".join(markdown_lines), encoding="utf-8")
@@ -665,6 +765,7 @@ def generate_within_city_supplemental_artifacts(
             "sample_rows_per_city": int(sample_rows_per_city),
             "split_seeds": [int(seed) for seed in split_seeds],
             "test_size": float(test_size),
+            "supplemental_within_city_baseline_model": SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME,
             "logistic_tuning_preset": logistic_tuning_preset,
             "random_forest_tuning_preset": random_forest_tuning_preset,
             "logistic_reference_run_dir": str(_resolve_project_path(logistic_reference_run_dir)),
@@ -685,6 +786,7 @@ def generate_within_city_supplemental_artifacts(
                 "predictions": str(predictions_path),
                 "calibration_curve": str(calibration_curve_path),
                 "figure": str(figure_path),
+                "recall_figure": str(recall_figure_path),
             },
         },
     )
@@ -701,6 +803,7 @@ def generate_within_city_supplemental_artifacts(
         calibration_curve_path=calibration_curve_path,
         metadata_path=paths.metadata_path,
         figure_path=figure_path,
+        recall_figure_path=recall_figure_path,
     )
 
 
@@ -719,7 +822,10 @@ def _build_post_preprocessing_feature_names(feature_columns: Sequence[str], fitt
     preprocessor = fitted_pipeline.named_steps["preprocess"]
     feature_names = list(numeric_columns)
     categorical_encoder = preprocessor.named_transformers_["categorical"].named_steps["encoder"]
-    feature_names.extend(categorical_encoder.get_feature_names_out(categorical_columns).tolist())
+    if hasattr(categorical_encoder, "get_feature_names_out"):
+        feature_names.extend(categorical_encoder.get_feature_names_out(categorical_columns).tolist())
+    else:
+        feature_names.extend(categorical_columns)
     return feature_names
 
 
@@ -766,13 +872,14 @@ def _summarize_logistic_coefficients(coefficients_df: pd.DataFrame) -> pd.DataFr
     ).reset_index(drop=True)
 
 
-def _summarize_rf_permutation_importance(permutation_df: pd.DataFrame) -> pd.DataFrame:
+def _summarize_permutation_importance(permutation_df: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for feature_name, group_df in permutation_df.groupby("feature_name", sort=False, dropna=False):
         mean_drop_series = group_df["pr_auc_drop_mean"].to_numpy(dtype="float64")
         rows.append(
             {
                 "feature_name": str(feature_name),
+                "base_feature_name": str(group_df["base_feature_name"].iloc[0]),
                 "fold_count": int(len(group_df)),
                 "mean_pr_auc_drop": float(np.mean(mean_drop_series)),
                 "std_pr_auc_drop_across_folds": float(np.std(mean_drop_series, ddof=0)),
@@ -785,6 +892,75 @@ def _summarize_rf_permutation_importance(permutation_df: pd.DataFrame) -> pd.Dat
         ["mean_pr_auc_drop", "median_rank"],
         ascending=[False, True],
     ).reset_index(drop=True)
+
+
+def _summarize_rf_impurity_importance(impurity_df: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for feature_name, group_df in impurity_df.groupby("feature_name", sort=False, dropna=False):
+        importance_series = group_df["impurity_importance"].to_numpy(dtype="float64")
+        rows.append(
+            {
+                "feature_name": str(feature_name),
+                "base_feature_name": str(group_df["base_feature_name"].iloc[0]),
+                "fold_count": int(len(group_df)),
+                "mean_impurity_importance": float(np.mean(importance_series)),
+                "std_impurity_importance_across_folds": float(np.std(importance_series, ddof=0)),
+                "median_rank": float(group_df["importance_rank"].median()),
+                "rank_std_across_folds": float(np.std(group_df["importance_rank"].to_numpy(dtype="float64"), ddof=0)),
+                "stability_positive_importance_fraction": float((importance_series > 0).mean()),
+            }
+        )
+    return pd.DataFrame(rows).sort_values(
+        ["mean_impurity_importance", "median_rank"],
+        ascending=[False, True],
+    ).reset_index(drop=True)
+
+
+def _collect_permutation_importance_rows(
+    *,
+    estimator: Any,
+    X: pd.DataFrame,
+    y: np.ndarray,
+    feature_columns: Sequence[str],
+    outer_fold: int,
+    baseline_pr_auc: float,
+    n_repeats: int,
+    random_state: int,
+    n_jobs: int | None,
+) -> list[dict[str, Any]]:
+    importance = permutation_importance(
+        estimator=estimator,
+        X=X,
+        y=y,
+        scoring=DEFAULT_PR_SCORING,
+        n_repeats=n_repeats,
+        random_state=random_state,
+        n_jobs=n_jobs,
+    )
+    importance_ranks = pd.Series(importance.importances_mean).rank(
+        method="dense",
+        ascending=False,
+    ).astype(int).tolist()
+    rows: list[dict[str, Any]] = []
+    for feature_name, mean_drop, std_drop, importance_rank in zip(
+        feature_columns,
+        importance.importances_mean.tolist(),
+        importance.importances_std.tolist(),
+        importance_ranks,
+        strict=True,
+    ):
+        rows.append(
+            {
+                "outer_fold": outer_fold,
+                "feature_name": str(feature_name),
+                "base_feature_name": str(feature_name),
+                "pr_auc_drop_mean": float(mean_drop),
+                "pr_auc_drop_std": float(std_drop),
+                "importance_rank": int(importance_rank),
+                "baseline_pr_auc": float(baseline_pr_auc),
+            }
+        )
+    return rows
 
 
 def plot_feature_importance_summary(
@@ -838,6 +1014,7 @@ def generate_feature_importance_artifacts(
     """Refit retained outer-fold winners and export bounded interpretation artifacts."""
     start = perf_counter()
     paths = resolve_supplemental_paths(output_dir=output_dir, figures_dir=figures_dir)
+    held_out_permutation_repeats = int(rf_permutation_repeats)
 
     logistic_metadata = _load_reference_run_metadata(logistic_run_dir)
     rf_metadata = _load_reference_run_metadata(random_forest_run_dir)
@@ -858,9 +1035,11 @@ def generate_feature_importance_artifacts(
     logistic_feature_name_rows: list[dict[str, Any]] = []
     logistic_refit_metric_rows: list[dict[str, Any]] = []
     logistic_intercepts: list[dict[str, Any]] = []
+    logistic_permutation_rows: list[dict[str, Any]] = []
 
     for fold_row in logistic_best_params_df.itertuples(index=False):
         outer_fold = int(fold_row.outer_fold)
+        LOGGER.info("Refitting retained logistic winner for outer_fold=%s", outer_fold)
         fold_data = load_outer_fold_data(
             outer_fold=outer_fold,
             dataset_path=logistic_dataset_path,
@@ -900,6 +1079,19 @@ def generate_feature_importance_artifacts(
                 "train_row_count": int(len(fold_data.train_df)),
                 "test_row_count": int(len(fold_data.test_df)),
             }
+        )
+        logistic_permutation_rows.extend(
+            _collect_permutation_importance_rows(
+                estimator=estimator,
+                X=fold_data.test_df[logistic_feature_columns],
+                y=fold_data.test_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                feature_columns=logistic_feature_columns,
+                outer_fold=outer_fold,
+                baseline_pr_auc=float(refit_pr_auc),
+                n_repeats=held_out_permutation_repeats,
+                random_state=int(logistic_metadata.get("random_state", DEFAULT_RANDOM_STATE)) + outer_fold,
+                n_jobs=permutation_n_jobs,
+            )
         )
 
         fitted_feature_names = _build_post_preprocessing_feature_names(logistic_feature_columns, estimator)
@@ -955,13 +1147,19 @@ def generate_feature_importance_artifacts(
         ["outer_fold", "absolute_rank", "feature_name"]
     )
     logistic_coefficients_summary_df = _summarize_logistic_coefficients(logistic_coefficients_df)
+    logistic_permutation_df = pd.DataFrame(logistic_permutation_rows).sort_values(
+        ["outer_fold", "importance_rank", "feature_name"]
+    ).reset_index(drop=True)
+    logistic_permutation_summary_df = _summarize_permutation_importance(logistic_permutation_df)
     logistic_refit_metrics_df = pd.DataFrame(logistic_refit_metric_rows).sort_values("outer_fold").reset_index(drop=True)
     logistic_intercepts_df = pd.DataFrame(logistic_intercepts).sort_values("outer_fold").reset_index(drop=True)
 
     rf_rows: list[dict[str, Any]] = []
     rf_refit_metric_rows: list[dict[str, Any]] = []
+    rf_impurity_rows: list[dict[str, Any]] = []
     for fold_row in rf_best_params_df.itertuples(index=False):
         outer_fold = int(fold_row.outer_fold)
+        LOGGER.info("Refitting retained random-forest winner for outer_fold=%s", outer_fold)
         fold_data = load_outer_fold_data(
             outer_fold=outer_fold,
             dataset_path=rf_dataset_path,
@@ -1002,50 +1200,74 @@ def generate_feature_importance_artifacts(
             }
         )
 
-        importance = permutation_importance(
-            estimator=estimator,
-            X=fold_data.test_df[rf_feature_columns],
-            y=fold_data.test_df[TARGET_COLUMN].to_numpy(dtype="int8"),
-            scoring=DEFAULT_PR_SCORING,
-            n_repeats=int(rf_permutation_repeats),
-            random_state=int(rf_metadata.get("random_state", DEFAULT_RANDOM_STATE)) + outer_fold,
-            n_jobs=permutation_n_jobs,
+        rf_rows.extend(
+            _collect_permutation_importance_rows(
+                estimator=estimator,
+                X=fold_data.test_df[rf_feature_columns],
+                y=fold_data.test_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                feature_columns=rf_feature_columns,
+                outer_fold=outer_fold,
+                baseline_pr_auc=float(refit_pr_auc),
+                n_repeats=held_out_permutation_repeats,
+                random_state=int(rf_metadata.get("random_state", DEFAULT_RANDOM_STATE)) + outer_fold,
+                n_jobs=permutation_n_jobs,
+            )
         )
-        importance_ranks = pd.Series(importance.importances_mean).rank(
+        rf_feature_names = _build_post_preprocessing_feature_names(rf_feature_columns, estimator)
+        rf_impurity_importance = estimator.named_steps["model"].feature_importances_
+        if len(rf_feature_names) != len(rf_impurity_importance):
+            raise ValueError(
+                f"Feature-name count {len(rf_feature_names)} did not match RF impurity count {len(rf_impurity_importance)}"
+            )
+        rf_impurity_ranks = pd.Series(rf_impurity_importance).rank(
             method="dense",
             ascending=False,
         ).astype(int).tolist()
-        for feature_name, mean_drop, std_drop, importance_rank in zip(
-            rf_feature_columns,
-            importance.importances_mean.tolist(),
-            importance.importances_std.tolist(),
-            importance_ranks,
+        for feature_name, impurity_importance, importance_rank in zip(
+            rf_feature_names,
+            rf_impurity_importance,
+            rf_impurity_ranks,
             strict=True,
         ):
-            rf_rows.append(
+            cleaned_feature_name = _strip_transformer_prefix(feature_name)
+            base_feature_name = _infer_base_feature_name(cleaned_feature_name, rf_feature_columns)
+            category_level = (
+                cleaned_feature_name[len(base_feature_name) + 1 :]
+                if cleaned_feature_name != base_feature_name and cleaned_feature_name.startswith(f"{base_feature_name}_")
+                else None
+            )
+            rf_impurity_rows.append(
                 {
                     "outer_fold": outer_fold,
-                    "feature_name": str(feature_name),
-                    "pr_auc_drop_mean": float(mean_drop),
-                    "pr_auc_drop_std": float(std_drop),
+                    "feature_name": cleaned_feature_name,
+                    "base_feature_name": base_feature_name,
+                    "category_level": category_level,
+                    "impurity_importance": float(impurity_importance),
                     "importance_rank": int(importance_rank),
-                    "baseline_pr_auc": float(refit_pr_auc),
                 }
             )
 
     rf_permutation_df = pd.DataFrame(rf_rows).sort_values(
         ["outer_fold", "importance_rank", "feature_name"]
     ).reset_index(drop=True)
-    rf_permutation_summary_df = _summarize_rf_permutation_importance(rf_permutation_df)
+    rf_permutation_summary_df = _summarize_permutation_importance(rf_permutation_df)
+    rf_impurity_df = pd.DataFrame(rf_impurity_rows).sort_values(
+        ["outer_fold", "importance_rank", "feature_name"]
+    ).reset_index(drop=True)
+    rf_impurity_summary_df = _summarize_rf_impurity_importance(rf_impurity_df)
     rf_refit_metrics_df = pd.DataFrame(rf_refit_metric_rows).sort_values("outer_fold").reset_index(drop=True)
 
     logistic_feature_names_path = paths.tables_dir / "logistic_post_preprocessing_feature_names.csv"
     logistic_coefficients_by_fold_path = paths.tables_dir / "logistic_coefficients_by_fold.csv"
     logistic_coefficients_summary_path = paths.tables_dir / "logistic_coefficients_summary.csv"
+    logistic_permutation_by_fold_path = paths.tables_dir / "logistic_permutation_importance_by_fold.csv"
+    logistic_permutation_summary_path = paths.tables_dir / "logistic_permutation_importance_summary.csv"
     logistic_refit_metrics_path = paths.tables_dir / "logistic_refit_fold_metrics.csv"
     logistic_intercepts_path = paths.tables_dir / "logistic_intercepts_by_fold.csv"
     rf_permutation_by_fold_path = paths.tables_dir / "rf_permutation_importance_by_fold.csv"
     rf_permutation_summary_path = paths.tables_dir / "rf_permutation_importance_summary.csv"
+    rf_impurity_by_fold_path = paths.tables_dir / "rf_impurity_importance_by_fold.csv"
+    rf_impurity_summary_path = paths.tables_dir / "rf_impurity_importance_summary.csv"
     rf_refit_metrics_path = paths.tables_dir / "rf_refit_fold_metrics.csv"
     figure_path = paths.figures_dir / "feature_importance_ranked_summary.png"
     summary_markdown_path = paths.output_dir / "feature_importance_summary.md"
@@ -1053,10 +1275,14 @@ def generate_feature_importance_artifacts(
     logistic_feature_names_df.to_csv(logistic_feature_names_path, index=False)
     logistic_coefficients_df.to_csv(logistic_coefficients_by_fold_path, index=False)
     logistic_coefficients_summary_df.to_csv(logistic_coefficients_summary_path, index=False)
+    logistic_permutation_df.to_csv(logistic_permutation_by_fold_path, index=False)
+    logistic_permutation_summary_df.to_csv(logistic_permutation_summary_path, index=False)
     logistic_refit_metrics_df.to_csv(logistic_refit_metrics_path, index=False)
     logistic_intercepts_df.to_csv(logistic_intercepts_path, index=False)
     rf_permutation_df.to_csv(rf_permutation_by_fold_path, index=False)
     rf_permutation_summary_df.to_csv(rf_permutation_summary_path, index=False)
+    rf_impurity_df.to_csv(rf_impurity_by_fold_path, index=False)
+    rf_impurity_summary_df.to_csv(rf_impurity_summary_path, index=False)
     rf_refit_metrics_df.to_csv(rf_refit_metrics_path, index=False)
     plot_feature_importance_summary(
         logistic_summary_df=logistic_coefficients_summary_df,
@@ -1065,7 +1291,9 @@ def generate_feature_importance_artifacts(
     )
 
     logistic_top = logistic_coefficients_summary_df.head(8)
+    logistic_permutation_top = logistic_permutation_summary_df.head(6)
     rf_top = rf_permutation_summary_df.head(6)
+    rf_impurity_top = rf_impurity_summary_df.head(6)
     markdown_lines = [
         "# Feature-Importance Summary",
         "",
@@ -1094,6 +1322,29 @@ def generate_feature_importance_artifacts(
             },
         ),
         "",
+        "Logistic coefficients remain the primary logistic interpretation artifact.",
+        "The held-out permutation table is provided only as a cross-check on that coefficient story, not as a replacement for it.",
+        "",
+        "## Logistic Held-Out Permutation Importance Cross-Check",
+        "",
+        _dataframe_to_markdown(
+            logistic_permutation_top[
+                [
+                    "feature_name",
+                    "mean_pr_auc_drop",
+                    "std_pr_auc_drop_across_folds",
+                    "median_rank",
+                    "stability_positive_drop_fraction",
+                ]
+            ],
+            decimal_columns={
+                "mean_pr_auc_drop",
+                "std_pr_auc_drop_across_folds",
+                "median_rank",
+                "stability_positive_drop_fraction",
+            },
+        ),
+        "",
         "## Random-Forest Held-Out Permutation Importance",
         "",
         _dataframe_to_markdown(
@@ -1114,6 +1365,29 @@ def generate_feature_importance_artifacts(
             },
         ),
         "",
+        "Random-forest held-out permutation importance remains the primary RF interpretation artifact.",
+        "Impurity importance is exported only as secondary appendix/debug output because it is more vulnerable to split-selection bias under correlated predictors.",
+        "",
+        "## Appendix: Random-Forest Impurity Importance (Secondary / Debug Only)",
+        "",
+        _dataframe_to_markdown(
+            rf_impurity_top[
+                [
+                    "feature_name",
+                    "mean_impurity_importance",
+                    "std_impurity_importance_across_folds",
+                    "median_rank",
+                    "stability_positive_importance_fraction",
+                ]
+            ],
+            decimal_columns={
+                "mean_impurity_importance",
+                "std_impurity_importance_across_folds",
+                "median_rank",
+                "stability_positive_importance_fraction",
+            },
+        ),
+        "",
         f"Figure: `{figure_path}`",
         "",
     ]
@@ -1126,6 +1400,8 @@ def generate_feature_importance_artifacts(
             "random_forest_run_dir": str(_resolve_project_path(random_forest_run_dir)),
             "logistic_dataset_path": str(logistic_dataset_path),
             "random_forest_dataset_path": str(rf_dataset_path),
+            "held_out_permutation_repeats": held_out_permutation_repeats,
+            "logistic_permutation_repeats": held_out_permutation_repeats,
             "rf_permutation_repeats": int(rf_permutation_repeats),
             "permutation_n_jobs": permutation_n_jobs,
             "timing_seconds": {
@@ -1136,10 +1412,14 @@ def generate_feature_importance_artifacts(
                 "logistic_feature_names": str(logistic_feature_names_path),
                 "logistic_coefficients_by_fold": str(logistic_coefficients_by_fold_path),
                 "logistic_coefficients_summary": str(logistic_coefficients_summary_path),
+                "logistic_permutation_by_fold": str(logistic_permutation_by_fold_path),
+                "logistic_permutation_summary": str(logistic_permutation_summary_path),
                 "logistic_refit_metrics": str(logistic_refit_metrics_path),
                 "logistic_intercepts": str(logistic_intercepts_path),
                 "rf_permutation_by_fold": str(rf_permutation_by_fold_path),
                 "rf_permutation_summary": str(rf_permutation_summary_path),
+                "rf_impurity_by_fold": str(rf_impurity_by_fold_path),
+                "rf_impurity_summary": str(rf_impurity_summary_path),
                 "rf_refit_metrics": str(rf_refit_metrics_path),
                 "figure": str(figure_path),
             },
@@ -1151,9 +1431,13 @@ def generate_feature_importance_artifacts(
         logistic_feature_names_path=logistic_feature_names_path,
         logistic_coefficients_by_fold_path=logistic_coefficients_by_fold_path,
         logistic_coefficients_summary_path=logistic_coefficients_summary_path,
+        logistic_permutation_by_fold_path=logistic_permutation_by_fold_path,
+        logistic_permutation_summary_path=logistic_permutation_summary_path,
         logistic_refit_metrics_path=logistic_refit_metrics_path,
         rf_permutation_by_fold_path=rf_permutation_by_fold_path,
         rf_permutation_summary_path=rf_permutation_summary_path,
+        rf_impurity_by_fold_path=rf_impurity_by_fold_path,
+        rf_impurity_summary_path=rf_impurity_summary_path,
         rf_refit_metrics_path=rf_refit_metrics_path,
         metadata_path=paths.metadata_path,
         figure_path=figure_path,

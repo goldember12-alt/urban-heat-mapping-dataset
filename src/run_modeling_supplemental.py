@@ -71,19 +71,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--feature-importance-logistic-run-dir",
         type=Path,
         default=DEFAULT_FEATURE_IMPORTANCE_LOGISTIC_RUN_DIR,
-        help="Retained logistic benchmark run whose saved outer-fold winners will be refit for coefficient export.",
+        help="Retained logistic benchmark run whose saved outer-fold winners will be refit for coefficient export plus held-out permutation cross-check tables.",
     )
     parser.add_argument(
         "--feature-importance-random-forest-run-dir",
         type=Path,
         default=DEFAULT_FEATURE_IMPORTANCE_RF_RUN_DIR,
-        help="Retained random-forest benchmark run whose saved outer-fold winners will be refit for permutation importance.",
+        help="Retained random-forest benchmark run whose saved outer-fold winners will be refit for held-out permutation importance plus secondary impurity appendix tables.",
     )
     parser.add_argument(
         "--rf-permutation-repeats",
         type=int,
         default=DEFAULT_RF_PERMUTATION_REPEATS,
-        help="Permutation repeats per outer fold for the retained random-forest interpretation export.",
+        help="Held-out permutation repeats per outer fold for the retained interpretation exports.",
     )
     parser.add_argument(
         "--grid-search-n-jobs",
@@ -137,6 +137,7 @@ def main() -> None:
         print(within_city_result.summary_markdown_path)
         print(within_city_result.contrast_table_path)
         print(within_city_result.figure_path)
+        print(within_city_result.recall_figure_path)
 
     if not args.skip_feature_importance:
         feature_importance_result = generate_feature_importance_artifacts(

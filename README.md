@@ -53,7 +53,7 @@ Implemented now:
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
-- Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast plus retained-run coefficient and permutation-importance exports
+- Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast plus retained-run interpretation exports that keep logistic coefficients and RF held-out permutation importance primary while adding appendix-style cross-check tables
 
 Verified status:
 
@@ -185,8 +185,8 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 `src.run_modeling_supplemental` builds the bounded supplemental layer under `outputs/modeling/supplemental/` and `figures/modeling/supplemental/`. It keeps the city-held-out cross-city benchmark as the canonical story while adding:
 
 - a `Reno` / `Charlotte` / `Detroit` within-city exploratory contrast with repeated stratified `80/20` splits
-- retained-run logistic coefficient exports from the sampled `20,000`-row linear reference
-- retained-run random-forest held-out permutation importance from the retained `frontier` reference
+- retained-run logistic coefficient exports from the sampled `20,000`-row linear reference, with held-out permutation importance added only as a cross-check
+- retained-run random-forest held-out permutation importance from the retained `frontier` reference, with impurity importance exported only as secondary/debug appendix output
 
 `--output-dir` is now optional for the tuned modeling CLIs. If you omit it, the CLI auto-generates a unique, readable run directory under the correct model-family root using the preset, fold scope, sample scope, and a timestamp. You can still pass `--output-dir` explicitly to override that behavior, and `--run-label` can add a short human tag to an auto-generated name without building the full path yourself.
 

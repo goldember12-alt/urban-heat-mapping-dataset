@@ -276,8 +276,9 @@ Models to compare:
 
 - logistic SAGA with the same preprocessing pattern and six-feature contract used in the main pipeline
 - random forest with the same six-feature contract and a bounded `smoke`-sized search only
+- `city_prevalence_baseline` as a within-city-only contextual baseline that predicts the training-split hotspot prevalence for every test row
 - do not run RF `frontier` or RF `full` for the within-city supplement unless a later implementation note finds a concrete reason they are needed
-- optional only if implementation cost is trivial: include one simple within-city baseline such as city prevalence or impervious-only for local context
+- do not treat that contextual baseline as part of the canonical cross-city baseline suite
 
 Metrics to report:
 
@@ -293,7 +294,8 @@ Recommended presentation:
 - one markdown summary that starts by restating that cross-city transfer remains canonical and within-city is a contrast case only
 - one city-model contrast table with columns for `city_name`, `climate_group`, `model_family`, `within_city_pr_auc_mean`, `cross_city_pr_auc`, `pr_auc_gap`, `within_city_recall_at_top_10pct_mean`, `cross_city_recall_at_top_10pct`, and `recall_gap`
 - one simple figure such as a dumbbell or slope plot showing within-city versus cross-city PR AUC for each selected city-model pair
-- optional only if time remains: one companion figure for recall at top 10%
+- one companion figure showing within-city versus retained cross-city recall at top 10% predicted risk for the same comparable city-model pairs
+- allow the exploratory `city_prevalence_baseline` rows to carry `n/a` retained cross-city comparison cells because that baseline is intentionally not part of the canonical transfer benchmark suite
 
 ### Feature-Importance / Interpretation Methodology
 
@@ -320,7 +322,8 @@ Logistic recommendation:
 - export the resolved feature names after preprocessing so numeric features and one-hot categorical levels are visible explicitly
 - summarize each feature with median coefficient, median absolute coefficient rank, and sign consistency across outer folds
 - for categorical levels, report the encoded one-hot level names explicitly and interpret them as regularized model weights within the encoded design rather than as standalone causal effects
-- optional only if time remains: add held-out-fold permutation importance for logistic as a comparability check against RF
+- add held-out-fold permutation importance for logistic only as a cross-check on the coefficient story, scored by held-out PR AUC / average-precision drop on the same retained outer-fold test rows
+- keep logistic coefficients as the primary logistic interpretation artifact in the markdown summary and main figure
 
 Random-forest recommendation:
 
@@ -328,7 +331,7 @@ Random-forest recommendation:
 - score permutation importance with PR AUC / average precision drop so the interpretation metric matches the main evaluation story
 - aggregate importance across folds using mean drop, median rank, and fold-to-fold stability
 - do not use impurity-based importance as the main reported result because it is more vulnerable to split-selection bias and can overstate importance under correlated predictors
-- optional only if useful for debugging or appendix material: export impurity importance in a separate table clearly marked as secondary
+- export impurity importance only in a separate appendix/debug table clearly marked as secondary
 
 Interpretation guardrails:
 
@@ -340,25 +343,24 @@ Interpretation guardrails:
 Most worth doing first:
 
 - the `3`-city within-city contrast using representative cities and repeated stratified splits
+- the exploratory `city_prevalence_baseline` as a bounded within-city context row only
 - logistic coefficient summaries from the retained `20,000`-row sampled `full` benchmark configuration
 - RF held-out-fold permutation importance from the retained `frontier` benchmark configuration
-- one concise markdown summary plus one contrast figure for within-city versus cross-city and one ranked-importance figure
+- one concise markdown summary plus PR AUC and recall contrast figures for within-city versus cross-city and one ranked-importance figure
 
 Optional only if time remains:
 
-- a trivial within-city baseline in the supplemental comparison table
-- a second recall-gap figure in addition to the main PR AUC contrast figure
-- logistic permutation importance as a cross-check on the coefficient story
 - spatial-block within-city sensitivity runs for the same `3` cities
-- RF impurity importance in an appendix/debug table only
 
 Implementation status:
 
 1. The retained reference runs and reporting-table snapshot are now frozen in code through `src.run_modeling_supplemental`.
 2. The within-city city-selection helper now defaults to the nearest-median city in each climate group from `cross_city_benchmark_report_city_error_comparison.csv`.
 3. The within-city runner now materializes the `3`-city repeated-stratified exploratory contrast under `outputs/modeling/supplemental/within_city/`.
-4. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes coefficient/permutation artifacts under `outputs/modeling/supplemental/feature_importance/`.
-5. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
+4. The within-city supplemental tables and markdown now also include the exploratory `city_prevalence_baseline` as a within-city-only context row without changing the canonical cross-city baseline suite.
+5. The within-city supplemental figure set now includes both PR AUC and recall-at-top-10%-risk contrast figures under `figures/modeling/supplemental/within_city/`.
+6. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes primary logistic coefficient tables, logistic held-out permutation cross-check tables, primary RF held-out permutation tables, and secondary/debug RF impurity appendix tables under `outputs/modeling/supplemental/feature_importance/`.
+7. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
 
 Run logging note:
 

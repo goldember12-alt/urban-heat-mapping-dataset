@@ -46,7 +46,8 @@ Implemented in code:
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - `outputs/modeling/reporting/` now exists as the repo-local home for broader markdown modeling summaries that synthesize retained run artifacts into report-ready comparison notes without changing the canonical workflow/methodology docs.
 - The modeling reporting layer now also includes a dedicated CLI, `src.run_modeling_reporting`, which materializes benchmark comparison tables, city-level RF-vs-logistic error summaries, and benchmark figures from retained modeling runs under `outputs/modeling/reporting/`, `outputs/modeling/reporting/tables/`, and `figures/modeling/reporting/`.
-- The bounded supplemental modeling layer is now implemented in `src.modeling_supplemental` plus `src.run_modeling_supplemental`. It writes exploratory within-city contrast artifacts under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, and retained-run interpretation artifacts under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`.
+- The bounded supplemental modeling layer is now implemented in `src.modeling_supplemental` plus `src.run_modeling_supplemental`. It writes exploratory within-city contrast artifacts under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, and retained-run interpretation artifacts under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`. The primary interpretation artifacts remain logistic coefficients and RF held-out permutation importance, with logistic held-out permutation exported only as a cross-check and RF impurity exported only as secondary/debug appendix output.
+- Phase 1 of the supplemental follow-up is now implemented: the within-city exploratory layer adds a `city_prevalence_baseline` context row to the repeat/summary/contrast artifacts, writes the companion recall contrast figure `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`, and keeps the canonical cross-city held-out benchmark narrative unchanged.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
@@ -95,6 +96,14 @@ Standardization status:
 
 As of 2026-03-26:
 
+- 2026-04-12 supplemental follow-up Phase 1 checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: success
+  - Coverage in this checkpoint includes:
+    - integration of the exploratory within-city `city_prevalence_baseline` into repeat metrics, best-params export, markdown, metadata, and contrast tables
+    - creation of the companion within-city recall contrast figure under `figures/modeling/supplemental/within_city/`
 - 2026-04-11 supplemental modeling implementation checkpoint:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
   - Result: success
@@ -104,6 +113,13 @@ As of 2026-03-26:
     - nearest-median within-city city selection from the retained reporting table contract
     - bounded repeated-stratified within-city artifact generation and cross-city contrast joins
     - retained-run refit exports for logistic coefficients and random-forest held-out permutation importance
+- 2026-04-12 supplemental interpretation Pass 2 checkpoint:
+  - `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: pending update after rerun in this checkpoint
+  - Coverage in this checkpoint includes:
+    - logistic held-out permutation importance by-fold and summary exports from the retained-run refit path
+    - RF impurity importance by-fold and summary appendix/debug exports from the same retained RF refits
+    - markdown-label checks that preserve logistic coefficients and RF held-out permutation importance as the primary interpretation artifacts
 - 2026-04-11 pytest Windows temp-dir repair:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_feature_assembly.py tests/test_modeling_runner.py -q`
   - Result: `35 passed`
@@ -762,6 +778,7 @@ Recommended order:
 - Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
 - If another reporting refresh is needed later, rerun `src.run_modeling_reporting` first and then rerun `src.run_modeling_supplemental` so the nearest-median city selector and retained reference joins stay synchronized.
 - Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
+- Phase 2 items such as logistic permutation importance, RF impurity importance, and spatial-block within-city sensitivity remain not started.
 
 
 
@@ -849,7 +866,7 @@ Recommended order:
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
 - Held-out-city map-oriented exports are still not implemented; `figures/modeling/reporting/` now covers benchmark and city-delta figures, but true hotspot maps, predicted hotspot maps, and residual/error maps are still pending.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
-- The supplemental within-city and feature-importance layer is now implemented, but optional follow-on pieces are still open: no within-city baseline, no recall-gap companion figure, no logistic permutation-importance cross-check, and no RF impurity appendix/debug export.
+- The supplemental within-city and feature-importance layer is now implemented, but optional follow-on pieces are still open: no spatial-block within-city sensitivity, no new within-city split modes, and no broader benchmark expansion beyond the retained cross-city benchmark plus current bounded supplement.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
@@ -865,6 +882,34 @@ Recommended order:
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-04-12 - Checkpoint: Supplemental Interpretation Pass 2
+
+- Date / checkpoint:
+  - 2026-04-12 bounded supplemental interpretation pass focused on retained-run importance exports only.
+- Change made:
+  - Extended `src.modeling_supplemental` so the existing retained-run refit path now also exports logistic held-out permutation importance scored by average-precision drop on the same retained outer-fold test rows.
+  - Added RF impurity-importance exports from the same retained RF refits and kept them explicitly labeled as secondary/debug appendix output.
+  - Updated the supplemental feature-importance markdown so logistic coefficients remain the primary logistic interpretation artifact and RF held-out permutation importance remains the primary RF interpretation artifact.
+  - Left the main cross-city city-held-out benchmark methodology, the six-feature first-pass contract, and the main ranked-importance figure unchanged.
+- Files touched:
+  - `src/modeling_supplemental.py`
+  - `src/run_modeling_supplemental.py`
+  - `tests/test_modeling_supplemental.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --permutation-n-jobs 1 --rf-permutation-repeats 10`
+- Test status:
+  - `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: pending update after rerun in this checkpoint
+- Manual verification status:
+  - No real-artifact CLI rerun has been recorded in this checkpoint yet; this pass is currently test-verified only until a retained-run refresh is executed.
+- Immediate Next Step:
+  - If refreshed supplemental interpretation artifacts are needed for writeup, rerun `src.run_modeling_supplemental --skip-within-city` against the retained reference runs and use the new logistic permutation cross-check plus RF impurity appendix tables without changing the canonical cross-city benchmark framing.
 
 ### 2026-04-11 - Checkpoint: Supplemental Modeling Layer Implemented
 

@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.modeling_config import DEFAULT_FEATURE_COLUMNS
 from src.modeling_runner import run_logistic_saga_model, run_random_forest_model
 from src.modeling_supplemental import (
     generate_feature_importance_artifacts,
     generate_within_city_supplemental_artifacts,
+    plot_within_city_recall_contrast,
     select_representative_within_city_cities,
 )
 
@@ -110,7 +112,7 @@ def test_select_representative_within_city_cities_prefers_nearest_median_default
     assert set(selected_df["selection_rule"]) == {"nearest_median_logistic_pr_auc_within_climate_group"}
 
 
-def test_generate_within_city_supplemental_artifacts_writes_outputs(tmp_path: Path) -> None:
+def test_generate_within_city_supplemental_artifacts_integrates_city_prevalence_baseline(tmp_path: Path) -> None:
     dataset_path = tmp_path / "final_dataset.parquet"
     comparison_path = tmp_path / "city_error.csv"
     _build_within_city_fixture().to_parquet(dataset_path, index=False)
@@ -159,14 +161,65 @@ def test_generate_within_city_supplemental_artifacts_writes_outputs(tmp_path: Pa
     assert result.best_params_path.exists()
     assert result.predictions_path.exists()
     assert result.figure_path.exists()
+    assert result.recall_figure_path.exists()
 
     contrast_df = pd.read_csv(result.contrast_table_path)
     assert set(contrast_df["city_name"]) == {"Reno", "Charlotte", "Detroit"}
-    assert set(contrast_df["model_name"]) == {"logistic_saga", "random_forest"}
+    assert set(contrast_df["model_name"]) == {"city_prevalence_baseline", "logistic_saga", "random_forest"}
     assert {"within_city_pr_auc_mean", "cross_city_pr_auc", "pr_auc_gap"}.issubset(contrast_df.columns)
+    baseline_rows = contrast_df.loc[contrast_df["model_name"] == "city_prevalence_baseline"].reset_index(drop=True)
+    assert len(baseline_rows) == 3
+    assert baseline_rows["cross_city_pr_auc"].isna().all()
+    assert baseline_rows["cross_city_recall_at_top_10pct"].isna().all()
+
+    best_params_df = pd.read_csv(result.best_params_path)
+    baseline_best_params = best_params_df.loc[best_params_df["model_name"] == "city_prevalence_baseline"]
+    assert len(baseline_best_params) == 9
+    assert set(baseline_best_params["best_params_json"]) == {"{}"}
+
+    summary_text = result.summary_markdown_path.read_text(encoding="utf-8")
+    assert "city_prevalence_baseline" in summary_text
+    assert "within-city-only contextual baseline" in summary_text
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert metadata["sample_rows_per_city"] == 60
+    assert metadata["supplemental_within_city_baseline_model"] == "city_prevalence_baseline"
+    assert metadata["output_files"]["recall_figure"] == str(result.recall_figure_path)
+
+
+def test_plot_within_city_recall_contrast_writes_figure(tmp_path: Path) -> None:
+    contrast_df = pd.DataFrame(
+        [
+            {
+                "city_name": "Reno",
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "within_city_recall_at_top_10pct_mean": 0.52,
+                "cross_city_recall_at_top_10pct": 0.24,
+            },
+            {
+                "city_name": "Charlotte",
+                "climate_group": "hot_humid",
+                "model_name": "random_forest",
+                "within_city_recall_at_top_10pct_mean": 0.48,
+                "cross_city_recall_at_top_10pct": 0.22,
+            },
+            {
+                "city_name": "Detroit",
+                "climate_group": "mild_cool",
+                "model_name": "city_prevalence_baseline",
+                "within_city_recall_at_top_10pct_mean": 0.30,
+                "cross_city_recall_at_top_10pct": float("nan"),
+            },
+        ]
+    )
+
+    output_path = tmp_path / "figures" / "within_city_recall_contrast.png"
+    returned_path = plot_within_city_recall_contrast(contrast_df=contrast_df, output_path=output_path)
+
+    assert returned_path == output_path
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
 
 
 def test_generate_feature_importance_artifacts_refits_saved_outer_fold_winners(tmp_path: Path) -> None:
@@ -214,16 +267,45 @@ def test_generate_feature_importance_artifacts_refits_saved_outer_fold_winners(t
 
     assert result.summary_markdown_path.exists()
     assert result.logistic_coefficients_summary_path.exists()
+    assert result.logistic_permutation_by_fold_path.exists()
+    assert result.logistic_permutation_summary_path.exists()
     assert result.rf_permutation_summary_path.exists()
+    assert result.rf_impurity_by_fold_path.exists()
+    assert result.rf_impurity_summary_path.exists()
     assert result.figure_path.exists()
 
     logistic_summary_df = pd.read_csv(result.logistic_coefficients_summary_path)
+    logistic_permutation_by_fold_df = pd.read_csv(result.logistic_permutation_by_fold_path)
+    logistic_permutation_summary_df = pd.read_csv(result.logistic_permutation_summary_path)
     rf_summary_df = pd.read_csv(result.rf_permutation_summary_path)
+    rf_impurity_by_fold_df = pd.read_csv(result.rf_impurity_by_fold_path)
+    rf_impurity_summary_df = pd.read_csv(result.rf_impurity_summary_path)
 
     assert "median_coefficient" in logistic_summary_df.columns
     assert "sign_consistency" in logistic_summary_df.columns
+    assert set(logistic_permutation_by_fold_df["feature_name"]) == set(DEFAULT_FEATURE_COLUMNS)
+    assert {
+        "mean_pr_auc_drop",
+        "median_rank",
+        "stability_positive_drop_fraction",
+    }.issubset(logistic_permutation_summary_df.columns)
     assert "mean_pr_auc_drop" in rf_summary_df.columns
     assert "stability_positive_drop_fraction" in rf_summary_df.columns
+    assert set(rf_impurity_by_fold_df["feature_name"]) == set(DEFAULT_FEATURE_COLUMNS)
+    assert {
+        "mean_impurity_importance",
+        "median_rank",
+        "stability_positive_importance_fraction",
+    }.issubset(rf_impurity_summary_df.columns)
+
+    summary_markdown = result.summary_markdown_path.read_text(encoding="utf-8")
+    assert "Logistic coefficients remain the primary logistic interpretation artifact." in summary_markdown
+    assert "cross-check on that coefficient story" in summary_markdown
+    assert "Random-forest held-out permutation importance remains the primary RF interpretation artifact." in summary_markdown
+    assert "secondary appendix/debug output" in summary_markdown
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert metadata["rf_permutation_repeats"] == 3
+    assert metadata["logistic_permutation_repeats"] == 3
+    assert "logistic_permutation_summary" in metadata["output_files"]
+    assert "rf_impurity_summary" in metadata["output_files"]

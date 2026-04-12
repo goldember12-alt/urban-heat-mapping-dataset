@@ -373,16 +373,23 @@ Honest status note:
   - `tables/within_city_best_params.csv`
   - `tables/within_city_calibration_curve.csv`
   - `within_city_predictions.parquet`
-- `figures/modeling/supplemental/within_city/` stores bounded within-city contrast figures such as `within_city_pr_auc_contrast.png`
+- within-city supplemental tables may include the exploratory-only `city_prevalence_baseline`, which is not part of the canonical cross-city baseline suite
+- `figures/modeling/supplemental/within_city/` stores bounded within-city contrast figures such as:
+  - `within_city_pr_auc_contrast.png`
+  - `within_city_recall_contrast.png`
 - `outputs/modeling/supplemental/feature_importance/` stores retained-run interpretation markdown plus tables such as:
   - `feature_importance_summary.md`
   - `tables/logistic_post_preprocessing_feature_names.csv`
   - `tables/logistic_coefficients_by_fold.csv`
   - `tables/logistic_coefficients_summary.csv`
+  - `tables/logistic_permutation_importance_by_fold.csv`
+  - `tables/logistic_permutation_importance_summary.csv`
   - `tables/logistic_refit_fold_metrics.csv`
   - `tables/rf_permutation_importance_by_fold.csv`
   - `tables/rf_permutation_importance_summary.csv`
+  - `tables/rf_impurity_importance_by_fold.csv`
+  - `tables/rf_impurity_importance_summary.csv`
   - `tables/rf_refit_fold_metrics.csv`
-- `figures/modeling/supplemental/feature_importance/` stores ranked-importance and coefficient-summary figures such as `feature_importance_ranked_summary.png`
+- `figures/modeling/supplemental/feature_importance/` stores ranked-importance and coefficient-summary figures such as `feature_importance_ranked_summary.png`; the figure keeps logistic coefficients and RF held-out permutation importance as the primary displayed summaries rather than promoting the appendix-only RF impurity export
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary
