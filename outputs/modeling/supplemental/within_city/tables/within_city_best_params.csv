@@ -1,16 +1,25 @@
 city_id,city_name,climate_group,model_name,repeat_id,split_seed,tuning_preset,best_params_json,best_inner_cv_average_precision
+10,Reno,hot_arid,city_prevalence_baseline,1,42,not_applicable,{},
+10,Reno,hot_arid,city_prevalence_baseline,2,43,not_applicable,{},
+10,Reno,hot_arid,city_prevalence_baseline,3,44,not_applicable,{},
 10,Reno,hot_arid,logistic_saga,1,42,smoke,"{""model__C"": 1.0, ""model__l1_ratio"": 0.0}",0.5054198552745034
 10,Reno,hot_arid,logistic_saga,2,43,smoke,"{""model__C"": 1.0, ""model__l1_ratio"": 0.0}",0.5131538093514948
 10,Reno,hot_arid,logistic_saga,3,44,smoke,"{""model__C"": 1.0, ""model__l1_ratio"": 0.0}",0.50164763270697
 10,Reno,hot_arid,random_forest,1,42,smoke,"{""model__max_depth"": null, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 1, ""model__n_estimators"": 200}",0.7428421640428601
 10,Reno,hot_arid,random_forest,2,43,smoke,"{""model__max_depth"": null, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 1, ""model__n_estimators"": 200}",0.7512214162533247
 10,Reno,hot_arid,random_forest,3,44,smoke,"{""model__max_depth"": null, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 1, ""model__n_estimators"": 200}",0.7444193577986041
+19,Charlotte,hot_humid,city_prevalence_baseline,1,42,not_applicable,{},
+19,Charlotte,hot_humid,city_prevalence_baseline,2,43,not_applicable,{},
+19,Charlotte,hot_humid,city_prevalence_baseline,3,44,not_applicable,{},
 19,Charlotte,hot_humid,logistic_saga,1,42,smoke,"{""model__C"": 0.1, ""model__l1_ratio"": 0.0}",0.1497891637981221
 19,Charlotte,hot_humid,logistic_saga,2,43,smoke,"{""model__C"": 0.1, ""model__l1_ratio"": 0.0}",0.14896327318718863
 19,Charlotte,hot_humid,logistic_saga,3,44,smoke,"{""model__C"": 0.1, ""model__l1_ratio"": 0.0}",0.15233900111860765
 19,Charlotte,hot_humid,random_forest,1,42,smoke,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 200}",0.1894542486084613
 19,Charlotte,hot_humid,random_forest,2,43,smoke,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 200}",0.19609481679063134
 19,Charlotte,hot_humid,random_forest,3,44,smoke,"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 200}",0.18846137554082942
+29,Detroit,mild_cool,city_prevalence_baseline,1,42,not_applicable,{},
+29,Detroit,mild_cool,city_prevalence_baseline,2,43,not_applicable,{},
+29,Detroit,mild_cool,city_prevalence_baseline,3,44,not_applicable,{},
 29,Detroit,mild_cool,logistic_saga,1,42,smoke,"{""model__C"": 1.0, ""model__l1_ratio"": 1.0}",0.17427072629749152
 29,Detroit,mild_cool,logistic_saga,2,43,smoke,"{""model__C"": 1.0, ""model__l1_ratio"": 1.0}",0.17833440713129503
 29,Detroit,mild_cool,logistic_saga,3,44,smoke,"{""model__C"": 1.0, ""model__l1_ratio"": 1.0}",0.1722481723518944

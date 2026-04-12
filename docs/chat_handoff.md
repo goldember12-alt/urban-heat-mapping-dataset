@@ -100,7 +100,7 @@ As of 2026-03-26:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
   - Result: success
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
-  - Result: success
+  - Result: `4 passed in 87.77s`
   - Coverage in this checkpoint includes:
     - integration of the exploratory within-city `city_prevalence_baseline` into repeat metrics, best-params export, markdown, metadata, and contrast tables
     - creation of the companion within-city recall contrast figure under `figures/modeling/supplemental/within_city/`
@@ -114,8 +114,10 @@ As of 2026-03-26:
     - bounded repeated-stratified within-city artifact generation and cross-city contrast joins
     - retained-run refit exports for logistic coefficients and random-forest held-out permutation importance
 - 2026-04-12 supplemental interpretation Pass 2 checkpoint:
-  - `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
-  - Result: pending update after rerun in this checkpoint
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: `4 passed`
   - Coverage in this checkpoint includes:
     - logistic held-out permutation importance by-fold and summary exports from the retained-run refit path
     - RF impurity importance by-fold and summary appendix/debug exports from the same retained RF refits
@@ -429,6 +431,7 @@ Implemented:
 - `src.run_logistic_saga` and `src.run_random_forest` now default to `--tuning-preset smoke`, preserve `--tuning-preset full`, record per-fold timing/search-space metadata, and reuse sampled city rows across folds instead of reloading them fold by fold.
 - `src.run_logistic_saga` and `src.run_random_forest` now also expose durable live-run monitoring artifacts and coarse outer-fold resumability through `progress.json`, `progress_log.csv`, `fold_status.json`, and per-fold output snapshots.
 - `src.run_modeling_supplemental` materializes the bounded supplemental within-city and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
+- `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance` was rerun on 2026-04-12 and refreshed the exploratory within-city summary, tables, predictions parquet, metadata, and both contrast figures, including `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -778,7 +781,7 @@ Recommended order:
 - Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
 - If another reporting refresh is needed later, rerun `src.run_modeling_reporting` first and then rerun `src.run_modeling_supplemental` so the nearest-median city selector and retained reference joins stay synchronized.
 - Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
-- Phase 2 items such as logistic permutation importance, RF impurity importance, and spatial-block within-city sensitivity remain not started.
+- Pass 2 interpretation exports are now implemented; only later Pass 3 ideas such as spatial-block within-city sensitivity and new within-city split modes remain not started.
 
 
 
@@ -904,8 +907,10 @@ Recommended order:
 - How to run:
   - `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --permutation-n-jobs 1 --rf-permutation-repeats 10`
 - Test status:
-  - `C:\Users\golde\OneDrive - University of Virginia\STAT5630_FinalProject_DataProcessing\.venv\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
-  - Result: pending update after rerun in this checkpoint
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: `4 passed`
 - Manual verification status:
   - No real-artifact CLI rerun has been recorded in this checkpoint yet; this pass is currently test-verified only until a retained-run refresh is executed.
 - Immediate Next Step:

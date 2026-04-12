@@ -16,6 +16,7 @@
     44
   ],
   "test_size": 0.2,
+  "supplemental_within_city_baseline_model": "city_prevalence_baseline",
   "logistic_tuning_preset": "smoke",
   "random_forest_tuning_preset": "smoke",
   "logistic_reference_run_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152",
@@ -23,7 +24,7 @@
   "grid_search_n_jobs": 1,
   "model_n_jobs": 1,
   "timing_seconds": {
-    "total_wall_clock": 247.26826059998712
+    "total_wall_clock": 633.8257685999852
   },
   "output_files": {
     "summary_markdown": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\within_city_contrast_summary.md",
@@ -35,6 +36,7 @@
     "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_best_params.csv",
     "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\within_city_predictions.parquet",
     "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_calibration_curve.csv",
-    "figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city\\within_city_pr_auc_contrast.png"
+    "figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city\\within_city_pr_auc_contrast.png",
+    "recall_figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city\\within_city_recall_contrast.png"
   }
 }
