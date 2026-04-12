@@ -123,9 +123,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Skip the retained 3-city within-city exploratory supplement.",
     )
     parser.add_argument(
-        "--skip-within-city-all-cities",
+        "--run-within-city-all-cities",
         action="store_true",
-        help="Skip the all-city within-city supplemental pass under outputs/modeling/supplemental/within_city_all_cities/.",
+        help="Also run the all-city within-city supplemental pass under outputs/modeling/supplemental/within_city_all_cities/.",
     )
     parser.add_argument(
         "--skip-feature-importance",
@@ -158,7 +158,7 @@ def main() -> None:
         print(within_city_result.figure_path)
         print(within_city_result.recall_figure_path)
 
-    if not args.skip_within_city_all_cities:
+    if args.run_within_city_all_cities:
         within_city_all_cities_result = generate_within_city_all_cities_supplemental_artifacts(
             dataset_path=args.dataset_path,
             city_error_table_path=args.city_error_table_path,

@@ -408,6 +408,19 @@ Honest status note:
 - `figures/modeling/supplemental/within_city/` stores bounded within-city contrast figures such as:
   - `within_city_pr_auc_contrast.png`
   - `within_city_recall_contrast.png`
+- `outputs/modeling/supplemental/within_city_all_cities/` stores the bounded all-city within-city appendix, including:
+  - `within_city_all_cities_summary.md`
+  - `within_city_all_cities_predictions.parquet`
+  - `tables/within_city_all_cities_repeat_metrics.csv`
+  - `tables/within_city_all_cities_city_summary.csv`
+  - `tables/within_city_all_cities_climate_summary.csv`
+  - `tables/within_city_all_cities_cross_city_gap_by_city.csv`
+  - `tables/within_city_all_cities_cross_city_gap_by_climate.csv`
+- the all-city within-city appendix keeps the same six-feature contract and uses retained cross-city reporting tables only as comparison references; it remains explicitly easier than and subordinate to the canonical held-out-city benchmark
+- `figures/modeling/supplemental/within_city_all_cities/` stores the all-city appendix figures:
+  - `within_city_all_cities_pr_auc_by_climate.png`
+  - `within_city_all_cities_recall_by_climate.png`
+  - `within_city_all_cities_within_vs_cross_gap.png`
 - `outputs/modeling/supplemental/within_city_spatial/` stores the harder logistic-only within-city spatial sensitivity artifacts such as:
   - `within_city_spatial_sensitivity_summary.md`
   - `tables/within_city_spatial_selected_cities.csv`

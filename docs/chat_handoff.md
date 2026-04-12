@@ -9,6 +9,7 @@ Maintain a reproducible cross-city urban heat project that covers study design, 
 - The canonical project narrative remains the cross-city city-held-out benchmark.
 - `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline retained benchmark reference.
 - `outputs/modeling/reporting/heldout_city_maps/` and `outputs/modeling/supplemental/` are support or appendix layers built from retained artifacts.
+- `outputs/modeling/supplemental/within_city_all_cities/` and `figures/modeling/supplemental/within_city_all_cities/` are now the bounded all-city within-city appendix roots, intended only for diagnostic within-city-versus-cross-city contrast rather than benchmark replacement.
 - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/` is the retained post-benchmark transfer package.
 - `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` are now reserved for application outputs from that retained package, not for new benchmark claims.
 
@@ -108,6 +109,18 @@ Standardization status:
 ## Testing Status
 
 As of 2026-04-12:
+
+- 2026-04-12 supplemental follow-up all-city within-city checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: `12 passed in 164.64s (0:02:44)`
+  - Coverage in this checkpoint includes:
+    - retained all-city city-roster iteration for the new within-city appendix path
+    - deterministic all-city appendix output/figure path generation
+    - climate-group summary aggregation from city-level within-city results
+    - within-city-versus-retained-cross-city gap table generation by city and by climate group
+    - markdown plus climate/gap figure artifact generation for the all-city appendix
 
 - 2026-04-12 transfer inference checkpoint:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_transfer_package.py src\run_modeling_transfer_package.py src\modeling_transfer_inference.py src\run_transfer_inference.py tests\test_modeling_transfer_package.py tests\test_modeling_transfer_inference.py`
@@ -476,9 +489,11 @@ Implemented:
 - `src.run_modeling_reporting` refreshes retained benchmark comparison tables/markdown/figures without rerunning the underlying benchmark checkpoints.
 - `src.run_modeling_spatial_reporting` materializes representative held-out-city predicted-hotspot, true-hotspot, and categorical error map triptychs from retained prediction artifacts under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`.
 - `src.run_modeling_supplemental` materializes the bounded supplemental within-city, optional within-city spatial sensitivity, and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
+- `src.run_modeling_supplemental --run-within-city-all-cities` now materializes the separate all-city within-city appendix under `outputs/modeling/supplemental/within_city_all_cities/` and `figures/modeling/supplemental/within_city_all_cities/`, keeping the same six-feature contract, up to `20,000` rows per city, `3` repeated stratified `80/20` splits, smoke-sized within-city tuning only, and retained cross-city reporting tables strictly as comparison references.
 - `src.run_modeling_transfer_package` fits the retained benchmark-selected model on all cities at the retained sample cap and writes the transfer-oriented package under `outputs/modeling/final_train/`.
 - `src.run_transfer_inference` applies the retained transfer package to one new-city feature parquet, validates the six-feature contract, and writes deterministic prediction tables plus transfer summary/figure artifacts under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/`.
 - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance` was rerun on 2026-04-12 and refreshed the exploratory within-city summary, tables, predictions parquet, metadata, and both contrast figures, including `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`.
+- The all-city within-city appendix is test-verified but was not fully materialized on the real canonical dataset in-session; the first live serial attempt timed out before final artifact writing completed.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -508,6 +523,10 @@ Not manually verified in the latest checkpoint:
 
 Manually verified:
 
+- 2026-04-12 all-city within-city supplemental CLI attempt:
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --run-within-city-all-cities --skip-feature-importance --grid-search-n-jobs 1 --model-n-jobs 1`.
+  - Result: the command began the new all-city appendix path and progressed through the early `hot_arid` cities (`Albuquerque` through `Salt Lake City`) before a `30` minute verification window timed out.
+  - Because the run timed out before the generator reached its final write step, treat the new all-city appendix as implemented and test-verified but not fully manually materialized on the real canonical dataset in this session.
 - 2026-04-12 held-out map reporting and final-train packaging:
   - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_reporting`.
   - Result: success; refreshed:
@@ -880,12 +899,13 @@ Recommended order:
 - Use `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/` for the bounded transfer-oriented final-train package derived from the retained RF frontier checkpoint.
 - Use `src.run_transfer_inference` plus `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` when a new-city feature parquet needs bounded post-benchmark scoring from the retained package.
 - Use `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` as the exploratory contrast source for the easier within-city-versus-cross-city narrative.
+- Use `src.run_modeling_supplemental --run-within-city-all-cities` plus `outputs/modeling/supplemental/within_city_all_cities/` and `figures/modeling/supplemental/within_city_all_cities/` when the bounded all-city within-city appendix is needed for climate-group pattern comparisons or transfer-hard versus intrinsically-hard diagnosis under the same six-feature contract.
 - Use `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/` as the separate harder within-city appendix contrast when discussing how performance changes under deterministic spatial holdouts inside the same city.
 - Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
-- If another reporting refresh is needed later, rerun `src.run_modeling_reporting`, then `src.run_modeling_spatial_reporting`, then `src.run_modeling_supplemental` so retained reference tables and representative-city joins stay synchronized.
+- If another reporting refresh is needed later, rerun `src.run_modeling_reporting`, then `src.run_modeling_spatial_reporting`, then `src.run_modeling_supplemental` so retained reference tables, selected-city joins, and the optional all-city appendix all stay synchronized.
 - Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
 - Keep the transfer package labeled as transfer-oriented packaging derived from the retained benchmark choice, not as a replacement benchmark.
-- Any later within-city follow-up should stay bounded, keep the six-feature contract fixed, and avoid reopening routine cross-city benchmark expansion.
+- Any later within-city follow-up should stay bounded, keep the six-feature contract fixed, and avoid reopening routine cross-city benchmark expansion. A future all-city spatial-block appendix would still be separate work.
 
 
 
@@ -948,6 +968,8 @@ Recommended order:
 - `outputs/modeling/supplemental/`
 - `outputs/modeling/supplemental/within_city/`
 - `outputs/modeling/supplemental/within_city/tables/`
+- `outputs/modeling/supplemental/within_city_all_cities/`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/`
 - `outputs/modeling/supplemental/within_city_spatial/`
 - `outputs/modeling/supplemental/within_city_spatial/tables/`
 - `outputs/modeling/supplemental/feature_importance/`
@@ -967,6 +989,7 @@ Recommended order:
 - `figures/modeling/transfer_inference/05_el_paso_tx/predicted_risk_map.png`
 - `figures/modeling/supplemental/within_city/`
 - `figures/modeling/supplemental/within_city/within_city_pr_auc_contrast.png`
+- `figures/modeling/supplemental/within_city_all_cities/`
 - `figures/modeling/supplemental/within_city_spatial/`
 - `figures/modeling/supplemental/within_city_spatial/within_city_spatial_pr_auc_contrast.png`
 - `figures/modeling/supplemental/feature_importance/`
@@ -993,7 +1016,8 @@ Recommended order:
 - The first broader logistic benchmark also exposed a Windows path-length limit when long output-dir names were combined with cache subdirectories; the runner now uses shorter cache-dir names, but future benchmark output dirs should still stay concise.
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
-- The supplemental within-city random-split layer, the separate logistic-only within-city spatial sensitivity, and the retained-run feature-importance layer are now implemented; optional follow-on pieces are still open only if later explicitly needed, such as additional within-city split modes or broader benchmark expansion beyond the retained cross-city benchmark plus current bounded supplement.
+- The supplemental within-city random-split layer, the new opt-in all-city within-city appendix, the separate logistic-only within-city spatial sensitivity, and the retained-run feature-importance layer are now implemented; optional follow-on pieces are still open only if later explicitly needed, such as an all-city spatial-block appendix or broader benchmark expansion beyond the retained cross-city benchmark plus current bounded supplement.
+- The first live all-city within-city appendix attempt timed out after `30` minutes with serial settings before final artifact writing completed, so a full real-data materialization still needs a longer dedicated run window.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.

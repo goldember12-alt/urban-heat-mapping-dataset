@@ -240,6 +240,9 @@ Recommended output locations:
 - `outputs/modeling/supplemental/within_city/within_city_contrast_summary.md`
 - `outputs/modeling/supplemental/within_city/tables/*.csv`
 - `figures/modeling/supplemental/within_city/*.png`
+- `outputs/modeling/supplemental/within_city_all_cities/within_city_all_cities_summary.md`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/*.csv`
+- `figures/modeling/supplemental/within_city_all_cities/*.png`
 - `outputs/modeling/supplemental/within_city_spatial/within_city_spatial_sensitivity_summary.md`
 - `outputs/modeling/supplemental/within_city_spatial/tables/*.csv`
 - `figures/modeling/supplemental/within_city_spatial/*.png`
@@ -304,6 +307,46 @@ Recommended presentation:
 - one simple figure such as a dumbbell or slope plot showing within-city versus cross-city PR AUC for each selected city-model pair
 - one companion figure showing within-city versus retained cross-city recall at top 10% predicted risk for the same comparable city-model pairs
 - allow the exploratory `city_prevalence_baseline` rows to carry `n/a` retained cross-city comparison cells because that baseline is intentionally not part of the canonical transfer benchmark suite
+
+### All-City Within-City Supplemental Methodology
+
+Scope guardrails:
+
+- keep this pass explicitly subordinate to the canonical cross-city city-held-out benchmark
+- do not present repeated within-city random splits as evaluation-equivalent to held-out-city transfer
+- keep the same six-feature first-pass contract
+- do not reopen broader within-city RF frontier/full search in this pass
+- keep the existing `Reno` / `Charlotte` / `Detroit` exploratory slice intact rather than replacing it
+
+Current bounded implementation:
+
+- iterate over all benchmark cities using the retained reporting roster from `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
+- sample up to `20,000` rows per city with the existing stratified city-sampling helper
+- use all available rows when a city has fewer than `20,000`
+- run `3` repeated stratified within-city `80/20` train/test splits with fixed seeds
+- fit only `city_prevalence_baseline`, logistic SAGA, and random forest
+- keep tuning bounded to the same `smoke`-sized within-city grids used by the smaller exploratory supplement
+- use the retained city-error comparison table only as a comparison reference for within-city-vs-cross-city gap summaries; do not rerun or redefine the benchmark
+
+Current bounded outputs:
+
+- `outputs/modeling/supplemental/within_city_all_cities/within_city_all_cities_summary.md`
+- `outputs/modeling/supplemental/within_city_all_cities/within_city_all_cities_predictions.parquet`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_repeat_metrics.csv`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_city_summary.csv`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_climate_summary.csv`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_cross_city_gap_by_city.csv`
+- `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_cross_city_gap_by_climate.csv`
+- `figures/modeling/supplemental/within_city_all_cities/within_city_all_cities_pr_auc_by_climate.png`
+- `figures/modeling/supplemental/within_city_all_cities/within_city_all_cities_recall_by_climate.png`
+- `figures/modeling/supplemental/within_city_all_cities/within_city_all_cities_within_vs_cross_gap.png`
+
+Current presentation:
+
+- restate in the markdown summary that the benchmark remains canonical and the all-city within-city pass is easier
+- use climate-group summaries to compare within-city performance patterns across `hot_arid`, `hot_humid`, and `mild_cool`
+- use city-level within-city-versus-cross-city gaps to diagnose whether some cities look mainly transfer-hard versus hard even under the six-feature within-city setting
+- keep any such interpretation careful and explicitly non-benchmark-equivalent
 
 ### Within-City Spatial-Block Sensitivity Methodology
 
@@ -399,9 +442,10 @@ Implementation status:
 3. The within-city runner now materializes the `3`-city repeated-stratified exploratory contrast under `outputs/modeling/supplemental/within_city/`.
 4. The within-city supplemental tables and markdown now also include the exploratory `city_prevalence_baseline` as a within-city-only context row without changing the canonical cross-city baseline suite.
 5. The within-city supplemental figure set now includes both PR AUC and recall-at-top-10%-risk contrast figures under `figures/modeling/supplemental/within_city/`.
-6. The separate within-city spatial sensitivity runner now materializes the same `3` cities under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants and logistic SAGA only so the pass stays bounded.
-7. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes primary logistic coefficient tables, logistic held-out permutation cross-check tables, primary RF held-out permutation tables, and secondary/debug RF impurity appendix tables under `outputs/modeling/supplemental/feature_importance/`.
-8. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
+6. The opt-in all-city within-city appendix now materializes under `outputs/modeling/supplemental/within_city_all_cities/` and `figures/modeling/supplemental/within_city_all_cities/`, using the same six-feature contract, `3` repeated stratified `80/20` splits, smoke-sized within-city tuning only, and retained reporting tables strictly as comparison references.
+7. The separate within-city spatial sensitivity runner now materializes the same `3` cities under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants and logistic SAGA only so the pass stays bounded.
+8. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes primary logistic coefficient tables, logistic held-out permutation cross-check tables, primary RF held-out permutation tables, and secondary/debug RF impurity appendix tables under `outputs/modeling/supplemental/feature_importance/`.
+9. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
 
 Run logging note:
 

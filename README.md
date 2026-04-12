@@ -201,9 +201,12 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 `src.run_modeling_supplemental` builds the bounded supplemental layer under `outputs/modeling/supplemental/` and `figures/modeling/supplemental/`. It keeps the city-held-out cross-city benchmark as the canonical story while adding:
 
 - a `Reno` / `Charlotte` / `Detroit` within-city exploratory contrast with repeated stratified `80/20` splits
+- an opt-in `--run-within-city-all-cities` appendix pass under `outputs/modeling/supplemental/within_city_all_cities/` and `figures/modeling/supplemental/within_city_all_cities/`, using the same six-feature contract, up to `20,000` rows per city, and `3` repeated stratified `80/20` splits with smoke-sized within-city tuning only
 - an opt-in `--run-within-city-spatial` logistic-only spatial-block within-city sensitivity under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants as a harder supplemental contrast rather than a replacement for held-out-city transfer
 - retained-run logistic coefficient exports from the sampled `20,000`-row linear reference, with held-out permutation importance added only as a cross-check
 - retained-run random-forest held-out permutation importance from the retained `frontier` reference, with impurity importance exported only as secondary/debug appendix output
+
+The all-city within-city pass remains explicitly diagnostic rather than benchmark-equivalent. It is meant to help distinguish transfer-hard cities from cities that are hard even under easier within-city random splits, and to compare those patterns across climate groups without reopening the canonical held-out-city benchmark ladder.
 
 `src.run_modeling_transfer_package` fits the retained benchmark-selected model on all 30 cities at the retained sample cap and writes a bounded transfer-oriented package under `outputs/modeling/final_train/`, including `model.joblib`, a preprocessing manifest, the six-feature contract, selected hyperparameters, and training metadata. This package supports later transfer workflows but does not replace the canonical city-held-out benchmark framing.
 
