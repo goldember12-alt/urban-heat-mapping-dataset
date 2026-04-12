@@ -163,6 +163,7 @@ These are the most important current entrypoints. The workflow doc lists how the
 .\.venv\Scripts\python.exe -m src.run_modeling_baselines
 .\.venv\Scripts\python.exe -m src.run_logistic_saga
 .\.venv\Scripts\python.exe -m src.run_random_forest
+.\.venv\Scripts\python.exe -m src.run_modeling_reporting
 ```
 
 AppEEARS-dependent commands read credentials from environment variables only. See the workflow doc for the acquisition contract and expected raw-output locations.
@@ -176,6 +177,8 @@ Recommended first ML smoke run on the canonical dataset:
 ```
 
 These runners default to `data_processed/final/final_dataset.parquet` as the canonical row-level input and prefer `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
+
+`src.run_modeling_reporting` builds report-ready comparison artifacts from retained modeling runs, writing markdown and derived CSV tables under `outputs/modeling/reporting/` plus benchmark figures under `figures/modeling/reporting/`.
 
 `--output-dir` is now optional for the tuned modeling CLIs. If you omit it, the CLI auto-generates a unique, readable run directory under the correct model-family root using the preset, fold scope, sample scope, and a timestamp. You can still pass `--output-dir` explicitly to override that behavior, and `--run-label` can add a short human tag to an auto-generated name without building the full path yourself.
 

@@ -279,6 +279,7 @@ Current main-model runners:
 
 - `src.run_logistic_saga`
 - `src.run_random_forest`
+- `src.run_modeling_reporting`
 
 Held-out prediction table columns:
 
@@ -360,5 +361,7 @@ Honest status note:
 - `outputs/data_processing/batch_reports/data_processing_report_summary.csv` stores the latest batch run status across requested cities
 - `outputs/modeling/` stores the current first-pass modeling metrics tables, held-out predictions, calibration tables, and run metadata
 - `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
+- `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons and city-level RF-vs-logistic error summaries
+- `figures/modeling/reporting/` stores benchmark comparison figures and city-level metric-delta plots derived from retained modeling runs
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary

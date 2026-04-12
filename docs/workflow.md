@@ -223,12 +223,15 @@ Key outputs:
 - `outputs/modeling/tuning_history.csv`
 - `outputs/modeling/tuning_history_annotations.csv`
 - `outputs/modeling/reporting/*.md`
+- `outputs/modeling/reporting/tables/*.csv`
+- `figures/modeling/reporting/*.png`
 
 Main entrypoints:
 
 - `src.run_modeling_baselines`
 - `src.run_logistic_saga`
 - `src.run_random_forest`
+- `src.run_modeling_reporting`
 
 Honest status line:
 
@@ -239,7 +242,7 @@ Honest status line:
 Implemented now:
 
 - Primary metric: PR AUC
-- Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, and calibration-curve tables
+- Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, calibration-curve tables, city-level RF-vs-logistic error summaries, and benchmark comparison figures
 - Held-out prediction tables include `city_id`, `city_name`, `climate_group`, `cell_id`, `centroid_lon`, and `centroid_lat` so later map export code can build on the saved outputs directly
 
 Planned next:

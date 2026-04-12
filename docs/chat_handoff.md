@@ -45,6 +45,7 @@ Implemented in code:
 - The regenerated `data_processed/final/final_dataset.csv` has now been re-audited against the canonical parquet and matches on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - `outputs/modeling/reporting/` now exists as the repo-local home for broader markdown modeling summaries that synthesize retained run artifacts into report-ready comparison notes without changing the canonical workflow/methodology docs.
+- The modeling reporting layer now also includes a dedicated CLI, `src.run_modeling_reporting`, which materializes benchmark comparison tables, city-level RF-vs-logistic error summaries, and benchmark figures from retained modeling runs under `outputs/modeling/reporting/`, `outputs/modeling/reporting/tables/`, and `figures/modeling/reporting/`.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
@@ -123,6 +124,24 @@ As of 2026-03-26:
   - Live runtime evidence captured during this checkpoint:
     - an observed in-progress RF `full` all-fold sampled `5000` rows-per-city run under `outputs/modeling/random_forest/full_allfolds_s5000_samplecurve-5k_2026-04-11_145823/` reported `81` candidates, `4` inner grouped-CV splits, `5` outer folds, and `1620` serial inner fits
     - at `79` completed fits, `progress.json` reported about `4549.86s` elapsed and about `88751s` ETA, which implies roughly `24-30` hours total wall clock on this workstation
+- 2026-04-11 modeling reporting checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_modeling_reporting.py -q`
+  - Result: `3 passed`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_reporting.py src\run_modeling_reporting.py tests\test_modeling_reporting.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_reporting`
+  - Result: success; wrote retained-run reporting artifacts under:
+    - `outputs/modeling/reporting/cross_city_benchmark_report.md`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
+    - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
+    - `figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png`
+    - `figures/modeling/reporting/cross_city_benchmark_report_runtime_vs_pr_auc.png`
+    - `figures/modeling/reporting/cross_city_benchmark_report_city_metric_deltas.png`
+  - Coverage in this checkpoint includes:
+    - canonical reporting-path resolution for modeling report artifacts
+    - city-level RF-vs-logistic error table generation and climate-group summaries
+    - report-ready markdown plus benchmark figure generation from retained run artifacts
 - 2026-04-10 shared-venv bootstrap repair:
   - `powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -SkipInstall`
   - Result: success; created `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe`
@@ -758,9 +777,18 @@ Recommended order:
 - `outputs/modeling/random_forest/pb_smk_f01/`
 - `outputs/modeling/reporting/`
 - `outputs/modeling/reporting/logistic_rf_comparison_summary_2026-04-11.md`
+- `outputs/modeling/reporting/cross_city_benchmark_report.md`
+- `outputs/modeling/reporting/tables/`
+- `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
+- `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
+- `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
 - `outputs/storage/`
 - `figures/data_processing/<city_stem>/`
 - `figures/modeling/`
+- `figures/modeling/reporting/`
+- `figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png`
+- `figures/modeling/reporting/cross_city_benchmark_report_runtime_vs_pr_auc.png`
+- `figures/modeling/reporting/cross_city_benchmark_report_city_metric_deltas.png`
 - `data_raw/cache/`
 - `data_raw/dem/<city_slug>/`
 - `data_raw/nlcd/<city_slug>/`
@@ -782,9 +810,9 @@ Recommended order:
 - The bounded `full` logistic dry run also completed, but it reproduced the same non-fatal `joblib` cache warnings and several logistic `ConvergenceWarning` messages; those warnings did not block outputs or registry logging, but they remain the main overnight-run caveat.
 - The first broader logistic benchmark also exposed a Windows path-length limit when long output-dir names were combined with cache subdirectories; the runner now uses shorter cache-dir names, but future benchmark output dirs should still stay concise.
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
-- Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
+- Held-out-city map-oriented exports are still not implemented; `figures/modeling/reporting/` now covers benchmark and city-delta figures, but true hotspot maps, predicted hotspot maps, and residual/error maps are still pending.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
-- Within-city exploratory comparisons, city-level error-analysis exports, and feature-importance summaries are still optional follow-on additions; they may strengthen the final presentation, but they are not yet the main repo direction.
+- Within-city exploratory comparisons and feature-importance summaries are still optional follow-on additions; they may strengthen the final presentation, but they are not yet the main repo direction.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.

@@ -54,6 +54,7 @@ First-pass modeling stage:
 - `src.run_modeling_baselines`
 - `src.run_logistic_saga`
 - `src.run_random_forest`
+- `src.run_modeling_reporting`
 
 Current implemented baseline models:
 
@@ -75,6 +76,8 @@ Current implemented evaluation outputs:
 - calibration-curve tables
 - held-out prediction tables
 - per-fold best-parameter summaries for tuned models
+- city-level RF-vs-logistic error comparison tables by city and climate group
+- benchmark comparison markdown and benchmark figures under the modeling reporting layer
 
 Honest implementation status:
 
@@ -125,10 +128,10 @@ Implemented supporting evaluation:
 
 Planned next evaluation additions:
 
-- error analysis by city and climate group
 - predicted hotspot maps
 - true hotspot maps
 - residual or error maps
+- optional within-city exploratory comparison tables kept separate from the canonical held-out-city evaluation
 
 ## Relationship To Future Scripts
 
