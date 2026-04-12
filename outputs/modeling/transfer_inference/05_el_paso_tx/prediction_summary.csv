@@ -1,0 +1,2 @@
+row_count,predicted_hotspot_count,predicted_hotspot_fraction,predicted_probability_min,predicted_probability_mean,predicted_probability_median,predicted_probability_max,top_decile_probability_threshold,rows_with_any_missing_features,city_id,city_name,centroid_lon,centroid_lat
+738527,73853,0.10000040621399083,0.021079240317414483,0.09489731379466786,0.08063955929353953,0.3271652666406293,0.16246853389326452,0,5,El Paso,-106.17576851515733,31.6968467132217

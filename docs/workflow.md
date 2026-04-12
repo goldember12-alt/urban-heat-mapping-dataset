@@ -11,7 +11,7 @@ This project is best understood as an end-to-end urban heat study, not only as a
 5. Merge the final modeling dataset
 6. Audit the final dataset and create city-held-out folds
 7. Run first-pass held-out-city models
-8. Expand to figures, bounded supplemental analyses, and final-train packaging
+8. Expand to benchmark reporting, support figures, bounded supplemental analyses, final-train packaging, and transfer inference
 
 ## 1. Study Design And Target Definition
 
@@ -238,21 +238,24 @@ Honest status line:
 
 - The new first-pass modeling layer is test-verified on synthetic grouped-city fixtures, but a full canonical run on the real 30-city dataset has not yet been recorded in `docs/chat_handoff.md`
 
-## 8. Evaluation, Supplemental Analyses, And Deliverables
+## 8. Evaluation, Reporting, Transfer, And Supplemental Deliverables
 
 Implemented now:
 
 - Primary metric: PR AUC
 - Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, calibration-curve tables, city-level RF-vs-logistic error summaries, and benchmark comparison figures
+- `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline benchmark reference for the modeling story
 - Held-out prediction tables include `city_id`, `city_name`, `climate_group`, `cell_id`, `centroid_lon`, and `centroid_lat` so later map export code can build on the saved outputs directly
-- A retained-run held-out map reporting layer under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` that exports representative predicted-hotspot, true-hotspot, and categorical error triptychs without rerunning the benchmark ladder
+- A retained-run held-out map reporting layer under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` that exports representative predicted-hotspot, true-hotspot, and categorical error triptychs without rerunning the benchmark ladder; these remain support artifacts under the retained benchmark rather than replacement evaluation results
 - A bounded final-train transfer package under `outputs/modeling/final_train/` that refits the retained benchmark-selected model on all cities at the retained sample cap and saves the fitted model plus transfer metadata
+- A separate transfer-inference application path under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` that applies the retained transfer package to one new-city feature parquet, validates the six-feature schema, and writes deterministic prediction/summary/map artifacts without computing new held-out benchmark metrics
 - A bounded supplemental within-city layer under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` that is explicitly labeled exploratory/easier and presented only as a contrast to the canonical held-out-city benchmark
 - A separate supplemental within-city spatial sensitivity layer under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/` that keeps the same `Reno` / `Charlotte` / `Detroit` trio but uses deterministic centroid quadrants as a harder logistic-only within-city sensitivity rather than as a replacement for the canonical held-out-city benchmark
 - A bounded retained-run interpretation layer under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` that refits saved outer-fold winners to export primary logistic coefficients, logistic held-out permutation cross-check tables, primary random-forest held-out permutation importance, and secondary/debug RF impurity appendix tables
 - `src.run_modeling_supplemental` to regenerate the supplemental roots from retained artifacts plus the canonical parquet dataset, with `--run-within-city-spatial` reserved for the separate spatial-block sensitivity path
 - `src.run_modeling_spatial_reporting` to regenerate the held-out map reporting root from retained prediction artifacts
 - `src.run_modeling_transfer_package` to regenerate the bounded final-train package from the retained benchmark-selected run metadata and best-parameter summaries
+- `src.run_transfer_inference` to score one new-city feature parquet with the retained package and materialize deterministic transfer-inference outputs
 
 Still later, if explicitly reopened:
 

@@ -1,6 +1,6 @@
 # Urban Heat Mapping Dataset and Cross-City Modeling Framework
 
-This repository supports a cross-city urban heat project that combines geospatial data engineering with city-held-out machine learning. The current codebase builds a reproducible 30 m cell-level dataset for 30 U.S. cities, prepares modeling handoff artifacts, and now includes the first reusable sklearn-based modeling layer.
+This repository supports a cross-city urban heat project that combines geospatial data engineering with city-held-out machine learning. The current codebase builds a reproducible 30 m cell-level dataset for 30 U.S. cities, prepares modeling handoff artifacts, and includes a reusable sklearn-based modeling layer whose canonical headline result remains the retained cross-city city-held-out benchmark.
 
 The project is broader than a preprocessing pipeline. It is organized around the full lifecycle:
 
@@ -53,8 +53,9 @@ Implemented now:
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
-- Retained-run benchmark reporting plus representative held-out-city map exports under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`
+- Retained benchmark reporting with `outputs/modeling/reporting/cross_city_benchmark_report.md` as the headline modeling reference, plus representative held-out-city map exports under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` as support artifacts rather than replacement results
 - Bounded final-train transfer packaging under `outputs/modeling/final_train/`, reusing the retained six-feature benchmark contract rather than creating a new benchmark path
+- A separate new-city transfer inference path under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` that scores one city feature parquet with the retained RF transfer package and writes deterministic prediction/report artifacts without reopening benchmark evaluation
 - Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast, a separate logistic-only spatial-block within-city sensitivity, and retained-run interpretation exports that keep logistic coefficients and RF held-out permutation importance primary while adding appendix-style cross-check tables
 
 Verified status:
@@ -101,7 +102,17 @@ Planned next, not yet implemented as full production code:
 ### 5. Modeling And Evaluation
 
 - Implemented now: first-pass baselines plus grouped logistic SAGA and random forest runners
-- Implemented now: retained benchmark reporting, representative held-out-city map exports, and bounded final-train packaging, while the supplemental within-city, spatial-sensitivity, and feature-importance layer remains appendix-style support for the canonical cross-city benchmark
+- Implemented now: retained benchmark reporting, representative held-out-city map exports, bounded final-train packaging, and a separate transfer-inference application path, while the supplemental within-city, spatial-sensitivity, and feature-importance layer remains appendix-style support for the canonical cross-city benchmark
+
+## Benchmark Reference
+
+Use these modeling artifacts in this order:
+
+- `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline benchmark reference for the project narrative.
+- `outputs/modeling/reporting/heldout_city_maps/heldout_city_maps.md` and `figures/modeling/heldout_city_maps/` are map-style support built from retained held-out predictions.
+- `outputs/modeling/supplemental/` and `figures/modeling/supplemental/` are appendix/support layers only.
+- `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/` is the retained post-benchmark transfer package.
+- `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` are application outputs from that retained package, not new evaluation-equivalent benchmark results.
 
 ## Repo Layout
 
@@ -110,8 +121,8 @@ Planned next, not yet implemented as full production code:
 - `docs/`: project-facing documentation
 - `data_raw/`: immutable downloaded source data
 - `data_processed/`: processed artifacts organized by project phase
-- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables including `reporting/`, `heldout_city_maps/`, and `supplemental/`
-- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts including `reporting/`, `final_train/`, and `supplemental/`, and `outputs/storage/` for storage-management outputs
+- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables including `reporting/`, `heldout_city_maps/`, `transfer_inference/`, and `supplemental/`
+- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts including `reporting/`, `final_train/`, `transfer_inference/`, and `supplemental/`, and `outputs/storage/` for storage-management outputs
 
 Important `data_processed/` subdirectories:
 
@@ -168,6 +179,7 @@ These are the most important current entrypoints. The workflow doc lists how the
 .\.venv\Scripts\python.exe -m src.run_modeling_spatial_reporting
 .\.venv\Scripts\python.exe -m src.run_modeling_supplemental
 .\.venv\Scripts\python.exe -m src.run_modeling_transfer_package
+.\.venv\Scripts\python.exe -m src.run_transfer_inference --input-parquet data_processed\city_features\05_el_paso_tx_features.parquet
 ```
 
 AppEEARS-dependent commands read credentials from environment variables only. See the workflow doc for the acquisition contract and expected raw-output locations.
@@ -194,6 +206,48 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 - retained-run random-forest held-out permutation importance from the retained `frontier` reference, with impurity importance exported only as secondary/debug appendix output
 
 `src.run_modeling_transfer_package` fits the retained benchmark-selected model on all 30 cities at the retained sample cap and writes a bounded transfer-oriented package under `outputs/modeling/final_train/`, including `model.joblib`, a preprocessing manifest, the six-feature contract, selected hyperparameters, and training metadata. This package supports later transfer workflows but does not replace the canonical city-held-out benchmark framing.
+
+`src.run_transfer_inference` is the thin application CLI for the retained transfer package. It loads `model.joblib`, validates the explicit six-feature schema from `feature_contract.json`, reads one new-city feature parquet, scores it, and writes deterministic outputs under `outputs/modeling/transfer_inference/<inference_id>/` plus `figures/modeling/transfer_inference/<inference_id>/`.
+
+## Apply To A New City
+
+Use `src.run_transfer_inference` only after the canonical benchmark has already been selected and frozen.
+
+Required input parquet columns:
+
+- `cell_id`
+- `impervious_pct`
+- `elevation_m`
+- `dist_to_water_m`
+- `ndvi_median_may_aug`
+- `land_cover_class`
+- `climate_group`
+
+Optional but recommended columns:
+
+- `city_id`
+- `city_name`
+- `centroid_lon`
+- `centroid_lat`
+
+What the CLI writes:
+
+- `outputs/modeling/transfer_inference/<inference_id>/predictions.parquet`
+- `outputs/modeling/transfer_inference/<inference_id>/predictions.csv`
+- `outputs/modeling/transfer_inference/<inference_id>/prediction_summary.csv`
+- `outputs/modeling/transfer_inference/<inference_id>/prediction_deciles.csv`
+- `outputs/modeling/transfer_inference/<inference_id>/feature_missingness.csv`
+- `outputs/modeling/transfer_inference/<inference_id>/transfer_inference_summary.md`
+- `outputs/modeling/transfer_inference/<inference_id>/transfer_inference_metadata.json`
+- `figures/modeling/transfer_inference/<inference_id>/predicted_risk_map.png`
+
+If `centroid_lon` and `centroid_lat` are present, the figure is a simple predicted-risk map plus predicted top-decile hotspot panel. If centroid columns are absent, the CLI still writes a fallback score-distribution figure so the transfer pass always emits at least one deterministic figure artifact.
+
+Example command:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_transfer_inference --input-parquet data_processed\city_features\05_el_paso_tx_features.parquet
+```
 
 `--output-dir` is now optional for the tuned modeling CLIs. If you omit it, the CLI auto-generates a unique, readable run directory under the correct model-family root using the preset, fold scope, sample scope, and a timestamp. You can still pass `--output-dir` explicitly to override that behavior, and `--run-label` can add a short human tag to an auto-generated name without building the full path yourself.
 

@@ -362,6 +362,7 @@ Honest status note:
 - `outputs/data_processing/batch_reports/data_processing_report_summary.csv` stores the latest batch run status across requested cities
 - `outputs/modeling/` stores the current first-pass modeling metrics tables, held-out predictions, calibration tables, and run metadata
 - `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
+- `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline modeling benchmark reference for the project narrative
 - `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons and city-level RF-vs-logistic error summaries
 - `figures/modeling/reporting/` stores benchmark comparison figures and city-level metric-delta plots derived from retained modeling runs
 - `outputs/modeling/reporting/heldout_city_maps/` stores retained-run held-out map reporting artifacts such as:
@@ -373,6 +374,7 @@ Honest status note:
   - `denver_heldout_map_triptych.png`
   - `atlanta_heldout_map_triptych.png`
   - `detroit_heldout_map_triptych.png`
+  - these are support artifacts derived from retained benchmark predictions, not replacement benchmark results
 - `outputs/modeling/final_train/` stores bounded final-train transfer packages derived from retained benchmark selections, currently including:
   - `random_forest_frontier_s5000_all_cities_transfer_package/model.joblib`
   - `random_forest_frontier_s5000_all_cities_transfer_package/feature_contract.json`
@@ -382,6 +384,17 @@ Honest status note:
   - `random_forest_frontier_s5000_all_cities_transfer_package/training_city_summary.csv`
   - `random_forest_frontier_s5000_all_cities_transfer_package/training_sample_diagnostics.csv`
   - `random_forest_frontier_s5000_all_cities_transfer_package/transfer_package_metadata.json`
+- `outputs/modeling/transfer_inference/` stores deterministic application outputs written from the retained transfer package, such as:
+  - `<inference_id>/predictions.parquet`
+  - `<inference_id>/predictions.csv`
+  - `<inference_id>/prediction_summary.csv`
+  - `<inference_id>/prediction_deciles.csv`
+  - `<inference_id>/feature_missingness.csv`
+  - `<inference_id>/transfer_inference_summary.md`
+  - `<inference_id>/transfer_inference_metadata.json`
+- `figures/modeling/transfer_inference/` stores transfer-inference figures, typically:
+  - `<inference_id>/predicted_risk_map.png`
+  - when centroid columns are absent, the same filename stores a fallback score-distribution figure instead of a centroid map
 - `outputs/modeling/supplemental/within_city/` stores exploratory within-city markdown summaries plus bounded contrast artifacts such as:
   - `within_city_contrast_summary.md`
   - `tables/within_city_selected_cities.csv`
@@ -423,3 +436,35 @@ Honest status note:
 - `figures/modeling/supplemental/feature_importance/` stores ranked-importance and coefficient-summary figures such as `feature_importance_ranked_summary.png`; the figure keeps logistic coefficients and RF held-out permutation importance as the primary displayed summaries rather than promoting the appendix-only RF impurity export
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary
+
+## Transfer Inference Input Contract
+
+Primary input:
+
+- one new-city feature parquet already aligned to the retained six-feature first-pass contract
+
+Required columns:
+
+- `cell_id`
+- `impervious_pct`
+- `elevation_m`
+- `dist_to_water_m`
+- `ndvi_median_may_aug`
+- `land_cover_class`
+- `climate_group`
+
+Optional reporting/map columns:
+
+- `city_id`
+- `city_name`
+- `centroid_lon`
+- `centroid_lat`
+
+Behavior notes:
+
+- the CLI validates required columns against the retained package `feature_contract.json`
+- `cell_id` must be present and unique
+- the parquet is expected to represent one city per run
+- if centroid columns are present, the transfer figure is a simple predicted-risk map plus predicted top-decile hotspot panel
+- if centroid columns are absent, the CLI still writes a fallback figure so the transfer artifact set is deterministic
+- transfer inference outputs are application artifacts derived from the retained package and are not evaluation-equivalent replacements for the canonical city-held-out benchmark

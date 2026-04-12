@@ -1,0 +1,50 @@
+{
+  "artifact_kind": "transfer_inference",
+  "benchmark_framing_note": "This transfer inference artifact is subordinate to the canonical cross-city city-held-out benchmark and does not constitute a new evaluation run.",
+  "inference_id": "05_el_paso_tx",
+  "input_parquet_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\data_processed\\city_features\\05_el_paso_tx_features.parquet",
+  "package_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\final_train\\random_forest_frontier_s5000_all_cities_transfer_package",
+  "package_metadata_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\final_train\\random_forest_frontier_s5000_all_cities_transfer_package\\transfer_package_metadata.json",
+  "source_reference_run_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\random_forest\\frontier_allfolds_s5000_frontier-check_2026-04-11_173430",
+  "source_reference_model_name": "random_forest",
+  "source_reference_tuning_preset": "frontier",
+  "selected_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "feature_type_map": {
+    "impervious_pct": "numeric",
+    "elevation_m": "numeric",
+    "dist_to_water_m": "numeric",
+    "ndvi_median_may_aug": "numeric",
+    "land_cover_class": "categorical",
+    "climate_group": "categorical"
+  },
+  "required_identifier_columns": [
+    "cell_id"
+  ],
+  "available_optional_columns": [
+    "city_id",
+    "city_name",
+    "centroid_lon",
+    "centroid_lat"
+  ],
+  "row_count": 738527,
+  "predicted_hotspot_count": 73853,
+  "predicted_hotspot_fraction": 0.10000040621399083,
+  "figure_kind": "centroid_map",
+  "top_fraction": 0.1,
+  "output_files": {
+    "predictions_parquet": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\transfer_inference\\05_el_paso_tx\\predictions.parquet",
+    "predictions_csv": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\transfer_inference\\05_el_paso_tx\\predictions.csv",
+    "prediction_summary_csv": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\transfer_inference\\05_el_paso_tx\\prediction_summary.csv",
+    "prediction_deciles_csv": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\transfer_inference\\05_el_paso_tx\\prediction_deciles.csv",
+    "feature_missingness_csv": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\transfer_inference\\05_el_paso_tx\\feature_missingness.csv",
+    "summary_markdown": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\transfer_inference\\05_el_paso_tx\\transfer_inference_summary.md",
+    "figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\transfer_inference\\05_el_paso_tx\\predicted_risk_map.png"
+  }
+}

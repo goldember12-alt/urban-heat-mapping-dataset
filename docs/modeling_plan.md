@@ -81,6 +81,7 @@ Current implemented evaluation outputs:
 - benchmark comparison markdown and benchmark figures under the modeling reporting layer
 - representative held-out-city predicted-hotspot, true-hotspot, and categorical error maps under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`
 - a bounded final-train transfer package under `outputs/modeling/final_train/` that reuses the retained six-feature benchmark selection without changing the canonical evaluation methodology
+- an application-only transfer inference path under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` that applies the retained transfer package to one new-city feature parquet without computing new held-out-city benchmark metrics
 - supplemental within-city contrast markdown/tables/figures under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`
 - supplemental retained-run interpretation tables/figures under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`
 
@@ -137,6 +138,7 @@ Implemented post-benchmark deliverables:
 - representative held-out-city true hotspot maps
 - representative held-out-city categorical residual or error maps
 - a bounded final-train transfer package based on the retained benchmark-selected model
+- a separate transfer inference CLI for scoring one new-city feature parquet from that retained package
 
 ## Relationship To Future Scripts
 

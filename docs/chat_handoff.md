@@ -4,6 +4,14 @@
 
 Maintain a reproducible cross-city urban heat project that covers study design, geospatial data assembly, modeling-ready handoff, and city-held-out machine-learning evaluation for 30 U.S. cities.
 
+## Current Modeling / Reporting / Transfer State
+
+- The canonical project narrative remains the cross-city city-held-out benchmark.
+- `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline retained benchmark reference.
+- `outputs/modeling/reporting/heldout_city_maps/` and `outputs/modeling/supplemental/` are support or appendix layers built from retained artifacts.
+- `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/` is the retained post-benchmark transfer package.
+- `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` are now reserved for application outputs from that retained package, not for new benchmark claims.
+
 ## What Is Completed
 
 Implemented in code:
@@ -49,6 +57,7 @@ Implemented in code:
 - The canonical merged dataset on disk is now the 30-city artifact described by `data_processed/final/final_dataset_artifact_summary.json`: `71,394,894` rows, `14` columns, and `30` source city-feature parquet files incorporated into `data_processed/final/final_dataset.parquet`.
 - A dedicated held-out-city spatial reporting layer is now implemented in `src.modeling_spatial_reporting` plus `src.run_modeling_spatial_reporting`. It reuses retained held-out prediction artifacts to write representative predicted-hotspot, true-hotspot, and categorical error map triptychs under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` without rerunning the benchmark ladder.
 - A bounded final-train transfer-packaging layer is now implemented in `src.modeling_transfer_package` plus `src.run_modeling_transfer_package`. It reuses retained benchmark metadata plus per-fold best-parameter summaries to fit one transfer-oriented package under `outputs/modeling/final_train/`, keeping the six-feature contract fixed and keeping this packaging path separate from held-out-city benchmark evaluation.
+- A dedicated transfer-inference layer is now implemented in `src.modeling_transfer_inference` plus `src.run_transfer_inference`. It loads the retained transfer package, validates the explicit six-feature schema for one new-city parquet, and writes deterministic prediction tables, compact summary artifacts, and a map-style or fallback figure under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` without reopening benchmark evaluation.
 - The bounded supplemental modeling layer is now implemented in `src.modeling_supplemental` plus `src.run_modeling_supplemental`. It writes exploratory within-city contrast artifacts under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, and retained-run interpretation artifacts under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`. The primary interpretation artifacts remain logistic coefficients and RF held-out permutation importance, with logistic held-out permutation exported only as a cross-check and RF impurity exported only as secondary/debug appendix output.
 - Phase 1 of the supplemental follow-up is now implemented: the within-city exploratory layer adds a `city_prevalence_baseline` context row to the repeat/summary/contrast artifacts, writes the companion recall contrast figure `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`, and keeps the canonical cross-city held-out benchmark narrative unchanged.
 - Pass 3 of the supplemental follow-up is now implemented as a separate harder within-city sensitivity layer: `src.run_modeling_supplemental --run-within-city-spatial` writes logistic-only spatial-block artifacts under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants for the same `Reno` / `Charlotte` / `Detroit` trio while keeping the canonical cross-city city-held-out benchmark unchanged.
@@ -99,6 +108,18 @@ Standardization status:
 ## Testing Status
 
 As of 2026-04-12:
+
+- 2026-04-12 transfer inference checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_transfer_package.py src\run_modeling_transfer_package.py src\modeling_transfer_inference.py src\run_transfer_inference.py tests\test_modeling_transfer_package.py tests\test_modeling_transfer_inference.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_transfer_package.py tests\test_modeling_transfer_inference.py -q`
+  - Result: `8 passed in 10.81s`
+  - Coverage in this checkpoint includes:
+    - retained transfer-package loading and contract validation
+    - transfer-input schema validation against the six-feature contract
+    - deterministic transfer-inference output-path generation
+    - prediction parquet/csv writing plus summary and decile artifact generation
+    - centroid-map figure generation plus fallback score-distribution figure generation when centroid columns are absent
 
 - 2026-04-12 held-out map export and final-train packaging checkpoint:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_spatial_reporting.py src\run_modeling_spatial_reporting.py src\modeling_transfer_package.py src\run_modeling_transfer_package.py tests\test_modeling_spatial_reporting.py tests\test_modeling_transfer_package.py`
@@ -456,6 +477,7 @@ Implemented:
 - `src.run_modeling_spatial_reporting` materializes representative held-out-city predicted-hotspot, true-hotspot, and categorical error map triptychs from retained prediction artifacts under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`.
 - `src.run_modeling_supplemental` materializes the bounded supplemental within-city, optional within-city spatial sensitivity, and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
 - `src.run_modeling_transfer_package` fits the retained benchmark-selected model on all cities at the retained sample cap and writes the transfer-oriented package under `outputs/modeling/final_train/`.
+- `src.run_transfer_inference` applies the retained transfer package to one new-city feature parquet, validates the six-feature contract, and writes deterministic prediction tables plus transfer summary/figure artifacts under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/`.
 - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance` was rerun on 2026-04-12 and refreshed the exploratory within-city summary, tables, predictions parquet, metadata, and both contrast figures, including `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
@@ -517,6 +539,18 @@ Manually verified:
     - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/training_sample_diagnostics.csv`
     - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/transfer_package_metadata.json`
   - Confirmed the bounded transfer package reused the retained RF frontier checkpoint, selected `300` trees with `max_depth=10`, `min_samples_leaf=5`, `max_features="sqrt"` as the modal fold winner, and fit on `150,000` sampled rows across all `30` cities with hotspot prevalence preserved at `0.10`.
+- 2026-04-12 transfer inference smoke materialization:
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_transfer_inference --input-parquet data_processed\city_features\05_el_paso_tx_features.parquet`.
+  - Result: success in about `76.4s`; wrote:
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/predictions.parquet`
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/predictions.csv`
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/prediction_summary.csv`
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/prediction_deciles.csv`
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/feature_missingness.csv`
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/transfer_inference_summary.md`
+    - `outputs/modeling/transfer_inference/05_el_paso_tx/transfer_inference_metadata.json`
+    - `figures/modeling/transfer_inference/05_el_paso_tx/predicted_risk_map.png`
+  - Confirmed the retained RF transfer package scored `738,527` El Paso cells, marked `73,853` predicted top-decile hotspot cells, found zero missing values across the six predictive features in this parquet, and preserved the benchmark framing note that this artifact is subordinate to the canonical cross-city city-held-out benchmark rather than a new evaluation result.
 
 - 2026-04-07 scratch-script guidance checkpoint:
   - Reviewed a partner logistic-regression draft against the live repo modeling contract and confirmed the key corrections needed were methodological rather than new pipeline code.
@@ -844,6 +878,7 @@ Recommended order:
 - Use `outputs/modeling/reporting/cross_city_benchmark_report.md` plus `figures/modeling/reporting/` for the benchmark narrative and cross-model comparison tables/figures.
 - Use `outputs/modeling/reporting/heldout_city_maps/` plus `figures/modeling/heldout_city_maps/` for representative held-out-city predicted-hotspot, true-hotspot, and categorical error map deliverables.
 - Use `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/` for the bounded transfer-oriented final-train package derived from the retained RF frontier checkpoint.
+- Use `src.run_transfer_inference` plus `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` when a new-city feature parquet needs bounded post-benchmark scoring from the retained package.
 - Use `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` as the exploratory contrast source for the easier within-city-versus-cross-city narrative.
 - Use `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/` as the separate harder within-city appendix contrast when discussing how performance changes under deterministic spatial holdouts inside the same city.
 - Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
@@ -908,6 +943,8 @@ Recommended order:
 - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/`
 - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/model.joblib`
 - `outputs/modeling/final_train/random_forest_frontier_s5000_all_cities_transfer_package/transfer_package_metadata.json`
+- `outputs/modeling/transfer_inference/`
+- `outputs/modeling/transfer_inference/05_el_paso_tx/`
 - `outputs/modeling/supplemental/`
 - `outputs/modeling/supplemental/within_city/`
 - `outputs/modeling/supplemental/within_city/tables/`
@@ -926,6 +963,8 @@ Recommended order:
 - `figures/modeling/heldout_city_maps/denver_heldout_map_triptych.png`
 - `figures/modeling/heldout_city_maps/atlanta_heldout_map_triptych.png`
 - `figures/modeling/heldout_city_maps/detroit_heldout_map_triptych.png`
+- `figures/modeling/transfer_inference/`
+- `figures/modeling/transfer_inference/05_el_paso_tx/predicted_risk_map.png`
 - `figures/modeling/supplemental/within_city/`
 - `figures/modeling/supplemental/within_city/within_city_pr_auc_contrast.png`
 - `figures/modeling/supplemental/within_city_spatial/`
@@ -966,9 +1005,40 @@ Recommended order:
 - The current `city_outer_folds` logic balances cities by row count and city count, not by hotspot prevalence; revisit if stricter target-stratified folds are needed for later modeling experiments.
 - The new baseline-modeling stage has not yet been run end to end on the canonical `final_dataset.parquet`; current verification is synthetic-fixture testing plus the already-completed canonical modeling-prep verification.
 - Legacy Phoenix-only root-level report artifacts under `outputs/phoenix_data_summary*` still exist from pre-refactor runs; the new code writes only to the split stage-specific structure, but the old generated files were not deleted automatically in this checkpoint.
-- The new held-out-city map deliverables and bounded application-to-new-cities package are implemented, but broader transfer scoring on truly unseen external cities is still future work.
+- The new held-out-city map deliverables, retained transfer package, and transfer inference CLI are implemented, but broader transfer scoring on truly unseen external cities is still future work.
 
-## Checkpoint Log
+## Historical Checkpoint Log
+
+Older acquisition, preflight, and operational notes are preserved below for provenance. When they conflict with the sections above, treat the current-state sections above as authoritative for the present modeling, reporting, and transfer status.
+
+### 2026-04-12 - Checkpoint: Transfer Inference Path Added
+
+- Date / checkpoint:
+  - 2026-04-12 bounded post-benchmark transfer-inference implementation pass.
+- Change made:
+  - Added `src.modeling_transfer_inference` plus `src.run_transfer_inference` as a thin, production-style application path on top of the retained RF transfer package.
+  - Added deterministic transfer-inference output roots under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/`.
+  - Added explicit validation for the retained six-feature schema plus required `cell_id`, deterministic prediction ranking/top-decile labeling, compact summary/decile/missingness tables, markdown, metadata, and map-style or fallback figures.
+  - Updated top-level docs so the retained cross-city benchmark report remains the headline reference while held-out maps, supplemental analyses, the transfer package, and transfer inference stay subordinate support/application layers.
+- Files touched:
+  - `src/config.py`
+  - `src/modeling_transfer_inference.py`
+  - `src/run_transfer_inference.py`
+  - `tests/test_modeling_transfer_inference.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_transfer_package.py tests\test_modeling_transfer_inference.py -q`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_transfer_inference --input-parquet data_processed\city_features\05_el_paso_tx_features.parquet`
+- Test status:
+  - `8 passed in 10.81s` for `tests/test_modeling_transfer_package.py` plus `tests/test_modeling_transfer_inference.py`.
+- Manual verification status:
+  - Real CLI smoke materialization completed successfully for `05_el_paso_tx_features.parquet` and wrote deterministic outputs under `outputs/modeling/transfer_inference/05_el_paso_tx/` plus `figures/modeling/transfer_inference/05_el_paso_tx/`.
+- Immediate Next Step:
+  - Keep the retained benchmark frozen as the canonical project story, and use `src.run_transfer_inference` only as a bounded application path for future city-feature parquet scoring.
 
 ### 2026-04-12 - Checkpoint: Held-Out Map Reporting And Final-Train Packaging
 
