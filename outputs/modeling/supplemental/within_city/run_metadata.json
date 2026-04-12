@@ -1,0 +1,40 @@
+{
+  "dataset_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\data_processed\\final\\final_dataset.parquet",
+  "city_error_table_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\reporting\\tables\\cross_city_benchmark_report_city_error_comparison.csv",
+  "selected_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "sample_rows_per_city": 20000,
+  "split_seeds": [
+    42,
+    43,
+    44
+  ],
+  "test_size": 0.2,
+  "logistic_tuning_preset": "smoke",
+  "random_forest_tuning_preset": "smoke",
+  "logistic_reference_run_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152",
+  "random_forest_reference_run_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\random_forest\\smoke_allfolds_s5000_nonlinear-check_2026-04-11_163814",
+  "grid_search_n_jobs": 1,
+  "model_n_jobs": 1,
+  "timing_seconds": {
+    "total_wall_clock": 247.26826059998712
+  },
+  "output_files": {
+    "summary_markdown": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\within_city_contrast_summary.md",
+    "city_selection": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_selected_cities.csv",
+    "sampling_diagnostics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_sampling_diagnostics.csv",
+    "repeat_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_repeat_metrics.csv",
+    "summary_table": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_summary.csv",
+    "contrast_table": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_city_model_contrast.csv",
+    "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_best_params.csv",
+    "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\within_city_predictions.parquet",
+    "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_calibration_curve.csv",
+    "figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city\\within_city_pr_auc_contrast.png"
+  }
+}

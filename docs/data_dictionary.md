@@ -280,6 +280,7 @@ Current main-model runners:
 - `src.run_logistic_saga`
 - `src.run_random_forest`
 - `src.run_modeling_reporting`
+- `src.run_modeling_supplemental`
 
 Held-out prediction table columns:
 
@@ -363,12 +364,25 @@ Honest status note:
 - `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
 - `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons and city-level RF-vs-logistic error summaries
 - `figures/modeling/reporting/` stores benchmark comparison figures and city-level metric-delta plots derived from retained modeling runs
-- Reserved next supplemental roots, planned but not yet implemented, are:
-  - `outputs/modeling/supplemental/within_city/` for exploratory within-city markdown summaries and contrast tables
-  - `outputs/modeling/supplemental/within_city/tables/` for supporting within-city CSV tables
-  - `figures/modeling/supplemental/within_city/` for within-city contrast figures
-  - `outputs/modeling/supplemental/feature_importance/` for feature-importance markdown summaries and interpretation tables
-  - `outputs/modeling/supplemental/feature_importance/tables/` for coefficient and permutation-importance CSV tables
-  - `figures/modeling/supplemental/feature_importance/` for ranked-importance and coefficient-summary figures
+- `outputs/modeling/supplemental/within_city/` stores exploratory within-city markdown summaries plus bounded contrast artifacts such as:
+  - `within_city_contrast_summary.md`
+  - `tables/within_city_selected_cities.csv`
+  - `tables/within_city_repeat_metrics.csv`
+  - `tables/within_city_summary.csv`
+  - `tables/within_city_city_model_contrast.csv`
+  - `tables/within_city_best_params.csv`
+  - `tables/within_city_calibration_curve.csv`
+  - `within_city_predictions.parquet`
+- `figures/modeling/supplemental/within_city/` stores bounded within-city contrast figures such as `within_city_pr_auc_contrast.png`
+- `outputs/modeling/supplemental/feature_importance/` stores retained-run interpretation markdown plus tables such as:
+  - `feature_importance_summary.md`
+  - `tables/logistic_post_preprocessing_feature_names.csv`
+  - `tables/logistic_coefficients_by_fold.csv`
+  - `tables/logistic_coefficients_summary.csv`
+  - `tables/logistic_refit_fold_metrics.csv`
+  - `tables/rf_permutation_importance_by_fold.csv`
+  - `tables/rf_permutation_importance_summary.csv`
+  - `tables/rf_refit_fold_metrics.csv`
+- `figures/modeling/supplemental/feature_importance/` stores ranked-importance and coefficient-summary figures such as `feature_importance_ranked_summary.png`
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary

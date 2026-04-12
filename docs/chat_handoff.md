@@ -46,6 +46,7 @@ Implemented in code:
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
 - `outputs/modeling/reporting/` now exists as the repo-local home for broader markdown modeling summaries that synthesize retained run artifacts into report-ready comparison notes without changing the canonical workflow/methodology docs.
 - The modeling reporting layer now also includes a dedicated CLI, `src.run_modeling_reporting`, which materializes benchmark comparison tables, city-level RF-vs-logistic error summaries, and benchmark figures from retained modeling runs under `outputs/modeling/reporting/`, `outputs/modeling/reporting/tables/`, and `figures/modeling/reporting/`.
+- The bounded supplemental modeling layer is now implemented in `src.modeling_supplemental` plus `src.run_modeling_supplemental`. It writes exploratory within-city contrast artifacts under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, and retained-run interpretation artifacts under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
@@ -94,6 +95,15 @@ Standardization status:
 
 As of 2026-03-26:
 
+- 2026-04-11 supplemental modeling implementation checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_runner.py tests\test_modeling_reporting.py tests\test_modeling_supplemental.py -q`
+  - Result: `41 passed`
+  - Coverage in this checkpoint includes:
+    - nearest-median within-city city selection from the retained reporting table contract
+    - bounded repeated-stratified within-city artifact generation and cross-city contrast joins
+    - retained-run refit exports for logistic coefficients and random-forest held-out permutation importance
 - 2026-04-11 pytest Windows temp-dir repair:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_env_bootstrap.py tests/test_feature_assembly.py tests/test_modeling_runner.py -q`
   - Result: `35 passed`
@@ -402,6 +412,7 @@ Implemented:
 - `src.run_logistic_saga` and `src.run_random_forest` now use the same explicit shared feature-type contract for tuned preprocessing, with categorical columns coerced safely ahead of `SimpleImputer` / encoder steps.
 - `src.run_logistic_saga` and `src.run_random_forest` now default to `--tuning-preset smoke`, preserve `--tuning-preset full`, record per-fold timing/search-space metadata, and reuse sampled city rows across folds instead of reloading them fold by fold.
 - `src.run_logistic_saga` and `src.run_random_forest` now also expose durable live-run monitoring artifacts and coarse outer-fold resumability through `progress.json`, `progress_log.csv`, `fold_status.json`, and per-fold output snapshots.
+- `src.run_modeling_supplemental` materializes the bounded supplemental within-city and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
 
@@ -420,6 +431,7 @@ Test-verified:
 - Random-forest parity coverage now also locks in the same smoke-preset metadata, sampled preload, progress logging, resumability, and sampled-diagnostics behavior already exercised for logistic SAGA.
 - Random-forest tuning-history descriptors now identify the staged `smoke`, `frontier`, and `full` grid families explicitly instead of collapsing everything into a generic-grid label, which brings RF run-history drift tracking closer to the existing logistic standard.
 - Data-processing report path generation and batch city iteration coverage are included in `tests/test_data_processing_reporting.py`.
+- Supplemental within-city and retained-run interpretation coverage is included in `tests/test_modeling_supplemental.py`.
 - The latest targeted modeling regression result is `35 passed` for the staged RF preset/config/help/history pass in `tests/test_modeling_runner.py`.
 
 Not manually verified in the latest checkpoint:
@@ -434,6 +446,20 @@ Manually verified:
   - Reviewed a partner logistic-regression draft against the live repo modeling contract and confirmed the key corrections needed were methodological rather than new pipeline code.
   - Confirmed from live code inspection that the correct scratch-script path is `pd.read_parquet(...)` or `src.modeling_data.load_modeling_rows(...)`, filtered by `city_id`, with predictors restricted to `DEFAULT_FEATURE_COLUMNS` and `hotspot_10pct` as the target.
   - Added matching guidance to `README.md` and `docs/modeling_plan.md`, including a minimal code example for one-city inspection and a leakage-safe `load_outer_fold_data(...)` example tied to `city_outer_folds.*`.
+- 2026-04-11 supplemental modeling artifact generation:
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance --grid-search-n-jobs 1 --model-n-jobs 1`.
+  - Result: success in about `250.2s`; wrote:
+    - `outputs/modeling/supplemental/within_city/within_city_contrast_summary.md`
+    - `outputs/modeling/supplemental/within_city/tables/within_city_city_model_contrast.csv`
+    - `figures/modeling/supplemental/within_city/within_city_pr_auc_contrast.png`
+  - Confirmed the default nearest-median selection resolved to `Reno`, `Charlotte`, and `Detroit`, and that the summary markdown restates the exploratory/easier framing explicitly.
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --permutation-n-jobs 1 --rf-permutation-repeats 10`.
+  - Result: success in about `1000.4s`; wrote:
+    - `outputs/modeling/supplemental/feature_importance/feature_importance_summary.md`
+    - `outputs/modeling/supplemental/feature_importance/tables/logistic_coefficients_summary.csv`
+    - `outputs/modeling/supplemental/feature_importance/tables/rf_permutation_importance_summary.csv`
+    - `figures/modeling/supplemental/feature_importance/feature_importance_ranked_summary.png`
+  - Confirmed `logistic_refit_fold_metrics.csv` and `rf_refit_fold_metrics.csv` match the retained fold-level PR AUC values to floating-point precision, which verifies that the interpretation layer is refitting the saved outer-fold winners rather than rerunning broad tuning.
 - 2026-03-26 final-artifact provenance diagnosis:
   - Confirmed from live code inspection that `src.feature_assembly.assemble_final_dataset()` writes `final_dataset.parquet` and `final_dataset.csv` from the same in-memory dataframe, so the intended design is equivalence rather than separate pipeline branches.
   - Compared the live artifacts directly and confirmed all 14 columns match, per-city rows match exactly for cities `1-24`, Los Angeles (`city_id=25`) is only partially present in the CSV, and cities `26-30` are missing entirely from the CSV.

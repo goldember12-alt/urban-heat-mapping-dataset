@@ -53,6 +53,7 @@ Implemented now:
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
+- Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast plus retained-run coefficient and permutation-importance exports
 
 Verified status:
 
@@ -65,7 +66,6 @@ Verified status:
 Planned next, not yet implemented as full production code:
 
 - Held-out-city spatial sanity figures and residual/error maps under `figures/modeling/`
-- A bounded supplemental analysis layer for within-city exploratory comparisons and feature-importance summaries, explicitly kept separate from the canonical cross-city benchmark story
 - Final train-on-all-cities packaging for apply-to-new-cities workflows
 - Any further benchmark expansion only if a later doc-backed decision says the added runtime is worth it on this workstation
 
@@ -110,8 +110,8 @@ Planned next, not yet implemented as full production code:
 - `docs/`: project-facing documentation
 - `data_raw/`: immutable downloaded source data
 - `data_processed/`: processed artifacts organized by project phase
-- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables
-- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts, and `outputs/storage/` for storage-management outputs
+- `figures/`: figure outputs split into `figures/data_processing/city_summaries/` for preprocessing-era city reports, `figures/data_processing/reference/` for shared reference plots, and `figures/modeling/` for ML/evaluation deliverables including `reporting/` and `supplemental/`
+- `outputs/`: report-style deliverables split into `outputs/data_processing/city_summaries/` for per-city preprocessing summaries, `outputs/data_processing/batch_reports/` for batch status tables, `outputs/modeling/` for ML/evaluation tables and prediction artifacts including `reporting/` and `supplemental/`, and `outputs/storage/` for storage-management outputs
 
 Important `data_processed/` subdirectories:
 
@@ -165,6 +165,7 @@ These are the most important current entrypoints. The workflow doc lists how the
 .\.venv\Scripts\python.exe -m src.run_logistic_saga
 .\.venv\Scripts\python.exe -m src.run_random_forest
 .\.venv\Scripts\python.exe -m src.run_modeling_reporting
+.\.venv\Scripts\python.exe -m src.run_modeling_supplemental
 ```
 
 AppEEARS-dependent commands read credentials from environment variables only. See the workflow doc for the acquisition contract and expected raw-output locations.
@@ -180,6 +181,12 @@ Recommended first ML smoke run on the canonical dataset:
 These runners default to `data_processed/final/final_dataset.parquet` as the canonical row-level input and prefer `data_processed/modeling/city_outer_folds.parquet` as the held-out-city split contract. They write prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`.
 
 `src.run_modeling_reporting` builds report-ready comparison artifacts from retained modeling runs, writing markdown and derived CSV tables under `outputs/modeling/reporting/` plus benchmark figures under `figures/modeling/reporting/`.
+
+`src.run_modeling_supplemental` builds the bounded supplemental layer under `outputs/modeling/supplemental/` and `figures/modeling/supplemental/`. It keeps the city-held-out cross-city benchmark as the canonical story while adding:
+
+- a `Reno` / `Charlotte` / `Detroit` within-city exploratory contrast with repeated stratified `80/20` splits
+- retained-run logistic coefficient exports from the sampled `20,000`-row linear reference
+- retained-run random-forest held-out permutation importance from the retained `frontier` reference
 
 `--output-dir` is now optional for the tuned modeling CLIs. If you omit it, the CLI auto-generates a unique, readable run directory under the correct model-family root using the preset, fold scope, sample scope, and a timestamp. You can still pass `--output-dir` explicitly to override that behavior, and `--run-label` can add a short human tag to an auto-generated name without building the full path yourself.
 

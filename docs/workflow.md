@@ -232,6 +232,7 @@ Main entrypoints:
 - `src.run_logistic_saga`
 - `src.run_random_forest`
 - `src.run_modeling_reporting`
+- `src.run_modeling_supplemental`
 
 Honest status line:
 
@@ -244,17 +245,13 @@ Implemented now:
 - Primary metric: PR AUC
 - Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, calibration-curve tables, city-level RF-vs-logistic error summaries, and benchmark comparison figures
 - Held-out prediction tables include `city_id`, `city_name`, `climate_group`, `cell_id`, `centroid_lon`, and `centroid_lat` so later map export code can build on the saved outputs directly
+- A bounded supplemental within-city layer under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` that is explicitly labeled exploratory/easier and presented only as a contrast to the canonical held-out-city benchmark
+- A bounded retained-run interpretation layer under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` that refits saved outer-fold winners to export logistic coefficients and random-forest held-out permutation importance
+- `src.run_modeling_supplemental` to regenerate both supplemental roots from retained artifacts plus the canonical parquet dataset
 
 Planned next:
 
 - Predicted hotspot maps, true hotspot maps, and residual/error maps under `figures/modeling/`
-- A bounded supplemental within-city layer that is explicitly labeled exploratory, uses a small representative city subset, and is presented only as a contrast to the canonical held-out-city benchmark
-- A bounded feature-importance layer that reuses retained benchmark configurations and reports predictive reliance carefully without causal claims
-- Planned supplemental report roots:
-  - `outputs/modeling/supplemental/within_city/`
-  - `outputs/modeling/supplemental/feature_importance/`
-  - `figures/modeling/supplemental/within_city/`
-  - `figures/modeling/supplemental/feature_importance/`
 - Final-train-on-all-cities packaging for transfer to new cities
 - Scaling strategy for full-canonical runs if workstation memory/runtime becomes the main blocker
 

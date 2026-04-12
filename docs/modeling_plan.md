@@ -55,6 +55,7 @@ First-pass modeling stage:
 - `src.run_logistic_saga`
 - `src.run_random_forest`
 - `src.run_modeling_reporting`
+- `src.run_modeling_supplemental`
 
 Current implemented baseline models:
 
@@ -78,6 +79,8 @@ Current implemented evaluation outputs:
 - per-fold best-parameter summaries for tuned models
 - city-level RF-vs-logistic error comparison tables by city and climate group
 - benchmark comparison markdown and benchmark figures under the modeling reporting layer
+- supplemental within-city contrast markdown/tables/figures under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`
+- supplemental retained-run interpretation tables/figures under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`
 
 Honest implementation status:
 
@@ -131,8 +134,6 @@ Planned next evaluation additions:
 - predicted hotspot maps
 - true hotspot maps
 - residual or error maps
-- a bounded within-city exploratory comparison layer kept separate from the canonical held-out-city evaluation
-- a bounded feature-importance layer tied to retained benchmark configurations, not to new broad tuning runs
 
 ## Relationship To Future Scripts
 
@@ -220,7 +221,7 @@ Reporting-oriented status after the current retained runs:
 - keep RF `smoke` and RF `frontier` at `5000` rows per city as the retained nonlinear checkpoints already used in reporting
 - do not schedule more routine logistic or RF benchmark expansion now; RF `full` remains a reserved confirmation path only if a later decision explicitly reopens it
 
-## Bounded Supplemental Analysis Plan
+## Bounded Supplemental Analysis Layer
 
 Guardrails:
 
@@ -255,6 +256,7 @@ Selection rule:
 - choose one city per climate group using the existing retained comparison table `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
 - default to the city closest to the current climate-group median logistic PR AUC so the supplemental set is representative rather than cherry-picked toward either easy or extreme-error cities
 - if retained reporting tables are refreshed later, reapply the same nearest-median-per-climate rule instead of hardcoding a new ad hoc trio
+- the current retained table resolves to `Reno`, `Charlotte`, and `Detroit`, which is the default trio used by `src.run_modeling_supplemental`
 
 Data scope:
 
@@ -283,7 +285,8 @@ Metrics to report:
 - supporting metric: recall at top 10% predicted risk
 - optional if already easy to export from the shared helpers: calibration curve tables
 - report mean and standard deviation across the `3` repeats for each city-model pair
-- join the within-city summary to the existing cross-city city-level table so the main presentation is the performance gap between within-city and held-out-city settings
+- join the within-city summary back to retained cross-city city-level metrics so the main presentation is the performance gap between within-city and held-out-city settings
+- the current implementation uses retained logistic `20,000` sampled `full` city metrics plus retained RF `smoke` city metrics for that cross-city contrast join
 
 Recommended presentation:
 
@@ -316,7 +319,7 @@ Logistic recommendation:
 - use fold-level post-preprocessing coefficients as the primary logistic interpretation artifact
 - export the resolved feature names after preprocessing so numeric features and one-hot categorical levels are visible explicitly
 - summarize each feature with median coefficient, median absolute coefficient rank, and sign consistency across outer folds
-- for categorical levels, report them relative to the encoded reference category rather than pretending they are free-standing causal effects
+- for categorical levels, report the encoded one-hot level names explicitly and interpret them as regularized model weights within the encoded design rather than as standalone causal effects
 - optional only if time remains: add held-out-fold permutation importance for logistic as a comparability check against RF
 
 Random-forest recommendation:
@@ -349,15 +352,13 @@ Optional only if time remains:
 - spatial-block within-city sensitivity runs for the same `3` cities
 - RF impurity importance in an appendix/debug table only
 
-Recommended implementation order:
+Implementation status:
 
-1. Freeze the retained reference runs and benchmark-table row names that the supplemental layer will use, so the new work points back to one stable cross-city reporting snapshot.
-2. Implement the within-city city-selection helper from `cross_city_benchmark_report_city_error_comparison.csv`, defaulting to the nearest-median city in each climate group.
-3. Implement the within-city runner with `3` repeated stratified `80/20` splits, `20,000` rows-per-city cap, and logistic SAGA plus RF `smoke` only.
-4. Write the within-city contrast summary/table/figure under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, explicitly joining against the retained cross-city city-level metrics.
-5. Implement the interpretation-export mode that refits final outer-fold estimators from saved `best_params_by_fold.csv` without rerunning inner tuning.
-6. Export logistic coefficient tables and RF held-out permutation-importance tables under `outputs/modeling/supplemental/feature_importance/tables/`, then write one short markdown summary and one ranked-importance figure.
-7. Update `README.md`, `docs/workflow.md`, `docs/data_dictionary.md`, and `docs/chat_handoff.md` after the implementation pass so the supplemental artifacts and their exploratory status are documented consistently.
+1. The retained reference runs and reporting-table snapshot are now frozen in code through `src.run_modeling_supplemental`.
+2. The within-city city-selection helper now defaults to the nearest-median city in each climate group from `cross_city_benchmark_report_city_error_comparison.csv`.
+3. The within-city runner now materializes the `3`-city repeated-stratified exploratory contrast under `outputs/modeling/supplemental/within_city/`.
+4. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes coefficient/permutation artifacts under `outputs/modeling/supplemental/feature_importance/`.
+5. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
 
 Run logging note:
 
