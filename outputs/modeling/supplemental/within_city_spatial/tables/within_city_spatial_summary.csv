@@ -1,0 +1,4 @@
+city_id,city_name,climate_group,model_name,spatial_block_eval_count,sample_rows_per_city_cap,effective_city_row_count,observed_spatial_block_count,spatial_within_city_pr_auc_mean,spatial_within_city_pr_auc_std,spatial_within_city_recall_at_top_10pct_mean,spatial_within_city_recall_at_top_10pct_std,spatial_best_inner_cv_average_precision_mean
+10,Reno,hot_arid,logistic_saga,4,20000,20000,4,0.4438411317346713,0.06344014998679066,0.6651432042048353,0.3454579464532985,0.5143636626246667
+19,Charlotte,hot_humid,logistic_saga,4,20000,20000,4,0.13852907036762743,0.03374496107681596,0.1637177595336821,0.058474023793045664,0.15256829052101112
+29,Detroit,mild_cool,logistic_saga,4,20000,20000,4,0.17590695161435058,0.07628767805853649,0.24940972986859353,0.1409389357365116,0.18523139909122288

@@ -14,7 +14,9 @@ from src.modeling_supplemental import (
     DEFAULT_WITHIN_CITY_RF_REFERENCE_RUN_DIR,
     DEFAULT_WITHIN_CITY_SAMPLE_ROWS_PER_CITY,
     DEFAULT_WITHIN_CITY_SPLIT_SEEDS,
+    DEFAULT_WITHIN_CITY_SPATIAL_DEFAULT_SUMMARY_PATH,
     generate_feature_importance_artifacts,
+    generate_within_city_spatial_sensitivity_artifacts,
     generate_within_city_supplemental_artifacts,
 )
 
@@ -66,6 +68,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_WITHIN_CITY_RF_REFERENCE_RUN_DIR,
         help="Retained cross-city random-forest run used for the within-city contrast join.",
+    )
+    parser.add_argument(
+        "--run-within-city-spatial",
+        action="store_true",
+        help="Also run the separate supplemental spatial-block within-city sensitivity layer.",
+    )
+    parser.add_argument(
+        "--within-city-spatial-default-summary-path",
+        type=Path,
+        default=DEFAULT_WITHIN_CITY_SPATIAL_DEFAULT_SUMMARY_PATH,
+        help="Default within-city summary table used to contrast random splits against the spatial-block sensitivity.",
     )
     parser.add_argument(
         "--feature-importance-logistic-run-dir",
@@ -138,6 +151,20 @@ def main() -> None:
         print(within_city_result.contrast_table_path)
         print(within_city_result.figure_path)
         print(within_city_result.recall_figure_path)
+
+    if args.run_within_city_spatial:
+        within_city_spatial_result = generate_within_city_spatial_sensitivity_artifacts(
+            dataset_path=args.dataset_path,
+            city_error_table_path=args.city_error_table_path,
+            default_within_city_summary_path=args.within_city_spatial_default_summary_path,
+            feature_columns=feature_columns,
+            sample_rows_per_city=args.sample_rows_per_city,
+            logistic_reference_run_dir=args.logistic_reference_run_dir,
+            grid_search_n_jobs=args.grid_search_n_jobs,
+        )
+        print(within_city_spatial_result.summary_markdown_path)
+        print(within_city_spatial_result.contrast_table_path)
+        print(within_city_spatial_result.figure_path)
 
     if not args.skip_feature_importance:
         feature_importance_result = generate_feature_importance_artifacts(

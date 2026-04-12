@@ -235,6 +235,9 @@ Recommended output locations:
 - `outputs/modeling/supplemental/within_city/within_city_contrast_summary.md`
 - `outputs/modeling/supplemental/within_city/tables/*.csv`
 - `figures/modeling/supplemental/within_city/*.png`
+- `outputs/modeling/supplemental/within_city_spatial/within_city_spatial_sensitivity_summary.md`
+- `outputs/modeling/supplemental/within_city_spatial/tables/*.csv`
+- `figures/modeling/supplemental/within_city_spatial/*.png`
 - `outputs/modeling/supplemental/feature_importance/feature_importance_summary.md`
 - `outputs/modeling/supplemental/feature_importance/tables/*.csv`
 - `figures/modeling/supplemental/feature_importance/*.png`
@@ -270,7 +273,7 @@ Split strategy:
 - use `3` repeated within-city `80/20` stratified train/test splits with fixed random seeds
 - tune only inside each training split
 - keep this intentionally simple and clearly label it as optimistic relative to the held-out-city benchmark because it does not test transfer to unseen cities
-- do not make a spatial-blocked variant the default first implementation; keep that only as an optional appendix if time remains
+- keep this as the default within-city supplement even after adding any harder spatial-block sensitivity; do not silently replace it
 
 Models to compare:
 
@@ -296,6 +299,38 @@ Recommended presentation:
 - one simple figure such as a dumbbell or slope plot showing within-city versus cross-city PR AUC for each selected city-model pair
 - one companion figure showing within-city versus retained cross-city recall at top 10% predicted risk for the same comparable city-model pairs
 - allow the exploratory `city_prevalence_baseline` rows to carry `n/a` retained cross-city comparison cells because that baseline is intentionally not part of the canonical transfer benchmark suite
+
+### Within-City Spatial-Block Sensitivity Methodology
+
+Scope guardrails:
+
+- keep this path separate from the default within-city random-split contrast
+- keep the same `Reno` / `Charlotte` / `Detroit` selected-city set
+- keep the same six-feature first-pass contract
+- keep the canonical cross-city city-held-out benchmark as the headline methodology
+- do not describe within-city spatial blocks as equivalent to transfer into unseen cities
+
+Current bounded implementation:
+
+- model scope is logistic SAGA only for this pass
+- reuse the same per-city sample cap of up to `20,000` rows
+- assign deterministic within-city spatial blocks from cell centroids using city-specific median `centroid_lon` and median `centroid_lat`
+- assign one of four centroid quadrants per sampled row: `southwest`, `southeast`, `northwest`, `northeast`
+- break ties onto the north/east side using `>=` median comparisons
+- evaluate one bounded holdout per non-empty block by training on the other blocks and testing on the held-out block
+
+Current bounded outputs:
+
+- `outputs/modeling/supplemental/within_city_spatial/within_city_spatial_sensitivity_summary.md`
+- `outputs/modeling/supplemental/within_city_spatial/tables/within_city_spatial_metrics.csv`
+- `outputs/modeling/supplemental/within_city_spatial/tables/within_city_spatial_contrast.csv`
+- `figures/modeling/supplemental/within_city_spatial/within_city_spatial_pr_auc_contrast.png`
+
+Current presentation:
+
+- compare the default within-city random-split logistic summary to the harder spatial-block logistic summary for the same cities
+- retain the city-level cross-city logistic benchmark columns in the same contrast table so the appendix view keeps the canonical benchmark visible
+- report PR AUC plus recall at top 10% predicted risk in the spatial contrast table
 
 ### Feature-Importance / Interpretation Methodology
 
@@ -348,9 +383,9 @@ Most worth doing first:
 - RF held-out-fold permutation importance from the retained `frontier` benchmark configuration
 - one concise markdown summary plus PR AUC and recall contrast figures for within-city versus cross-city and one ranked-importance figure
 
-Optional only if time remains:
+Implemented after the original optional list:
 
-- spatial-block within-city sensitivity runs for the same `3` cities
+- spatial-block within-city sensitivity runs for the same `3` cities, kept as a separate logistic-only appendix path rather than changing the default within-city workflow
 
 Implementation status:
 
@@ -359,8 +394,9 @@ Implementation status:
 3. The within-city runner now materializes the `3`-city repeated-stratified exploratory contrast under `outputs/modeling/supplemental/within_city/`.
 4. The within-city supplemental tables and markdown now also include the exploratory `city_prevalence_baseline` as a within-city-only context row without changing the canonical cross-city baseline suite.
 5. The within-city supplemental figure set now includes both PR AUC and recall-at-top-10%-risk contrast figures under `figures/modeling/supplemental/within_city/`.
-6. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes primary logistic coefficient tables, logistic held-out permutation cross-check tables, primary RF held-out permutation tables, and secondary/debug RF impurity appendix tables under `outputs/modeling/supplemental/feature_importance/`.
-7. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
+6. The separate within-city spatial sensitivity runner now materializes the same `3` cities under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants and logistic SAGA only so the pass stays bounded.
+7. The retained-run interpretation-export path now refits saved outer-fold winners from `best_params_by_fold.csv` and writes primary logistic coefficient tables, logistic held-out permutation cross-check tables, primary RF held-out permutation tables, and secondary/debug RF impurity appendix tables under `outputs/modeling/supplemental/feature_importance/`.
+8. The repo docs and handoff notes now document the supplemental outputs explicitly while keeping the cross-city benchmark narrative canonical.
 
 Run logging note:
 

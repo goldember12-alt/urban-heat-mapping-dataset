@@ -377,6 +377,18 @@ Honest status note:
 - `figures/modeling/supplemental/within_city/` stores bounded within-city contrast figures such as:
   - `within_city_pr_auc_contrast.png`
   - `within_city_recall_contrast.png`
+- `outputs/modeling/supplemental/within_city_spatial/` stores the harder logistic-only within-city spatial sensitivity artifacts such as:
+  - `within_city_spatial_sensitivity_summary.md`
+  - `tables/within_city_spatial_selected_cities.csv`
+  - `tables/within_city_spatial_sampling_diagnostics.csv`
+  - `tables/within_city_spatial_metrics.csv`
+  - `tables/within_city_spatial_summary.csv`
+  - `tables/within_city_spatial_contrast.csv`
+  - `tables/within_city_spatial_best_params.csv`
+  - `tables/within_city_spatial_calibration_curve.csv`
+  - `within_city_spatial_predictions.parquet`
+- the spatial sensitivity keeps the same six-feature contract and the same `Reno` / `Charlotte` / `Detroit` city trio, but uses deterministic centroid quadrants and remains explicitly supplemental rather than equivalent to the canonical cross-city city-held-out benchmark
+- `figures/modeling/supplemental/within_city_spatial/` stores the bounded spatial-sensitivity figure set, currently including `within_city_spatial_pr_auc_contrast.png`
 - `outputs/modeling/supplemental/feature_importance/` stores retained-run interpretation markdown plus tables such as:
   - `feature_importance_summary.md`
   - `tables/logistic_post_preprocessing_feature_names.csv`

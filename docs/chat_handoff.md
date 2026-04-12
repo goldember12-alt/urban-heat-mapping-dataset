@@ -48,6 +48,7 @@ Implemented in code:
 - The modeling reporting layer now also includes a dedicated CLI, `src.run_modeling_reporting`, which materializes benchmark comparison tables, city-level RF-vs-logistic error summaries, and benchmark figures from retained modeling runs under `outputs/modeling/reporting/`, `outputs/modeling/reporting/tables/`, and `figures/modeling/reporting/`.
 - The bounded supplemental modeling layer is now implemented in `src.modeling_supplemental` plus `src.run_modeling_supplemental`. It writes exploratory within-city contrast artifacts under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/`, and retained-run interpretation artifacts under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/`. The primary interpretation artifacts remain logistic coefficients and RF held-out permutation importance, with logistic held-out permutation exported only as a cross-check and RF impurity exported only as secondary/debug appendix output.
 - Phase 1 of the supplemental follow-up is now implemented: the within-city exploratory layer adds a `city_prevalence_baseline` context row to the repeat/summary/contrast artifacts, writes the companion recall contrast figure `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`, and keeps the canonical cross-city held-out benchmark narrative unchanged.
+- Pass 3 of the supplemental follow-up is now implemented as a separate harder within-city sensitivity layer: `src.run_modeling_supplemental --run-within-city-spatial` writes logistic-only spatial-block artifacts under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants for the same `Reno` / `Charlotte` / `Detroit` trio while keeping the canonical cross-city city-held-out benchmark unchanged.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
@@ -104,6 +105,15 @@ As of 2026-03-26:
   - Coverage in this checkpoint includes:
     - integration of the exploratory within-city `city_prevalence_baseline` into repeat metrics, best-params export, markdown, metadata, and contrast tables
     - creation of the companion within-city recall contrast figure under `figures/modeling/supplemental/within_city/`
+- 2026-04-12 supplemental follow-up Pass 3 checkpoint:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: `8 passed in 115.77s`
+  - Coverage in this checkpoint includes:
+    - deterministic centroid-quadrant spatial block assignment
+    - non-overlapping train/test block membership for the bounded spatial holdout path
+    - artifact generation for the separate within-city spatial sensitivity root
 - 2026-04-11 supplemental modeling implementation checkpoint:
   - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
   - Result: success
@@ -430,7 +440,7 @@ Implemented:
 - `src.run_logistic_saga` and `src.run_random_forest` now use the same explicit shared feature-type contract for tuned preprocessing, with categorical columns coerced safely ahead of `SimpleImputer` / encoder steps.
 - `src.run_logistic_saga` and `src.run_random_forest` now default to `--tuning-preset smoke`, preserve `--tuning-preset full`, record per-fold timing/search-space metadata, and reuse sampled city rows across folds instead of reloading them fold by fold.
 - `src.run_logistic_saga` and `src.run_random_forest` now also expose durable live-run monitoring artifacts and coarse outer-fold resumability through `progress.json`, `progress_log.csv`, `fold_status.json`, and per-fold output snapshots.
-- `src.run_modeling_supplemental` materializes the bounded supplemental within-city and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
+- `src.run_modeling_supplemental` materializes the bounded supplemental within-city, optional within-city spatial sensitivity, and retained-run interpretation layers without changing the canonical city-held-out benchmark runners.
 - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance` was rerun on 2026-04-12 and refreshed the exploratory within-city summary, tables, predictions parquet, metadata, and both contrast figures, including `figures/modeling/supplemental/within_city/within_city_recall_contrast.png`.
 - `src.run_data_processing_reports` generates per-city data-processing markdown summaries, supporting CSV tables, and PNG figures for all configured cities or a selected subset.
 - `src.summarize_phoenix_dataset` remains available as a Phoenix compatibility wrapper over the shared data-processing reporting logic.
@@ -479,6 +489,14 @@ Manually verified:
     - `outputs/modeling/supplemental/feature_importance/tables/rf_permutation_importance_summary.csv`
     - `figures/modeling/supplemental/feature_importance/feature_importance_ranked_summary.png`
   - Confirmed `logistic_refit_fold_metrics.csv` and `rf_refit_fold_metrics.csv` match the retained fold-level PR AUC values to floating-point precision, which verifies that the interpretation layer is refitting the saved outer-fold winners rather than rerunning broad tuning.
+- 2026-04-12 supplemental spatial sensitivity artifact generation:
+  - Ran `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --skip-feature-importance --run-within-city-spatial --grid-search-n-jobs 1`.
+  - Result: success in about `113.3s`; wrote:
+    - `outputs/modeling/supplemental/within_city_spatial/within_city_spatial_sensitivity_summary.md`
+    - `outputs/modeling/supplemental/within_city_spatial/tables/within_city_spatial_metrics.csv`
+    - `outputs/modeling/supplemental/within_city_spatial/tables/within_city_spatial_contrast.csv`
+    - `figures/modeling/supplemental/within_city_spatial/within_city_spatial_pr_auc_contrast.png`
+  - Confirmed the spatial layer stayed logistic-only, reused the same nearest-median `Reno` / `Charlotte` / `Detroit` trio, and labeled the deterministic centroid-quadrant holdouts as a supplemental harder within-city sensitivity rather than as a replacement for the canonical cross-city city-held-out benchmark.
 - 2026-03-26 final-artifact provenance diagnosis:
   - Confirmed from live code inspection that `src.feature_assembly.assemble_final_dataset()` writes `final_dataset.parquet` and `final_dataset.csv` from the same in-memory dataframe, so the intended design is equivalence rather than separate pipeline branches.
   - Compared the live artifacts directly and confirmed all 14 columns match, per-city rows match exactly for cities `1-24`, Los Angeles (`city_id=25`) is only partially present in the CSV, and cities `26-30` are missing entirely from the CSV.
@@ -778,10 +796,11 @@ Recommended order:
   - logistic sampled `full` at `5000`, `10000`, and `20000` rows per city
   - RF `smoke` and RF `frontier` at `5000` rows per city
 - Use `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` as the exploratory contrast source for the easier within-city-versus-cross-city narrative.
+- Use `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/` as the separate harder within-city appendix contrast when discussing how performance changes under deterministic spatial holdouts inside the same city.
 - Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
 - If another reporting refresh is needed later, rerun `src.run_modeling_reporting` first and then rerun `src.run_modeling_supplemental` so the nearest-median city selector and retained reference joins stay synchronized.
 - Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
-- Pass 2 interpretation exports are now implemented; only later Pass 3 ideas such as spatial-block within-city sensitivity and new within-city split modes remain not started.
+- Pass 3 spatial-block sensitivity is now implemented; any later within-city follow-up should stay bounded, keep the six-feature contract fixed, and avoid reopening routine cross-city benchmark expansion.
 
 
 
@@ -833,6 +852,8 @@ Recommended order:
 - `outputs/modeling/supplemental/`
 - `outputs/modeling/supplemental/within_city/`
 - `outputs/modeling/supplemental/within_city/tables/`
+- `outputs/modeling/supplemental/within_city_spatial/`
+- `outputs/modeling/supplemental/within_city_spatial/tables/`
 - `outputs/modeling/supplemental/feature_importance/`
 - `outputs/modeling/supplemental/feature_importance/tables/`
 - `outputs/storage/`
@@ -844,6 +865,8 @@ Recommended order:
 - `figures/modeling/reporting/cross_city_benchmark_report_city_metric_deltas.png`
 - `figures/modeling/supplemental/within_city/`
 - `figures/modeling/supplemental/within_city/within_city_pr_auc_contrast.png`
+- `figures/modeling/supplemental/within_city_spatial/`
+- `figures/modeling/supplemental/within_city_spatial/within_city_spatial_pr_auc_contrast.png`
 - `figures/modeling/supplemental/feature_importance/`
 - `figures/modeling/supplemental/feature_importance/feature_importance_ranked_summary.png`
 - `data_raw/cache/`
@@ -869,7 +892,7 @@ Recommended order:
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
 - Held-out-city map-oriented exports are still not implemented; `figures/modeling/reporting/` now covers benchmark and city-delta figures, but true hotspot maps, predicted hotspot maps, and residual/error maps are still pending.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
-- The supplemental within-city and feature-importance layer is now implemented, but optional follow-on pieces are still open: no spatial-block within-city sensitivity, no new within-city split modes, and no broader benchmark expansion beyond the retained cross-city benchmark plus current bounded supplement.
+- The supplemental within-city random-split layer, the separate logistic-only within-city spatial sensitivity, and the retained-run feature-importance layer are now implemented; optional follow-on pieces are still open only if later explicitly needed, such as additional within-city split modes or broader benchmark expansion beyond the retained cross-city benchmark plus current bounded supplement.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
@@ -885,6 +908,38 @@ Recommended order:
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-04-12 - Checkpoint: Supplemental Spatial Sensitivity Pass 3
+
+- Date / checkpoint:
+  - 2026-04-12 bounded supplemental follow-up pass adding a separate harder within-city spatial-block sensitivity.
+- Change made:
+  - Extended `src.modeling_supplemental` with a logistic-only spatial sensitivity path that keeps the same nearest-median `Reno` / `Charlotte` / `Detroit` trio, the same six-feature contract, and deterministic output paths under a separate `within_city_spatial` root.
+  - Added deterministic centroid-quadrant block assignment from city-specific median `centroid_lon` / `centroid_lat`, with one bounded holdout evaluation per non-empty block.
+  - Added the opt-in `--run-within-city-spatial` mode to `src.run_modeling_supplemental` so the existing within-city random-split workflow remains unchanged by default.
+  - Materialized real spatial-sensitivity outputs and updated `README.md`, `docs/workflow.md`, `docs/data_dictionary.md`, `docs/modeling_plan.md`, and `docs/chat_handoff.md` so the supplemental appendix structure stays aligned.
+- Files touched:
+  - `src/config.py`
+  - `src/modeling_supplemental.py`
+  - `src/run_modeling_supplemental.py`
+  - `tests/test_modeling_supplemental.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --skip-feature-importance --run-within-city-spatial --grid-search-n-jobs 1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\config.py src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_supplemental.py -q`
+  - Result: `8 passed in 115.77s`
+- Manual verification status:
+  - The real-data spatial-only CLI run completed successfully and wrote the expected markdown, CSV, parquet, JSON, and PNG outputs under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`.
+  - The summary markdown explicitly keeps the canonical cross-city city-held-out benchmark as the main project narrative and labels the new layer as a harder within-city supplemental sensitivity rather than as unseen-city transfer.
+- Immediate Next Step:
+  - Use the new `within_city_spatial` appendix outputs alongside the existing `within_city` and `feature_importance` artifacts in later writeup, while keeping all main-methods language anchored to the canonical held-out-city cross-city benchmark.
 
 ### 2026-04-12 - Checkpoint: Supplemental Interpretation Pass 2
 

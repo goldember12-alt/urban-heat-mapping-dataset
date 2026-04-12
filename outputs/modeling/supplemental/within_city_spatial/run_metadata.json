@@ -1,0 +1,35 @@
+{
+  "dataset_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\data_processed\\final\\final_dataset.parquet",
+  "city_error_table_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\reporting\\tables\\cross_city_benchmark_report_city_error_comparison.csv",
+  "default_within_city_summary_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city\\tables\\within_city_summary.csv",
+  "selected_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "sample_rows_per_city": 20000,
+  "random_state": 42,
+  "model_name": "logistic_saga",
+  "logistic_tuning_preset": "smoke",
+  "spatial_block_rule": "deterministic centroid quadrants using city-specific median centroid_lon and centroid_lat, with ties assigned to the north/east side via >= median comparisons",
+  "logistic_reference_run_dir": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\logistic_saga\\full_allfolds_s20000_samplecurve-20k_2026-04-08_021152",
+  "grid_search_n_jobs": 1,
+  "timing_seconds": {
+    "total_wall_clock": 108.1998309000046
+  },
+  "output_files": {
+    "summary_markdown": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\within_city_spatial_sensitivity_summary.md",
+    "city_selection": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_selected_cities.csv",
+    "sampling_diagnostics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_sampling_diagnostics.csv",
+    "metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_metrics.csv",
+    "summary_table": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_summary.csv",
+    "contrast_table": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_contrast.csv",
+    "best_params": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_best_params.csv",
+    "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\within_city_spatial_predictions.parquet",
+    "calibration_curve": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_spatial\\tables\\within_city_spatial_calibration_curve.csv",
+    "figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city_spatial\\within_city_spatial_pr_auc_contrast.png"
+  }
+}

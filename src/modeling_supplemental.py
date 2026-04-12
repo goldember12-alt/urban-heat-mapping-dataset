@@ -23,6 +23,8 @@ from src.config import (
     MODELING_SUPPLEMENTAL_FEATURE_IMPORTANCE_OUTPUTS,
     MODELING_SUPPLEMENTAL_WITHIN_CITY_FIGURES,
     MODELING_SUPPLEMENTAL_WITHIN_CITY_OUTPUTS,
+    MODELING_SUPPLEMENTAL_WITHIN_CITY_SPATIAL_FIGURES,
+    MODELING_SUPPLEMENTAL_WITHIN_CITY_SPATIAL_OUTPUTS,
     PROJECT_ROOT,
 )
 from src.modeling_config import (
@@ -70,6 +72,17 @@ DEFAULT_WITHIN_CITY_LOGISTIC_PRESET = "smoke"
 DEFAULT_WITHIN_CITY_RF_PRESET = "smoke"
 DEFAULT_WITHIN_CITY_LOGISTIC_REFERENCE_RUN_DIR = DEFAULT_LOGISTIC_20K_RUN_DIR
 DEFAULT_WITHIN_CITY_RF_REFERENCE_RUN_DIR = DEFAULT_RF_SMOKE_RUN_DIR
+DEFAULT_WITHIN_CITY_SPATIAL_DEFAULT_SUMMARY_PATH = (
+    MODELING_SUPPLEMENTAL_WITHIN_CITY_OUTPUTS / "tables" / "within_city_summary.csv"
+)
+DEFAULT_WITHIN_CITY_SPATIAL_LOGISTIC_PRESET = "smoke"
+DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_COLUMN = "spatial_block_id"
+DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_ORDER = ("southwest", "southeast", "northwest", "northeast")
+DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_RULE = (
+    "deterministic centroid quadrants using city-specific median centroid_lon and centroid_lat, "
+    "with ties assigned to the north/east side via >= median comparisons"
+)
+DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME = "logistic_saga"
 DEFAULT_FEATURE_IMPORTANCE_LOGISTIC_RUN_DIR = DEFAULT_LOGISTIC_20K_RUN_DIR
 DEFAULT_FEATURE_IMPORTANCE_RF_RUN_DIR = DEFAULT_RF_FRONTIER_RUN_DIR
 DEFAULT_RF_PERMUTATION_REPEATS = 10
@@ -98,6 +111,28 @@ class WithinCitySupplementResult:
     metadata_path: Path
     figure_path: Path
     recall_figure_path: Path
+
+
+@dataclass(frozen=True)
+class SpatialBlockSplit:
+    held_out_block: str
+    train_index: np.ndarray
+    test_index: np.ndarray
+
+
+@dataclass(frozen=True)
+class WithinCitySpatialSensitivityResult:
+    summary_markdown_path: Path
+    city_selection_path: Path
+    sample_diagnostics_path: Path
+    split_metrics_path: Path
+    summary_table_path: Path
+    contrast_table_path: Path
+    best_params_path: Path
+    predictions_path: Path
+    calibration_curve_path: Path
+    metadata_path: Path
+    figure_path: Path
 
 
 @dataclass(frozen=True)
@@ -274,6 +309,38 @@ def _load_cross_city_reference_metrics(
     )
 
 
+def _load_logistic_cross_city_reference_metrics(*, logistic_run_dir: Path) -> pd.DataFrame:
+    logistic_df = pd.read_csv(_resolve_project_path(logistic_run_dir) / "metrics_by_city.csv").copy()
+    logistic_df["model_name"] = "logistic_saga"
+    logistic_df["cross_city_reference_run_dir"] = str(_resolve_project_path(logistic_run_dir))
+    logistic_df["cross_city_reference_run_label"] = Path(logistic_run_dir).name
+    logistic_df = logistic_df.rename(
+        columns={
+            "pr_auc": "cross_city_pr_auc",
+            "recall_at_top_10pct": "cross_city_recall_at_top_10pct",
+            "row_count": "cross_city_row_count",
+            "positive_count": "cross_city_positive_count",
+            "prevalence": "cross_city_prevalence",
+        }
+    )
+    keep_columns = [
+        "model_name",
+        "city_id",
+        "city_name",
+        "climate_group",
+        "cross_city_row_count",
+        "cross_city_positive_count",
+        "cross_city_prevalence",
+        "cross_city_pr_auc",
+        "cross_city_recall_at_top_10pct",
+        "cross_city_reference_run_dir",
+        "cross_city_reference_run_label",
+    ]
+    return logistic_df[keep_columns].drop_duplicates(
+        subset=["model_name", "city_id", "city_name", "climate_group"]
+    )
+
+
 def _resolve_effective_stratified_cv_splits(y: Sequence[int], requested_splits: int) -> int:
     class_counts = pd.Series(y).value_counts(dropna=False)
     if class_counts.empty:
@@ -357,6 +424,78 @@ def _build_within_city_prediction_frame(
 def _predict_city_prevalence_baseline(train_df: pd.DataFrame, test_df: pd.DataFrame) -> np.ndarray:
     prevalence = float(train_df[TARGET_COLUMN].mean())
     return np.full(len(test_df), prevalence, dtype=np.float64)
+
+
+def assign_within_city_spatial_blocks(
+    city_df: pd.DataFrame,
+    *,
+    lon_column: str = "centroid_lon",
+    lat_column: str = "centroid_lat",
+    block_column: str = DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_COLUMN,
+) -> pd.DataFrame:
+    """Assign deterministic city-specific centroid quadrants for a bounded spatial sensitivity."""
+    required_columns = {lon_column, lat_column}
+    missing_columns = sorted(required_columns - set(city_df.columns))
+    if missing_columns:
+        raise ValueError(
+            "Spatial block assignment requires centroid columns: " + ", ".join(missing_columns)
+        )
+
+    blocked_df = city_df.copy()
+    lon_values = blocked_df[lon_column].to_numpy(dtype="float64")
+    lat_values = blocked_df[lat_column].to_numpy(dtype="float64")
+    lon_median = float(np.median(lon_values))
+    lat_median = float(np.median(lat_values))
+
+    east_mask = lon_values >= lon_median
+    north_mask = lat_values >= lat_median
+    blocked_df[block_column] = np.select(
+        [
+            (~north_mask) & (~east_mask),
+            (~north_mask) & east_mask,
+            north_mask & (~east_mask),
+            north_mask & east_mask,
+        ],
+        DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_ORDER,
+        default=DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_ORDER[-1],
+    )
+    return blocked_df
+
+
+def make_within_city_spatial_block_splits(
+    city_df: pd.DataFrame,
+    *,
+    block_column: str = DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_COLUMN,
+) -> list[SpatialBlockSplit]:
+    """Create one deterministic holdout split per non-empty within-city spatial block."""
+    if block_column not in city_df.columns:
+        raise ValueError(f"Spatial block column '{block_column}' is missing from city_df")
+
+    observed_blocks = [
+        block_name
+        for block_name in DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_ORDER
+        if block_name in set(city_df[block_column].astype(str))
+    ]
+    if len(observed_blocks) < 2:
+        raise ValueError("Within-city spatial sensitivity requires at least two non-empty spatial blocks")
+
+    splits: list[SpatialBlockSplit] = []
+    for block_name in observed_blocks:
+        test_index = city_df.index[city_df[block_column].astype(str) == block_name].to_numpy(dtype=int)
+        train_index = city_df.index[city_df[block_column].astype(str) != block_name].to_numpy(dtype=int)
+        if len(test_index) == 0 or len(train_index) == 0:
+            continue
+        splits.append(
+            SpatialBlockSplit(
+                held_out_block=block_name,
+                train_index=train_index,
+                test_index=test_index,
+            )
+        )
+
+    if not splits:
+        raise ValueError("Within-city spatial sensitivity could not form any non-empty block holdouts")
+    return splits
 
 
 def _format_within_city_model_short_label(model_name: str) -> str:
@@ -453,6 +592,151 @@ def plot_within_city_recall_contrast(contrast_df: pd.DataFrame, output_path: Pat
         metric_label="Recall At Top 10% Predicted Risk",
         title="Exploratory Within-City Recall vs Retained Cross-City Benchmark",
     )
+
+
+def _build_within_city_spatial_prediction_frame(
+    *,
+    test_df: pd.DataFrame,
+    probabilities: np.ndarray,
+    model_name: str,
+    held_out_block: str,
+    spatial_split_id: int,
+    split_seed: int,
+    block_column: str = DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_COLUMN,
+) -> pd.DataFrame:
+    prediction_df = test_df[
+        [
+            GROUP_COLUMN,
+            CITY_NAME_COLUMN,
+            "climate_group",
+            "cell_id",
+            "centroid_lon",
+            "centroid_lat",
+            block_column,
+            TARGET_COLUMN,
+        ]
+    ].copy()
+    prediction_df["model_name"] = model_name
+    prediction_df["held_out_block"] = held_out_block
+    prediction_df["spatial_split_id"] = int(spatial_split_id)
+    prediction_df["split_seed"] = int(split_seed)
+    prediction_df["predicted_probability"] = probabilities
+    return prediction_df
+
+
+def _load_within_city_summary_reference(default_within_city_summary_path: Path) -> pd.DataFrame:
+    summary_df = pd.read_csv(_resolve_project_path(default_within_city_summary_path)).copy()
+    required_columns = {
+        "city_id",
+        "city_name",
+        "climate_group",
+        "model_name",
+        "repeat_count",
+        "within_city_pr_auc_mean",
+        "within_city_recall_at_top_10pct_mean",
+    }
+    missing_columns = sorted(required_columns - set(summary_df.columns))
+    if missing_columns:
+        raise ValueError(
+            "Default within-city summary is missing required columns: " + ", ".join(missing_columns)
+        )
+    summary_df = summary_df.rename(
+        columns={
+            "repeat_count": "default_within_city_repeat_count",
+            "within_city_pr_auc_mean": "default_within_city_pr_auc_mean",
+            "within_city_recall_at_top_10pct_mean": "default_within_city_recall_at_top_10pct_mean",
+        }
+    )
+    keep_columns = [
+        "city_id",
+        "city_name",
+        "climate_group",
+        "model_name",
+        "default_within_city_repeat_count",
+        "default_within_city_pr_auc_mean",
+        "default_within_city_recall_at_top_10pct_mean",
+    ]
+    return summary_df[keep_columns].drop_duplicates(
+        subset=["city_id", "city_name", "climate_group", "model_name"]
+    )
+
+
+def plot_within_city_spatial_pr_auc_contrast(contrast_df: pd.DataFrame, output_path: Path) -> Path:
+    """Plot supplemental default-vs-spatial-vs-cross-city PR AUC for the selected cities."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    ordered = contrast_df.sort_values(["climate_group", "city_name"]).reset_index(drop=True)
+    if ordered.empty:
+        fig, ax = plt.subplots(figsize=(10, 3.5), constrained_layout=True)
+        ax.axis("off")
+        ax.text(
+            0.5,
+            0.5,
+            "No spatial sensitivity contrast rows were available.",
+            ha="center",
+            va="center",
+        )
+        fig.savefig(output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        return output_path
+
+    y_positions = np.arange(len(ordered))
+    fig, ax = plt.subplots(figsize=(10, 4.8), constrained_layout=True)
+    default_color = "#2f6c8f"
+    spatial_color = "#c7681f"
+    cross_color = "#555555"
+
+    for index, row in ordered.iterrows():
+        values = [
+            float(row["cross_city_pr_auc"]) if pd.notna(row["cross_city_pr_auc"]) else np.nan,
+            float(row["default_within_city_pr_auc_mean"])
+            if pd.notna(row["default_within_city_pr_auc_mean"])
+            else np.nan,
+            float(row["spatial_within_city_pr_auc_mean"])
+            if pd.notna(row["spatial_within_city_pr_auc_mean"])
+            else np.nan,
+        ]
+        finite_values = [value for value in values if np.isfinite(value)]
+        if len(finite_values) >= 2:
+            ax.plot(
+                [min(finite_values), max(finite_values)],
+                [index, index],
+                color="#c9c9c9",
+                linewidth=2,
+                alpha=0.9,
+                zorder=1,
+            )
+        if np.isfinite(values[0]):
+            ax.scatter(values[0], index, s=72, color="white", edgecolor=cross_color, zorder=3)
+        if np.isfinite(values[1]):
+            ax.scatter(values[1], index, s=72, color=default_color, marker="s", zorder=3)
+        if np.isfinite(values[2]):
+            ax.scatter(values[2], index, s=78, color=spatial_color, marker="D", zorder=4)
+
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(
+        [f"{row.city_name} ({row.climate_group})" for row in ordered.itertuples(index=False)],
+        fontsize=9,
+    )
+    ax.set_xlabel("PR AUC")
+    ax.set_title("Supplemental PR AUC Contrast: Default Within-City vs Spatial Blocks vs Cross-City")
+    ax.grid(axis="x", alpha=0.25)
+    legend_handles = [
+        matplotlib.lines.Line2D(
+            [0], [0], marker="o", linestyle="None", markerfacecolor="white", markeredgecolor=cross_color
+        ),
+        matplotlib.lines.Line2D([0], [0], marker="s", linestyle="None", color=default_color),
+        matplotlib.lines.Line2D([0], [0], marker="D", linestyle="None", color=spatial_color),
+    ]
+    ax.legend(
+        legend_handles,
+        ["Cross-city benchmark", "Default within-city random splits", "Spatial-block sensitivity"],
+        loc="lower right",
+        frameon=False,
+        fontsize=9,
+    )
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
 
 
 def generate_within_city_supplemental_artifacts(
@@ -804,6 +1088,384 @@ def generate_within_city_supplemental_artifacts(
         metadata_path=paths.metadata_path,
         figure_path=figure_path,
         recall_figure_path=recall_figure_path,
+    )
+
+
+def generate_within_city_spatial_sensitivity_artifacts(
+    *,
+    dataset_path: Path,
+    city_error_table_path: Path = DEFAULT_WITHIN_CITY_CITY_ERROR_TABLE_PATH,
+    default_within_city_summary_path: Path = DEFAULT_WITHIN_CITY_SPATIAL_DEFAULT_SUMMARY_PATH,
+    output_dir: Path = MODELING_SUPPLEMENTAL_WITHIN_CITY_SPATIAL_OUTPUTS,
+    figures_dir: Path = MODELING_SUPPLEMENTAL_WITHIN_CITY_SPATIAL_FIGURES,
+    feature_columns: Sequence[str] = DEFAULT_FEATURE_COLUMNS,
+    sample_rows_per_city: int = DEFAULT_WITHIN_CITY_SAMPLE_ROWS_PER_CITY,
+    random_state: int = DEFAULT_RANDOM_STATE,
+    logistic_tuning_preset: str = DEFAULT_WITHIN_CITY_SPATIAL_LOGISTIC_PRESET,
+    logistic_reference_run_dir: Path = DEFAULT_WITHIN_CITY_LOGISTIC_REFERENCE_RUN_DIR,
+    grid_search_n_jobs: int = 1,
+) -> WithinCitySpatialSensitivityResult:
+    """Run a bounded deterministic spatial-block within-city sensitivity for the selected cities."""
+    start = perf_counter()
+    paths = resolve_supplemental_paths(output_dir=output_dir, figures_dir=figures_dir)
+
+    city_selection_df = select_representative_within_city_cities(
+        city_error_table_path=city_error_table_path,
+    )
+    selected_city_ids = city_selection_df[GROUP_COLUMN].astype(int).tolist()
+    sampled_rows_df, sample_diagnostics_df = load_sampled_modeling_rows_with_diagnostics(
+        dataset_path=_resolve_project_path(dataset_path),
+        feature_columns=feature_columns,
+        city_ids=selected_city_ids,
+        sample_rows_per_city=int(sample_rows_per_city),
+        random_state=int(random_state),
+    )
+    sampled_rows_df = drop_missing_target_rows(sampled_rows_df)
+    LOGGER.info(
+        "Running supplemental within-city spatial sensitivity for %s cities with model=%s",
+        len(city_selection_df),
+        DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+    )
+
+    prediction_frames: list[pd.DataFrame] = []
+    split_metric_rows: list[dict[str, Any]] = []
+    best_param_rows: list[dict[str, Any]] = []
+
+    for city_row in city_selection_df.itertuples(index=False):
+        city_df = sampled_rows_df.loc[sampled_rows_df[GROUP_COLUMN] == int(city_row.city_id)].copy().reset_index(drop=True)
+        if city_df.empty:
+            raise ValueError(f"No within-city rows were loaded for city_id={city_row.city_id}")
+        city_df = assign_within_city_spatial_blocks(city_df)
+        spatial_splits = make_within_city_spatial_block_splits(city_df)
+        valid_city_split_count = 0
+
+        for spatial_split_id, split in enumerate(spatial_splits, start=1):
+            train_df = city_df.iloc[split.train_index].reset_index(drop=True)
+            test_df = city_df.iloc[split.test_index].reset_index(drop=True)
+            if np.unique(train_df[TARGET_COLUMN].to_numpy(dtype="int8")).size < 2:
+                LOGGER.warning(
+                    "Skipping spatial sensitivity split with single-class training rows: city=%s held_out_block=%s",
+                    city_row.city_name,
+                    split.held_out_block,
+                )
+                continue
+
+            split_seed = int(random_state + spatial_split_id - 1)
+            LOGGER.info(
+                "Within-city spatial sensitivity fit: city=%s held_out_block=%s model=%s",
+                city_row.city_name,
+                split.held_out_block,
+                DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+            )
+            try:
+                estimator, best_score, best_params, effective_inner_splits = _fit_within_city_model(
+                    model_name=DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+                    feature_columns=feature_columns,
+                    train_df=train_df,
+                    random_state=split_seed,
+                    tuning_preset=logistic_tuning_preset,
+                    grid_search_n_jobs=int(grid_search_n_jobs),
+                )
+            except ValueError as exc:
+                LOGGER.warning(
+                    "Skipping spatial sensitivity split after bounded logistic fit failure: city=%s held_out_block=%s reason=%s",
+                    city_row.city_name,
+                    split.held_out_block,
+                    exc,
+                )
+                continue
+
+            probabilities = estimator.predict_proba(test_df[list(feature_columns)])[:, 1]
+            prediction_df = _build_within_city_spatial_prediction_frame(
+                test_df=test_df,
+                probabilities=probabilities,
+                model_name=DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+                held_out_block=split.held_out_block,
+                spatial_split_id=spatial_split_id,
+                split_seed=split_seed,
+            )
+            prediction_frames.append(prediction_df)
+
+            metrics = compute_prediction_metrics(
+                y_true=prediction_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                y_score=prediction_df["predicted_probability"].to_numpy(dtype="float64"),
+                top_fraction=DEFAULT_TOP_FRACTION,
+            )
+            split_metric_rows.append(
+                {
+                    "city_id": int(city_row.city_id),
+                    "city_name": str(city_row.city_name),
+                    "climate_group": str(city_row.climate_group),
+                    "model_name": DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+                    "held_out_block": split.held_out_block,
+                    "spatial_split_id": int(spatial_split_id),
+                    "split_seed": split_seed,
+                    "tuning_preset": logistic_tuning_preset,
+                    "sample_rows_per_city_cap": int(sample_rows_per_city),
+                    "effective_city_row_count": int(len(city_df)),
+                    "observed_spatial_block_count": int(city_df[DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_COLUMN].nunique()),
+                    "train_row_count": int(len(train_df)),
+                    "test_row_count": int(metrics["row_count"]),
+                    "test_positive_count": int(metrics["positive_count"]),
+                    "test_prevalence": float(metrics["prevalence"]),
+                    "pr_auc": float(metrics["pr_auc"]),
+                    "recall_at_top_10pct": float(metrics["recall_at_top_10pct"]),
+                    "best_inner_cv_average_precision": float(best_score),
+                    "effective_inner_cv_splits": int(effective_inner_splits),
+                    "spatial_block_rule": DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_RULE,
+                }
+            )
+            best_param_rows.append(
+                {
+                    "city_id": int(city_row.city_id),
+                    "city_name": str(city_row.city_name),
+                    "climate_group": str(city_row.climate_group),
+                    "model_name": DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+                    "held_out_block": split.held_out_block,
+                    "spatial_split_id": int(spatial_split_id),
+                    "split_seed": split_seed,
+                    "tuning_preset": logistic_tuning_preset,
+                    "best_params_json": json.dumps(best_params, sort_keys=True),
+                    "best_inner_cv_average_precision": float(best_score),
+                }
+            )
+            valid_city_split_count += 1
+
+        if valid_city_split_count == 0:
+            raise ValueError(
+                f"No valid within-city spatial-block evaluations were produced for city_id={city_row.city_id}"
+            )
+
+    predictions_df = pd.concat(prediction_frames, ignore_index=True).sort_values(
+        ["city_id", "model_name", "spatial_split_id", "cell_id"]
+    )
+    split_metrics_df = pd.DataFrame(split_metric_rows).sort_values(
+        ["city_id", "model_name", "spatial_split_id"]
+    ).reset_index(drop=True)
+    best_params_df = pd.DataFrame(best_param_rows).sort_values(
+        ["city_id", "model_name", "spatial_split_id"]
+    ).reset_index(drop=True)
+
+    summary_df = (
+        split_metrics_df.groupby(["city_id", "city_name", "climate_group", "model_name"], dropna=False)
+        .agg(
+            spatial_block_eval_count=("spatial_split_id", "count"),
+            sample_rows_per_city_cap=("sample_rows_per_city_cap", "first"),
+            effective_city_row_count=("effective_city_row_count", "first"),
+            observed_spatial_block_count=("observed_spatial_block_count", "first"),
+            spatial_within_city_pr_auc_mean=("pr_auc", "mean"),
+            spatial_within_city_pr_auc_std=("pr_auc", "std"),
+            spatial_within_city_recall_at_top_10pct_mean=("recall_at_top_10pct", "mean"),
+            spatial_within_city_recall_at_top_10pct_std=("recall_at_top_10pct", "std"),
+            spatial_best_inner_cv_average_precision_mean=("best_inner_cv_average_precision", "mean"),
+        )
+        .reset_index()
+        .sort_values(["climate_group", "city_name", "model_name"])
+        .reset_index(drop=True)
+    )
+    for column_name in ["spatial_within_city_pr_auc_std", "spatial_within_city_recall_at_top_10pct_std"]:
+        summary_df[column_name] = summary_df[column_name].fillna(0.0)
+
+    default_within_city_df = _load_within_city_summary_reference(default_within_city_summary_path)
+    default_within_city_df = default_within_city_df.loc[
+        default_within_city_df["model_name"] == DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME
+    ].reset_index(drop=True)
+    cross_city_reference_df = _load_logistic_cross_city_reference_metrics(
+        logistic_run_dir=logistic_reference_run_dir,
+    )
+    contrast_df = summary_df.merge(
+        default_within_city_df,
+        on=["city_id", "city_name", "climate_group", "model_name"],
+        how="left",
+        validate="one_to_one",
+    ).merge(
+        cross_city_reference_df,
+        on=["city_id", "city_name", "climate_group", "model_name"],
+        how="left",
+        validate="one_to_one",
+    )
+    contrast_df["spatial_minus_default_pr_auc_gap"] = (
+        contrast_df["spatial_within_city_pr_auc_mean"] - contrast_df["default_within_city_pr_auc_mean"]
+    )
+    contrast_df["spatial_minus_cross_city_pr_auc_gap"] = (
+        contrast_df["spatial_within_city_pr_auc_mean"] - contrast_df["cross_city_pr_auc"]
+    )
+    contrast_df["spatial_minus_default_recall_gap"] = (
+        contrast_df["spatial_within_city_recall_at_top_10pct_mean"]
+        - contrast_df["default_within_city_recall_at_top_10pct_mean"]
+    )
+    contrast_df["spatial_minus_cross_city_recall_gap"] = (
+        contrast_df["spatial_within_city_recall_at_top_10pct_mean"]
+        - contrast_df["cross_city_recall_at_top_10pct"]
+    )
+    contrast_df = contrast_df.sort_values(["climate_group", "city_name", "model_name"]).reset_index(drop=True)
+
+    calibration_frames: list[pd.DataFrame] = []
+    for (city_id, city_name, climate_group, model_name), group_df in predictions_df.groupby(
+        ["city_id", "city_name", "climate_group", "model_name"],
+        sort=True,
+        dropna=False,
+    ):
+        calibration_df = build_calibration_curve_table(
+            predictions_df=group_df,
+            model_name=str(model_name),
+            scope_name="within_city_spatial_city_model",
+            scope_value=f"{city_name}:{model_name}",
+        )
+        calibration_df["city_id"] = int(city_id)
+        calibration_df["city_name"] = str(city_name)
+        calibration_df["climate_group"] = str(climate_group)
+        calibration_frames.append(calibration_df)
+    calibration_curve_df = pd.concat(calibration_frames, ignore_index=True) if calibration_frames else pd.DataFrame()
+
+    city_selection_path = paths.tables_dir / "within_city_spatial_selected_cities.csv"
+    sample_diagnostics_path = paths.tables_dir / "within_city_spatial_sampling_diagnostics.csv"
+    split_metrics_path = paths.tables_dir / "within_city_spatial_metrics.csv"
+    summary_table_path = paths.tables_dir / "within_city_spatial_summary.csv"
+    contrast_table_path = paths.tables_dir / "within_city_spatial_contrast.csv"
+    best_params_path = paths.tables_dir / "within_city_spatial_best_params.csv"
+    predictions_path = paths.output_dir / "within_city_spatial_predictions.parquet"
+    calibration_curve_path = paths.tables_dir / "within_city_spatial_calibration_curve.csv"
+    figure_path = paths.figures_dir / "within_city_spatial_pr_auc_contrast.png"
+    summary_markdown_path = paths.output_dir / "within_city_spatial_sensitivity_summary.md"
+
+    city_selection_df.to_csv(city_selection_path, index=False)
+    sample_diagnostics_df.to_csv(sample_diagnostics_path, index=False)
+    split_metrics_df.to_csv(split_metrics_path, index=False)
+    summary_df.to_csv(summary_table_path, index=False)
+    contrast_df.to_csv(contrast_table_path, index=False)
+    best_params_df.to_csv(best_params_path, index=False)
+    predictions_df.to_parquet(predictions_path, index=False)
+    calibration_curve_df.to_csv(calibration_curve_path, index=False)
+    plot_within_city_spatial_pr_auc_contrast(contrast_df=contrast_df, output_path=figure_path)
+
+    average_gap_row = {
+        "mean_spatial_minus_default_pr_auc_gap": float(contrast_df["spatial_minus_default_pr_auc_gap"].mean()),
+        "mean_spatial_minus_cross_city_pr_auc_gap": float(contrast_df["spatial_minus_cross_city_pr_auc_gap"].mean()),
+        "mean_spatial_minus_default_recall_gap": float(contrast_df["spatial_minus_default_recall_gap"].mean()),
+        "mean_spatial_minus_cross_city_recall_gap": float(contrast_df["spatial_minus_cross_city_recall_gap"].mean()),
+    }
+    average_gaps_df = pd.DataFrame([average_gap_row])
+
+    markdown_lines = [
+        "# Within-City Spatial-Block Sensitivity",
+        "",
+        "This layer is a harder within-city sensitivity than the default random-split supplement because each evaluation holds out one deterministic centroid-based spatial block.",
+        "It remains supplemental and exploratory, and it is not equivalent to the canonical cross-city city-held-out benchmark or to transfer into unseen cities.",
+        "The main project narrative remains the canonical cross-city city-held-out benchmark.",
+        "This pass intentionally keeps model scope logistic SAGA only so the spatial sensitivity stays bounded and workstation-friendly.",
+        "",
+        "Deterministic blocking rule:",
+        f"- {DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_RULE}",
+        "",
+        "## Selected Cities",
+        "",
+        _dataframe_to_markdown(
+            city_selection_df[
+                [
+                    "city_name",
+                    "climate_group",
+                    "pr_auc_logistic",
+                    "climate_group_logistic_pr_auc_median",
+                    "abs_diff_to_group_median",
+                ]
+            ],
+            decimal_columns={
+                "pr_auc_logistic",
+                "climate_group_logistic_pr_auc_median",
+                "abs_diff_to_group_median",
+            },
+        ),
+        "",
+        "## Default vs Spatial vs Cross-City Contrast",
+        "",
+        _dataframe_to_markdown(
+            contrast_df[
+                [
+                    "city_name",
+                    "climate_group",
+                    "default_within_city_pr_auc_mean",
+                    "spatial_within_city_pr_auc_mean",
+                    "cross_city_pr_auc",
+                    "spatial_minus_default_pr_auc_gap",
+                    "spatial_minus_cross_city_pr_auc_gap",
+                    "default_within_city_recall_at_top_10pct_mean",
+                    "spatial_within_city_recall_at_top_10pct_mean",
+                    "cross_city_recall_at_top_10pct",
+                    "spatial_minus_default_recall_gap",
+                    "spatial_minus_cross_city_recall_gap",
+                ]
+            ],
+            decimal_columns={
+                "default_within_city_pr_auc_mean",
+                "spatial_within_city_pr_auc_mean",
+                "cross_city_pr_auc",
+                "spatial_minus_default_pr_auc_gap",
+                "spatial_minus_cross_city_pr_auc_gap",
+                "default_within_city_recall_at_top_10pct_mean",
+                "spatial_within_city_recall_at_top_10pct_mean",
+                "cross_city_recall_at_top_10pct",
+                "spatial_minus_default_recall_gap",
+                "spatial_minus_cross_city_recall_gap",
+            },
+        ),
+        "",
+        "## Average Gap Across Cities",
+        "",
+        _dataframe_to_markdown(
+            average_gaps_df,
+            decimal_columns=set(average_gap_row),
+        ),
+        "",
+        f"Figure: `{figure_path}`",
+        "",
+    ]
+    summary_markdown_path.write_text("\n".join(markdown_lines), encoding="utf-8")
+
+    _write_json(
+        paths.metadata_path,
+        {
+            "dataset_path": str(_resolve_project_path(dataset_path)),
+            "city_error_table_path": str(_resolve_project_path(city_error_table_path)),
+            "default_within_city_summary_path": str(_resolve_project_path(default_within_city_summary_path)),
+            "selected_feature_columns": list(feature_columns),
+            "sample_rows_per_city": int(sample_rows_per_city),
+            "random_state": int(random_state),
+            "model_name": DEFAULT_WITHIN_CITY_SPATIAL_MODEL_NAME,
+            "logistic_tuning_preset": logistic_tuning_preset,
+            "spatial_block_rule": DEFAULT_WITHIN_CITY_SPATIAL_BLOCK_RULE,
+            "logistic_reference_run_dir": str(_resolve_project_path(logistic_reference_run_dir)),
+            "grid_search_n_jobs": int(grid_search_n_jobs),
+            "timing_seconds": {
+                "total_wall_clock": float(perf_counter() - start),
+            },
+            "output_files": {
+                "summary_markdown": str(summary_markdown_path),
+                "city_selection": str(city_selection_path),
+                "sampling_diagnostics": str(sample_diagnostics_path),
+                "metrics": str(split_metrics_path),
+                "summary_table": str(summary_table_path),
+                "contrast_table": str(contrast_table_path),
+                "best_params": str(best_params_path),
+                "predictions": str(predictions_path),
+                "calibration_curve": str(calibration_curve_path),
+                "figure": str(figure_path),
+            },
+        },
+    )
+
+    return WithinCitySpatialSensitivityResult(
+        summary_markdown_path=summary_markdown_path,
+        city_selection_path=city_selection_path,
+        sample_diagnostics_path=sample_diagnostics_path,
+        split_metrics_path=split_metrics_path,
+        summary_table_path=summary_table_path,
+        contrast_table_path=contrast_table_path,
+        best_params_path=best_params_path,
+        predictions_path=predictions_path,
+        calibration_curve_path=calibration_curve_path,
+        metadata_path=paths.metadata_path,
+        figure_path=figure_path,
     )
 
 

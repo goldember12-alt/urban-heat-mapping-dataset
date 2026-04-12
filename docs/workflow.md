@@ -246,8 +246,9 @@ Implemented now:
 - Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, calibration-curve tables, city-level RF-vs-logistic error summaries, and benchmark comparison figures
 - Held-out prediction tables include `city_id`, `city_name`, `climate_group`, `cell_id`, `centroid_lon`, and `centroid_lat` so later map export code can build on the saved outputs directly
 - A bounded supplemental within-city layer under `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` that is explicitly labeled exploratory/easier and presented only as a contrast to the canonical held-out-city benchmark
+- A separate supplemental within-city spatial sensitivity layer under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/` that keeps the same `Reno` / `Charlotte` / `Detroit` trio but uses deterministic centroid quadrants as a harder logistic-only within-city sensitivity rather than as a replacement for the canonical held-out-city benchmark
 - A bounded retained-run interpretation layer under `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` that refits saved outer-fold winners to export primary logistic coefficients, logistic held-out permutation cross-check tables, primary random-forest held-out permutation importance, and secondary/debug RF impurity appendix tables
-- `src.run_modeling_supplemental` to regenerate both supplemental roots from retained artifacts plus the canonical parquet dataset
+- `src.run_modeling_supplemental` to regenerate the supplemental roots from retained artifacts plus the canonical parquet dataset, with `--run-within-city-spatial` reserved for the separate spatial-block sensitivity path
 
 Planned next:
 

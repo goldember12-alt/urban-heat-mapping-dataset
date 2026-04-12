@@ -53,7 +53,7 @@ Implemented now:
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
-- Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast plus retained-run interpretation exports that keep logistic coefficients and RF held-out permutation importance primary while adding appendix-style cross-check tables
+- Bounded supplemental modeling artifacts with a 3-city within-city exploratory contrast, a separate logistic-only spatial-block within-city sensitivity, and retained-run interpretation exports that keep logistic coefficients and RF held-out permutation importance primary while adding appendix-style cross-check tables
 
 Verified status:
 
@@ -101,7 +101,7 @@ Planned next, not yet implemented as full production code:
 ### 5. Modeling And Evaluation
 
 - Implemented now: first-pass baselines plus grouped logistic SAGA and random forest runners
-- Next stage: richer evaluation figures plus a bounded supplemental within-city / feature-importance layer, then final-train packaging
+- Next stage: richer evaluation figures plus final-train packaging, while the bounded supplemental within-city, spatial-sensitivity, and feature-importance layer remains appendix-style support for the canonical cross-city benchmark
 
 ## Repo Layout
 
@@ -185,6 +185,7 @@ These runners default to `data_processed/final/final_dataset.parquet` as the can
 `src.run_modeling_supplemental` builds the bounded supplemental layer under `outputs/modeling/supplemental/` and `figures/modeling/supplemental/`. It keeps the city-held-out cross-city benchmark as the canonical story while adding:
 
 - a `Reno` / `Charlotte` / `Detroit` within-city exploratory contrast with repeated stratified `80/20` splits
+- an opt-in `--run-within-city-spatial` logistic-only spatial-block within-city sensitivity under `outputs/modeling/supplemental/within_city_spatial/` and `figures/modeling/supplemental/within_city_spatial/`, using deterministic centroid quadrants as a harder supplemental contrast rather than a replacement for held-out-city transfer
 - retained-run logistic coefficient exports from the sampled `20,000`-row linear reference, with held-out permutation importance added only as a cross-check
 - retained-run random-forest held-out permutation importance from the retained `frontier` reference, with impurity importance exported only as secondary/debug appendix output
 
