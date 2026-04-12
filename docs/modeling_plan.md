@@ -306,9 +306,9 @@ Retained reference runs to use:
 Current artifact constraint:
 
 - the retained run directories save metrics, predictions, calibration tables, and `best_params_by_fold.csv`, but they do not currently save fitted estimator objects or exported feature-importance tables
-- because of that, a small follow-up implementation is needed even though no new benchmark search is recommended
+- because of that, the current implementation uses a bounded refit/export path instead of trying to serialize large fitted estimator objects from the retained benchmark runs
 
-Smallest useful follow-up run set:
+Current bounded implementation path:
 
 - do not rerun inner search grids for interpretation
 - instead, add an interpretation-export mode that reads the retained `best_params_by_fold.csv`, refits only the final outer-fold estimator for each fold, and writes interpretation artifacts

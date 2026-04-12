@@ -751,20 +751,16 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Preserve the current cross-city logistic SAGA versus random-forest reporting story as the canonical benchmark layer, and move next to the bounded supplemental analysis plan without scheduling more routine benchmark expansion.
+Preserve the current cross-city logistic SAGA versus random-forest reporting story as the canonical benchmark layer, and use the new supplemental artifacts for interpretation/writeup without reopening routine benchmark expansion.
 
 Recommended order:
 
 - Keep the retained cross-city reference runs fixed:
   - logistic sampled `full` at `5000`, `10000`, and `20000` rows per city
   - RF `smoke` and RF `frontier` at `5000` rows per city
-- Implement the within-city exploratory supplement for `Reno`, `Charlotte`, and `Detroit`, using `20,000` rows per city, `3` repeated stratified `80/20` splits, and logistic SAGA plus RF `smoke` only.
-- Implement the feature-importance supplement by refitting final outer-fold estimators from the retained logistic `20,000` sampled `full` run and retained RF `frontier` run without rerunning inner tuning.
-- Write the new supplemental artifacts under:
-  - `outputs/modeling/supplemental/within_city/`
-  - `outputs/modeling/supplemental/feature_importance/`
-  - `figures/modeling/supplemental/within_city/`
-  - `figures/modeling/supplemental/feature_importance/`
+- Use `outputs/modeling/supplemental/within_city/` and `figures/modeling/supplemental/within_city/` as the exploratory contrast source for the easier within-city-versus-cross-city narrative.
+- Use `outputs/modeling/supplemental/feature_importance/` and `figures/modeling/supplemental/feature_importance/` as the retained-run interpretation source for non-causal model-reliance discussion.
+- If another reporting refresh is needed later, rerun `src.run_modeling_reporting` first and then rerun `src.run_modeling_supplemental` so the nearest-median city selector and retained reference joins stay synchronized.
 - Keep all writeup language explicit that within-city results are exploratory/easier, while the held-out-city results remain the main benchmark story.
 
 
@@ -814,6 +810,11 @@ Recommended order:
 - `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
 - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
 - `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
+- `outputs/modeling/supplemental/`
+- `outputs/modeling/supplemental/within_city/`
+- `outputs/modeling/supplemental/within_city/tables/`
+- `outputs/modeling/supplemental/feature_importance/`
+- `outputs/modeling/supplemental/feature_importance/tables/`
 - `outputs/storage/`
 - `figures/data_processing/<city_stem>/`
 - `figures/modeling/`
@@ -821,6 +822,10 @@ Recommended order:
 - `figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png`
 - `figures/modeling/reporting/cross_city_benchmark_report_runtime_vs_pr_auc.png`
 - `figures/modeling/reporting/cross_city_benchmark_report_city_metric_deltas.png`
+- `figures/modeling/supplemental/within_city/`
+- `figures/modeling/supplemental/within_city/within_city_pr_auc_contrast.png`
+- `figures/modeling/supplemental/feature_importance/`
+- `figures/modeling/supplemental/feature_importance/feature_importance_ranked_summary.png`
 - `data_raw/cache/`
 - `data_raw/dem/<city_slug>/`
 - `data_raw/nlcd/<city_slug>/`
@@ -844,8 +849,7 @@ Recommended order:
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
 - Held-out-city map-oriented exports are still not implemented; `figures/modeling/reporting/` now covers benchmark and city-delta figures, but true hotspot maps, predicted hotspot maps, and residual/error maps are still pending.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
-- Within-city exploratory comparisons and feature-importance summaries are still optional follow-on additions; they may strengthen the final presentation, but they are not yet the main repo direction.
-- The supplemental within-city and feature-importance layer is now planned concretely in `docs/modeling_plan.md`, but it is not implemented yet.
+- The supplemental within-city and feature-importance layer is now implemented, but optional follow-on pieces are still open: no within-city baseline, no recall-gap companion figure, no logistic permutation-importance cross-check, and no RF impurity appendix/debug export.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
@@ -861,6 +865,45 @@ Recommended order:
 - Held-out-city map deliverables, residual/error maps, and the application-to-new-cities workflow are still planned rather than implemented.
 
 ## Checkpoint Log
+
+### 2026-04-11 - Checkpoint: Supplemental Modeling Layer Implemented
+
+- Date / checkpoint:
+  - 2026-04-11 bounded supplemental modeling implementation and artifact-generation pass.
+- Change made:
+  - Added `src.modeling_supplemental` plus `src.run_modeling_supplemental`.
+  - Implemented the nearest-median within-city city selector from `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`, which currently resolves to `Reno`, `Charlotte`, and `Detroit`.
+  - Implemented the bounded within-city exploratory runner with `3` repeated stratified `80/20` splits, `20,000` rows-per-city cap, logistic SAGA, and RF `smoke` only.
+  - Implemented the retained-run interpretation export path that reads `best_params_by_fold.csv`, refits only the saved outer-fold winners, exports logistic post-preprocessing feature names plus coefficient summaries, and exports RF held-out permutation importance scored by average-precision drop.
+  - Materialized the first real supplemental outputs under:
+    - `outputs/modeling/supplemental/within_city/`
+    - `outputs/modeling/supplemental/feature_importance/`
+    - `figures/modeling/supplemental/within_city/`
+    - `figures/modeling/supplemental/feature_importance/`
+  - Updated `README.md`, `docs/workflow.md`, `docs/data_dictionary.md`, `docs/modeling_plan.md`, and `docs/chat_handoff.md` so the supplemental layer is documented as implemented while the cross-city benchmark remains canonical.
+- Files touched:
+  - `src/config.py`
+  - `src/modeling_supplemental.py`
+  - `src/run_modeling_supplemental.py`
+  - `tests/test_modeling_supplemental.py`
+  - `README.md`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/modeling_plan.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-feature-importance --grid-search-n-jobs 1 --model-n-jobs 1`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_supplemental --skip-within-city --permutation-n-jobs 1 --rf-permutation-repeats 10`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_supplemental.py src\run_modeling_supplemental.py tests\test_modeling_supplemental.py`
+  - Result: success
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_runner.py tests\test_modeling_reporting.py tests\test_modeling_supplemental.py -q`
+  - Result: `41 passed`
+- Manual verification status:
+  - Both supplemental CLI passes completed successfully on the real retained artifacts and wrote the expected markdown, CSV, parquet, JSON, and PNG outputs.
+  - The retained-run refit parity tables match the original fold-level PR AUC values to floating-point precision for both logistic and RF, so the interpretation layer is reusing the saved winners correctly.
+- Immediate Next Step:
+  - Use the new supplemental outputs in later writeup/figure polishing while keeping the retained city-held-out cross-city benchmark as the headline methodology and main comparison frame.
 
 ### 2026-04-11 - Checkpoint: Supplemental Analysis Planning Pass
 
