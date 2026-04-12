@@ -222,6 +222,7 @@ Key outputs:
 - `outputs/modeling/run_registry.jsonl`
 - `outputs/modeling/tuning_history.csv`
 - `outputs/modeling/tuning_history_annotations.csv`
+- `outputs/modeling/reporting/*.md`
 
 Main entrypoints:
 

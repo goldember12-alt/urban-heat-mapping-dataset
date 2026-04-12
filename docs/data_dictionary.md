@@ -359,5 +359,6 @@ Honest status note:
 - `outputs/data_processing/city_summaries/<city_stem>/tables/` stores supporting CSV tables for that city summary
 - `outputs/data_processing/batch_reports/data_processing_report_summary.csv` stores the latest batch run status across requested cities
 - `outputs/modeling/` stores the current first-pass modeling metrics tables, held-out predictions, calibration tables, and run metadata
+- `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
 - `outputs/storage/` continues to hold storage-management and cache-audit artifacts
 - `figures/data_processing/reference/` stores shared inspection figures such as the city-point map that are not tied to one city summary

@@ -208,12 +208,34 @@ Stopping guidance:
 - stop increasing RF sample size if runtime grows faster than practical performance gains
 - use `tuning_history.csv` plus `tuning_history_annotations.csv` to record those stop / escalate decisions explicitly for later writeup
 
+Reporting-oriented action plan:
+
+- keep the main modeling line focused first on the existing leakage-safe logistic SAGA and random-forest comparison, because that is the canonical project question
+- finish the retained logistic sampled benchmark ladder at `5000`, `10000`, and `20000` rows per city as the linear reference path for reporting
+- treat RF `smoke` and RF `frontier` at `5000` rows per city as the main nonlinear comparison checkpoints on this workstation
+- escalate to RF `full` only if the pooled metrics, city-level pattern, and tuning-history notes still justify paying for an expensive confirmation run
+- refresh `run_registry.jsonl`, `tuning_history.csv`, and `tuning_history_annotations.csv` after each retained decision run so the report can explain why the RF search was stopped or expanded
+- summarize the current logistic versus RF story using pooled metrics, mean city metrics, runtime, and per-city wins/losses rather than a single headline number
+- add the next modeling deliverables after that comparison story is stable:
+  - pooled comparison tables for logistic versus RF
+  - city-level error analysis by held-out city and climate group
+  - figures under `figures/modeling/` for PR AUC, recall at top 10%, and calibration
+
+Supplemental additions that could strengthen the final project without replacing the main direction:
+
+- a within-city exploratory comparison on one or a few representative cities using the same feature contract, explicitly labeled as easier and non-canonical
+- city-level hotspot / prediction / residual maps for a small representative set of cities
+- coefficient review for logistic SAGA plus impurity- or permutation-based feature importance for RF, framed as first-pass interpretation rather than causal attribution
+- a short gap-style comparison between within-city and held-out-city performance to show why transferability is the real challenge
+- brief city-family error summaries, such as hot-arid versus hot-humid versus mild-cool differences, if the held-out predictions show clear structure
+
 Recommended implementation order:
 
-1. Run the new first-pass modeling CLIs on the canonical parquet and review the outputs under `outputs/modeling/`
+1. Continue the retained logistic SAGA versus random-forest comparison until the stop / escalate decisions are documented well enough for reporting
 2. Add held-out-city figure generation under `figures/modeling/`
-3. Add richer calibration/reporting views and residual-map exports
-4. Add final-train-on-all-cities packaging for transfer to new cities
+3. Add richer calibration/reporting views plus city-level error summaries and maps
+4. Add optional supplemental comparisons such as within-city exploratory runs only after the main cross-city reporting story is stable
+5. Add final-train-on-all-cities packaging for transfer to new cities
 
 Run logging note:
 

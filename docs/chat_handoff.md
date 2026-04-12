@@ -44,6 +44,7 @@ Implemented in code:
 - Final-dataset assembly now writes parquet and CSV via atomic temp-file replacement and emits `data_processed/final/final_dataset_artifact_summary.json` with row count, column count, per-city row counts, artifact paths/sizes, and an explicit shared-dataframe provenance flag.
 - The regenerated `data_processed/final/final_dataset.csv` has now been re-audited against the canonical parquet and matches on total rows, all 14 column names, per-city row counts, hotspot counts, and key null-count checks.
 - Meaningful modeling CLI runs now append structured records to `outputs/modeling/run_registry.jsonl`, including failed runs, exact commands, dataset format, fold selection, summary metrics when available, and wall-clock time when available. Module-style `-m ...` invocation is now preserved in new registry entries.
+- `outputs/modeling/reporting/` now exists as the repo-local home for broader markdown modeling summaries that synthesize retained run artifacts into report-ready comparison notes without changing the canonical workflow/methodology docs.
 - README.md is now the canonical definition of `smoke` versus `full`, and the repo docs now point future methodology/results language back to that single definition.
 - README.md and `docs/modeling_plan.md` now also include an explicit manual parquet-inspection pattern for scratch scripts, clarifying `pd.read_parquet(...)` usage, approved first-pass feature selection, `city_id` filtering instead of parquet row slicing, and the requirement to treat random cell-level train/test splits as exploratory only rather than canonical project evaluation.
 - Logistic SAGA now keeps the retained sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear baseline path, while random forest now follows an explicit staged workflow in code and docs: `smoke` for the cheap nonlinear comparison, `frontier` for a bounded targeted follow-up search, and `full` only for expensive confirmation if the earlier RF stages justify it.
@@ -701,16 +702,19 @@ Explicit blocker statement:
 
 ## Immediate Next Step
 
-Run the cheap RF Stage A comparison first, not the expensive RF `full` search.
+Keep the main repo direction on the cross-city logistic SAGA versus random-forest reporting story until the stop / escalate decisions are well documented.
 
 Recommended order:
 
-- Start with RF `smoke` on all folds at `5000` rows per city:
-  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset smoke --grid-search-n-jobs 1 --model-n-jobs 1 --run-label nonlinear-check`
-- Only if that retained RF smoke checkpoint looks materially better than the sampled logistic baseline should the next step be RF `frontier`:
-  - `.\.venv\Scripts\python.exe -m src.run_random_forest --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset frontier --grid-search-n-jobs 1 --model-n-jobs 1 --run-label frontier-check`
-- Reserve RF `full` for expensive confirmation only if the `frontier` run still looks worth the extra cost.
-- When a retained RF checkpoint is completed, refresh `tuning_history.csv` and mark the retained decision run as `benchmark` in `tuning_history_annotations.csv`.
+- Keep the retained logistic sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the main linear baseline path for reporting.
+- Use the completed RF `smoke` and RF `frontier` runs at `5000` rows per city as the current nonlinear comparison checkpoints.
+- Review the logistic and RF runs together using pooled PR AUC, mean city PR AUC, recall at top 10%, runtime, and city-level wins/losses before deciding whether RF deserves any more search.
+- Reserve RF `full` for expensive confirmation only if the documented comparison still suggests that the marginal RF gains are important enough to justify day-scale compute.
+- Refresh `tuning_history.csv` and mark retained decision runs in `tuning_history_annotations.csv` so the final report can explain clearly why the RF search stopped or escalated.
+- Treat the following as supplemental additions for the final project, not the repo's primary next direction:
+  - within-city exploratory comparisons on a few representative cities
+  - city-level error analysis and representative hotspot / residual maps
+  - coefficient review for logistic plus first-pass feature-importance summaries for RF
 
 
 
@@ -752,6 +756,8 @@ Recommended order:
 - `outputs/modeling/random_forest/<run_dir>/sample_diagnostics_by_city.csv` for sampled tuned runs
 - `outputs/modeling/random_forest/parquet_verify/`
 - `outputs/modeling/random_forest/pb_smk_f01/`
+- `outputs/modeling/reporting/`
+- `outputs/modeling/reporting/logistic_rf_comparison_summary_2026-04-11.md`
 - `outputs/storage/`
 - `figures/data_processing/<city_stem>/`
 - `figures/modeling/`
@@ -778,6 +784,7 @@ Recommended order:
 - A live RF `full` sampled `5000` all-fold run on 2026-04-11 reinforced that the current `81`-candidate `full` search is too expensive to be the default RF iteration path on this workstation; the observed ETA implied roughly day-scale wall clock.
 - Held-out-city map exports and figure generation under `figures/modeling/` are still not implemented.
 - The current sklearn-based first-pass runners now have sampled diagnostics plus outer-fold resume support, but meaningful benchmark work on this workstation still needs disciplined sampled caps and fold batching rather than full-row plans.
+- Within-city exploratory comparisons, city-level error-analysis exports, and feature-importance summaries are still optional follow-on additions; they may strengthen the final presentation, but they are not yet the main repo direction.
 - Preflight summary CSVs should be regenerated before using them as authoritative global readiness counts, because the current disk state now extends beyond the older Phoenix-only checkpoint.
 - Broader cross-climate validation beyond the first four Southwestern cities is still pending.
 - The new cache cleanup utility has not yet been run in live delete mode; only dry-run audit/plan manifests were generated on 2026-03-19.
