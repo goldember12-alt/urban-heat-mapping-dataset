@@ -16,6 +16,7 @@ from src.modeling_supplemental import (
     DEFAULT_WITHIN_CITY_SPLIT_SEEDS,
     DEFAULT_WITHIN_CITY_SPATIAL_DEFAULT_SUMMARY_PATH,
     generate_feature_importance_artifacts,
+    generate_within_city_all_cities_supplemental_artifacts,
     generate_within_city_spatial_sensitivity_artifacts,
     generate_within_city_supplemental_artifacts,
 )
@@ -31,7 +32,7 @@ def _parse_int_list(raw_value: str) -> list[int]:
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Generate bounded supplemental within-city and feature-importance artifacts without changing the canonical cross-city benchmark framing.",
+        description="Generate bounded supplemental within-city, all-city within-city, spatial-sensitivity, and feature-importance artifacts without changing the canonical cross-city benchmark framing.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--dataset-path", type=Path, default=DEFAULT_FINAL_DATASET_PATH)
@@ -119,7 +120,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-within-city",
         action="store_true",
-        help="Skip the within-city exploratory supplement and only run feature-importance exports.",
+        help="Skip the retained 3-city within-city exploratory supplement.",
+    )
+    parser.add_argument(
+        "--skip-within-city-all-cities",
+        action="store_true",
+        help="Skip the all-city within-city supplemental pass under outputs/modeling/supplemental/within_city_all_cities/.",
     )
     parser.add_argument(
         "--skip-feature-importance",
@@ -151,6 +157,22 @@ def main() -> None:
         print(within_city_result.contrast_table_path)
         print(within_city_result.figure_path)
         print(within_city_result.recall_figure_path)
+
+    if not args.skip_within_city_all_cities:
+        within_city_all_cities_result = generate_within_city_all_cities_supplemental_artifacts(
+            dataset_path=args.dataset_path,
+            city_error_table_path=args.city_error_table_path,
+            feature_columns=feature_columns,
+            sample_rows_per_city=args.sample_rows_per_city,
+            split_seeds=split_seeds,
+            grid_search_n_jobs=args.grid_search_n_jobs,
+            model_n_jobs=args.model_n_jobs,
+        )
+        print(within_city_all_cities_result.summary_markdown_path)
+        print(within_city_all_cities_result.gap_by_city_path)
+        print(within_city_all_cities_result.pr_auc_figure_path)
+        print(within_city_all_cities_result.recall_figure_path)
+        print(within_city_all_cities_result.gap_figure_path)
 
     if args.run_within_city_spatial:
         within_city_spatial_result = generate_within_city_spatial_sensitivity_artifacts(

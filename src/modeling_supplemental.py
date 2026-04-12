@@ -21,6 +21,8 @@ from src.config import (
     MODELING_REPORTING_OUTPUTS,
     MODELING_SUPPLEMENTAL_FEATURE_IMPORTANCE_FIGURES,
     MODELING_SUPPLEMENTAL_FEATURE_IMPORTANCE_OUTPUTS,
+    MODELING_SUPPLEMENTAL_WITHIN_CITY_ALL_CITIES_FIGURES,
+    MODELING_SUPPLEMENTAL_WITHIN_CITY_ALL_CITIES_OUTPUTS,
     MODELING_SUPPLEMENTAL_WITHIN_CITY_FIGURES,
     MODELING_SUPPLEMENTAL_WITHIN_CITY_OUTPUTS,
     MODELING_SUPPLEMENTAL_WITHIN_CITY_SPATIAL_FIGURES,
@@ -72,6 +74,8 @@ DEFAULT_WITHIN_CITY_LOGISTIC_PRESET = "smoke"
 DEFAULT_WITHIN_CITY_RF_PRESET = "smoke"
 DEFAULT_WITHIN_CITY_LOGISTIC_REFERENCE_RUN_DIR = DEFAULT_LOGISTIC_20K_RUN_DIR
 DEFAULT_WITHIN_CITY_RF_REFERENCE_RUN_DIR = DEFAULT_RF_SMOKE_RUN_DIR
+DEFAULT_WITHIN_CITY_ALL_CITIES_OUTPUT_DIR = MODELING_SUPPLEMENTAL_WITHIN_CITY_ALL_CITIES_OUTPUTS
+DEFAULT_WITHIN_CITY_ALL_CITIES_FIGURES_DIR = MODELING_SUPPLEMENTAL_WITHIN_CITY_ALL_CITIES_FIGURES
 DEFAULT_WITHIN_CITY_SPATIAL_DEFAULT_SUMMARY_PATH = (
     MODELING_SUPPLEMENTAL_WITHIN_CITY_OUTPUTS / "tables" / "within_city_summary.csv"
 )
@@ -111,6 +115,21 @@ class WithinCitySupplementResult:
     metadata_path: Path
     figure_path: Path
     recall_figure_path: Path
+
+
+@dataclass(frozen=True)
+class WithinCityAllCitiesSupplementResult:
+    summary_markdown_path: Path
+    split_metrics_path: Path
+    city_summary_path: Path
+    climate_summary_path: Path
+    gap_by_city_path: Path
+    gap_by_climate_path: Path
+    predictions_path: Path
+    metadata_path: Path
+    pr_auc_figure_path: Path
+    recall_figure_path: Path
+    gap_figure_path: Path
 
 
 @dataclass(frozen=True)
@@ -261,6 +280,27 @@ def select_representative_within_city_cities(
     return pd.DataFrame(selected_rows).sort_values(["climate_group", "city_name"]).reset_index(drop=True)
 
 
+def select_all_within_city_cities(
+    *,
+    city_error_table_path: Path = DEFAULT_WITHIN_CITY_CITY_ERROR_TABLE_PATH,
+) -> pd.DataFrame:
+    """Load the retained benchmark city roster for the all-city within-city supplement."""
+    comparison_df = pd.read_csv(_resolve_project_path(city_error_table_path))
+    required_columns = {"city_id", "city_name", "climate_group"}
+    missing_columns = sorted(required_columns - set(comparison_df.columns))
+    if missing_columns:
+        raise ValueError(
+            "City comparison table is missing required columns: " + ", ".join(missing_columns)
+        )
+
+    return (
+        comparison_df[["city_id", "city_name", "climate_group"]]
+        .drop_duplicates(subset=["city_id", "city_name", "climate_group"])
+        .sort_values(["climate_group", "city_name"])
+        .reset_index(drop=True)
+    )
+
+
 def _load_cross_city_reference_metrics(
     *,
     logistic_run_dir: Path,
@@ -339,6 +379,79 @@ def _load_logistic_cross_city_reference_metrics(*, logistic_run_dir: Path) -> pd
     return logistic_df[keep_columns].drop_duplicates(
         subset=["model_name", "city_id", "city_name", "climate_group"]
     )
+
+
+def _load_cross_city_reference_metrics_from_city_error_table(
+    *,
+    city_error_table_path: Path = DEFAULT_WITHIN_CITY_CITY_ERROR_TABLE_PATH,
+) -> pd.DataFrame:
+    comparison_df = pd.read_csv(_resolve_project_path(city_error_table_path))
+    required_columns = {
+        "city_id",
+        "city_name",
+        "climate_group",
+        "pr_auc_logistic",
+        "pr_auc_rf",
+        "recall_at_top_10pct_logistic",
+        "recall_at_top_10pct_rf",
+    }
+    missing_columns = sorted(required_columns - set(comparison_df.columns))
+    if missing_columns:
+        raise ValueError(
+            "City comparison table is missing required columns: " + ", ".join(missing_columns)
+        )
+
+    unique_city_rows = (
+        comparison_df[
+            [
+                "city_id",
+                "city_name",
+                "climate_group",
+                "pr_auc_logistic",
+                "pr_auc_rf",
+                "recall_at_top_10pct_logistic",
+                "recall_at_top_10pct_rf",
+            ]
+        ]
+        .drop_duplicates(subset=["city_id", "city_name", "climate_group"])
+        .reset_index(drop=True)
+    )
+
+    logistic_df = unique_city_rows[
+        ["city_id", "city_name", "climate_group", "pr_auc_logistic", "recall_at_top_10pct_logistic"]
+    ].rename(
+        columns={
+            "pr_auc_logistic": "cross_city_pr_auc",
+            "recall_at_top_10pct_logistic": "cross_city_recall_at_top_10pct",
+        }
+    )
+    logistic_df["model_name"] = "logistic_saga"
+
+    rf_df = unique_city_rows[
+        ["city_id", "city_name", "climate_group", "pr_auc_rf", "recall_at_top_10pct_rf"]
+    ].rename(
+        columns={
+            "pr_auc_rf": "cross_city_pr_auc",
+            "recall_at_top_10pct_rf": "cross_city_recall_at_top_10pct",
+        }
+    )
+    rf_df["model_name"] = "random_forest"
+
+    reference_df = pd.concat([logistic_df, rf_df], ignore_index=True)
+    reference_df["cross_city_reference_source_path"] = str(_resolve_project_path(city_error_table_path))
+    reference_df["cross_city_reference_source"] = "cross_city_benchmark_report_city_error_comparison"
+    return reference_df[
+        [
+            "city_id",
+            "city_name",
+            "climate_group",
+            "model_name",
+            "cross_city_pr_auc",
+            "cross_city_recall_at_top_10pct",
+            "cross_city_reference_source",
+            "cross_city_reference_source_path",
+        ]
+    ].sort_values(["climate_group", "city_name", "model_name"]).reset_index(drop=True)
 
 
 def _resolve_effective_stratified_cv_splits(y: Sequence[int], requested_splits: int) -> int:
@@ -592,6 +705,234 @@ def plot_within_city_recall_contrast(contrast_df: pd.DataFrame, output_path: Pat
         metric_label="Recall At Top 10% Predicted Risk",
         title="Exploratory Within-City Recall vs Retained Cross-City Benchmark",
     )
+
+
+def _build_within_city_city_summary(split_metrics_df: pd.DataFrame) -> pd.DataFrame:
+    summary_df = (
+        split_metrics_df.groupby(["city_id", "city_name", "climate_group", "model_name"], dropna=False)
+        .agg(
+            repeat_count=("repeat_id", "count"),
+            sample_rows_per_city_cap=("sample_rows_per_city_cap", "first"),
+            effective_city_row_count=("effective_city_row_count", "first"),
+            within_city_pr_auc_mean=("pr_auc", "mean"),
+            within_city_pr_auc_std=("pr_auc", "std"),
+            within_city_recall_at_top_10pct_mean=("recall_at_top_10pct", "mean"),
+            within_city_recall_at_top_10pct_std=("recall_at_top_10pct", "std"),
+            within_city_best_inner_cv_average_precision_mean=("best_inner_cv_average_precision", "mean"),
+        )
+        .reset_index()
+        .sort_values(["climate_group", "city_name", "model_name"])
+        .reset_index(drop=True)
+    )
+    for column_name in ["within_city_pr_auc_std", "within_city_recall_at_top_10pct_std"]:
+        summary_df[column_name] = summary_df[column_name].fillna(0.0)
+    return summary_df
+
+
+def build_within_city_all_cities_climate_summary(city_summary_df: pd.DataFrame) -> pd.DataFrame:
+    return (
+        city_summary_df.groupby(["climate_group", "model_name"], dropna=False)
+        .agg(
+            city_count=("city_id", "nunique"),
+            mean_effective_city_row_count=("effective_city_row_count", "mean"),
+            mean_city_within_city_pr_auc=("within_city_pr_auc_mean", "mean"),
+            std_city_within_city_pr_auc=("within_city_pr_auc_mean", "std"),
+            mean_city_within_city_recall_at_top_10pct=("within_city_recall_at_top_10pct_mean", "mean"),
+            std_city_within_city_recall_at_top_10pct=("within_city_recall_at_top_10pct_mean", "std"),
+        )
+        .reset_index()
+        .sort_values(["climate_group", "model_name"])
+        .reset_index(drop=True)
+        .fillna(
+            {
+                "std_city_within_city_pr_auc": 0.0,
+                "std_city_within_city_recall_at_top_10pct": 0.0,
+            }
+        )
+    )
+
+
+def build_within_city_all_cities_gap_by_climate(gap_by_city_df: pd.DataFrame) -> pd.DataFrame:
+    return (
+        gap_by_city_df.groupby(["climate_group", "model_name"], dropna=False)
+        .agg(
+            city_count=("city_id", "nunique"),
+            mean_city_within_city_pr_auc=("within_city_pr_auc_mean", "mean"),
+            mean_city_cross_city_pr_auc=("cross_city_pr_auc", "mean"),
+            mean_city_pr_auc_gap=("pr_auc_gap", "mean"),
+            mean_city_within_city_recall_at_top_10pct=("within_city_recall_at_top_10pct_mean", "mean"),
+            mean_city_cross_city_recall_at_top_10pct=("cross_city_recall_at_top_10pct", "mean"),
+            mean_city_recall_gap=("recall_gap", "mean"),
+        )
+        .reset_index()
+        .sort_values(["climate_group", "model_name"])
+        .reset_index(drop=True)
+    )
+
+
+def _plot_within_city_all_cities_climate_metric(
+    *,
+    climate_summary_df: pd.DataFrame,
+    output_path: Path,
+    metric_column: str,
+    ylabel: str,
+    title: str,
+) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    ordered = climate_summary_df.sort_values(["climate_group", "model_name"]).reset_index(drop=True)
+    if ordered.empty:
+        fig, ax = plt.subplots(figsize=(9, 3.5), constrained_layout=True)
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No climate-group rows were available.", ha="center", va="center")
+        fig.savefig(output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        return output_path
+
+    climate_groups = ordered["climate_group"].drop_duplicates().tolist()
+    model_order = [SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME, "logistic_saga", "random_forest"]
+    model_labels = {
+        SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME: "City prevalence baseline",
+        "logistic_saga": "Logistic SAGA",
+        "random_forest": "Random forest",
+    }
+    model_colors = {
+        SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME: "#6b7a3a",
+        "logistic_saga": "#2f6c8f",
+        "random_forest": "#9b3d2f",
+    }
+
+    x_positions = np.arange(len(climate_groups))
+    width = 0.23
+    fig, ax = plt.subplots(figsize=(10, 5.6), constrained_layout=True)
+    for offset_index, model_name in enumerate(model_order):
+        model_rows = ordered.loc[ordered["model_name"] == model_name].set_index("climate_group")
+        values = [model_rows.at[group_name, metric_column] if group_name in model_rows.index else np.nan for group_name in climate_groups]
+        ax.bar(
+            x_positions + ((offset_index - 1) * width),
+            values,
+            width=width,
+            color=model_colors[model_name],
+            label=model_labels[model_name],
+            alpha=0.9,
+        )
+
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(climate_groups)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend(frameon=False, fontsize=9)
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_within_city_all_cities_pr_auc_by_climate(
+    climate_summary_df: pd.DataFrame,
+    output_path: Path,
+) -> Path:
+    return _plot_within_city_all_cities_climate_metric(
+        climate_summary_df=climate_summary_df,
+        output_path=output_path,
+        metric_column="mean_city_within_city_pr_auc",
+        ylabel="Mean City-Level Within-City PR AUC",
+        title="Supplemental Within-City PR AUC By Climate Group",
+    )
+
+
+def plot_within_city_all_cities_recall_by_climate(
+    climate_summary_df: pd.DataFrame,
+    output_path: Path,
+) -> Path:
+    return _plot_within_city_all_cities_climate_metric(
+        climate_summary_df=climate_summary_df,
+        output_path=output_path,
+        metric_column="mean_city_within_city_recall_at_top_10pct",
+        ylabel="Mean City-Level Within-City Recall At Top 10%",
+        title="Supplemental Within-City Recall At Top 10% By Climate Group",
+    )
+
+
+def plot_within_city_all_cities_gap_patterns(gap_by_city_df: pd.DataFrame, output_path: Path) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    ordered = gap_by_city_df.loc[
+        gap_by_city_df["pr_auc_gap"].notna() & gap_by_city_df["recall_gap"].notna()
+    ].sort_values(["climate_group", "city_name", "model_name"])
+    if ordered.empty:
+        fig, ax = plt.subplots(figsize=(9, 3.5), constrained_layout=True)
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No within-city versus cross-city gap rows were available.", ha="center", va="center")
+        fig.savefig(output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        return output_path
+
+    climate_colors = {
+        "hot_arid": "#c7681f",
+        "hot_humid": "#2f6c8f",
+        "mild_cool": "#6b7a3a",
+    }
+    model_markers = {
+        "logistic_saga": "o",
+        "random_forest": "s",
+    }
+    model_labels = {
+        "logistic_saga": "Logistic SAGA",
+        "random_forest": "Random forest",
+    }
+
+    fig, ax = plt.subplots(figsize=(10, 6.2), constrained_layout=True)
+    for model_name, model_df in ordered.groupby("model_name", sort=True, dropna=False):
+        ax.scatter(
+            model_df["pr_auc_gap"],
+            model_df["recall_gap"],
+            s=60,
+            alpha=0.85,
+            c=[climate_colors.get(str(value), "#666666") for value in model_df["climate_group"]],
+            marker=model_markers.get(str(model_name), "o"),
+            edgecolors="white",
+            linewidths=0.6,
+            label=model_labels.get(str(model_name), str(model_name)),
+        )
+
+    ax.axvline(0.0, color="#999999", linewidth=1, linestyle="--")
+    ax.axhline(0.0, color="#999999", linewidth=1, linestyle="--")
+    ax.set_xlabel("Within-City PR AUC Minus Retained Cross-City PR AUC")
+    ax.set_ylabel("Within-City Recall@Top10 Minus Retained Cross-City Recall@Top10")
+    ax.set_title("Supplemental Within-City vs Cross-City Gap Patterns")
+    ax.grid(alpha=0.2)
+
+    model_handles = [
+        matplotlib.lines.Line2D(
+            [0],
+            [0],
+            marker=marker,
+            linestyle="None",
+            markerfacecolor="#666666",
+            markeredgecolor="white",
+            markersize=8,
+            label=model_labels[model_name],
+        )
+        for model_name, marker in model_markers.items()
+    ]
+    climate_handles = [
+        matplotlib.lines.Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="None",
+            markerfacecolor=color,
+            markeredgecolor=color,
+            markersize=8,
+            label=climate_group,
+        )
+        for climate_group, color in climate_colors.items()
+    ]
+    first_legend = ax.legend(handles=model_handles, frameon=False, loc="upper left", title="Model")
+    ax.add_artist(first_legend)
+    ax.legend(handles=climate_handles, frameon=False, loc="lower right", title="Climate Group")
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
 
 
 def _build_within_city_spatial_prediction_frame(
@@ -1088,6 +1429,353 @@ def generate_within_city_supplemental_artifacts(
         metadata_path=paths.metadata_path,
         figure_path=figure_path,
         recall_figure_path=recall_figure_path,
+    )
+
+
+def generate_within_city_all_cities_supplemental_artifacts(
+    *,
+    dataset_path: Path,
+    city_error_table_path: Path = DEFAULT_WITHIN_CITY_CITY_ERROR_TABLE_PATH,
+    output_dir: Path = DEFAULT_WITHIN_CITY_ALL_CITIES_OUTPUT_DIR,
+    figures_dir: Path = DEFAULT_WITHIN_CITY_ALL_CITIES_FIGURES_DIR,
+    feature_columns: Sequence[str] = DEFAULT_FEATURE_COLUMNS,
+    sample_rows_per_city: int = DEFAULT_WITHIN_CITY_SAMPLE_ROWS_PER_CITY,
+    split_seeds: Sequence[int] = DEFAULT_WITHIN_CITY_SPLIT_SEEDS,
+    test_size: float = DEFAULT_WITHIN_CITY_TEST_SIZE,
+    random_state: int = DEFAULT_RANDOM_STATE,
+    logistic_tuning_preset: str = DEFAULT_WITHIN_CITY_LOGISTIC_PRESET,
+    random_forest_tuning_preset: str = DEFAULT_WITHIN_CITY_RF_PRESET,
+    grid_search_n_jobs: int = 1,
+    model_n_jobs: int | None = 1,
+) -> WithinCityAllCitiesSupplementResult:
+    """Run the bounded all-city within-city supplemental pass."""
+    start = perf_counter()
+    paths = resolve_supplemental_paths(output_dir=output_dir, figures_dir=figures_dir)
+
+    city_selection_df = select_all_within_city_cities(city_error_table_path=city_error_table_path)
+    selected_city_ids = city_selection_df[GROUP_COLUMN].astype(int).tolist()
+    sampled_rows_df, _ = load_sampled_modeling_rows_with_diagnostics(
+        dataset_path=_resolve_project_path(dataset_path),
+        feature_columns=feature_columns,
+        city_ids=selected_city_ids,
+        sample_rows_per_city=int(sample_rows_per_city),
+        random_state=int(random_state),
+    )
+    sampled_rows_df = drop_missing_target_rows(sampled_rows_df)
+    model_specs = [
+        (SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME, None),
+        ("logistic_saga", logistic_tuning_preset),
+        ("random_forest", random_forest_tuning_preset),
+    ]
+    LOGGER.info(
+        "Running all-city within-city supplement for %s benchmark cities and %s model rows",
+        len(city_selection_df),
+        len(model_specs),
+    )
+
+    prediction_frames: list[pd.DataFrame] = []
+    split_metric_rows: list[dict[str, Any]] = []
+
+    for city_row in city_selection_df.itertuples(index=False):
+        city_df = sampled_rows_df.loc[sampled_rows_df[GROUP_COLUMN] == int(city_row.city_id)].copy().reset_index(drop=True)
+        if city_df.empty:
+            raise ValueError(f"No within-city rows were loaded for city_id={city_row.city_id}")
+
+        y = city_df[TARGET_COLUMN].to_numpy(dtype="int8")
+        if np.unique(y).size < 2:
+            raise ValueError(f"Within-city sampling produced a single-class dataset for city_id={city_row.city_id}")
+
+        for repeat_id, split_seed in enumerate(split_seeds, start=1):
+            train_index, test_index = train_test_split(
+                np.arange(len(city_df)),
+                test_size=float(test_size),
+                random_state=int(split_seed),
+                stratify=y,
+            )
+            train_df = city_df.iloc[train_index].reset_index(drop=True)
+            test_df = city_df.iloc[test_index].reset_index(drop=True)
+
+            for model_name, tuning_preset in model_specs:
+                LOGGER.info(
+                    "Within-city all-cities fit: city=%s repeat=%s model=%s",
+                    city_row.city_name,
+                    repeat_id,
+                    model_name,
+                )
+                if model_name == SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME:
+                    probabilities = _predict_city_prevalence_baseline(train_df=train_df, test_df=test_df)
+                    best_score = float("nan")
+                    effective_inner_splits = None
+                else:
+                    estimator, best_score, _, effective_inner_splits = _fit_within_city_model(
+                        model_name=model_name,
+                        feature_columns=feature_columns,
+                        train_df=train_df,
+                        random_state=int(split_seed),
+                        tuning_preset=str(tuning_preset),
+                        grid_search_n_jobs=int(grid_search_n_jobs),
+                        model_n_jobs=model_n_jobs if model_name == "random_forest" else None,
+                    )
+                    probabilities = estimator.predict_proba(test_df[list(feature_columns)])[:, 1]
+
+                prediction_df = _build_within_city_prediction_frame(
+                    test_df=test_df,
+                    probabilities=probabilities,
+                    model_name=model_name,
+                    repeat_id=repeat_id,
+                    split_seed=int(split_seed),
+                )
+                prediction_frames.append(prediction_df)
+
+                metrics = compute_prediction_metrics(
+                    y_true=prediction_df[TARGET_COLUMN].to_numpy(dtype="int8"),
+                    y_score=prediction_df["predicted_probability"].to_numpy(dtype="float64"),
+                    top_fraction=DEFAULT_TOP_FRACTION,
+                )
+                split_metric_rows.append(
+                    {
+                        "city_id": int(city_row.city_id),
+                        "city_name": str(city_row.city_name),
+                        "climate_group": str(city_row.climate_group),
+                        "model_name": model_name,
+                        "repeat_id": int(repeat_id),
+                        "split_seed": int(split_seed),
+                        "tuning_preset": tuning_preset if tuning_preset is not None else "not_applicable",
+                        "sample_rows_per_city_cap": int(sample_rows_per_city),
+                        "effective_city_row_count": int(len(city_df)),
+                        "train_row_count": int(len(train_df)),
+                        "test_row_count": int(metrics["row_count"]),
+                        "test_positive_count": int(metrics["positive_count"]),
+                        "test_prevalence": float(metrics["prevalence"]),
+                        "pr_auc": float(metrics["pr_auc"]),
+                        "recall_at_top_10pct": float(metrics["recall_at_top_10pct"]),
+                        "best_inner_cv_average_precision": float(best_score),
+                        "effective_inner_cv_splits": (
+                            int(effective_inner_splits) if effective_inner_splits is not None else np.nan
+                        ),
+                    }
+                )
+
+    predictions_df = pd.concat(prediction_frames, ignore_index=True).sort_values(
+        ["city_id", "model_name", "repeat_id", "cell_id"]
+    )
+    split_metrics_df = pd.DataFrame(split_metric_rows).sort_values(
+        ["city_id", "model_name", "repeat_id"]
+    ).reset_index(drop=True)
+    city_summary_df = _build_within_city_city_summary(split_metrics_df)
+    climate_summary_df = build_within_city_all_cities_climate_summary(city_summary_df)
+
+    cross_city_reference_df = _load_cross_city_reference_metrics_from_city_error_table(
+        city_error_table_path=city_error_table_path,
+    )
+    gap_by_city_df = city_summary_df.merge(
+        cross_city_reference_df,
+        on=["city_id", "city_name", "climate_group", "model_name"],
+        how="left",
+        validate="one_to_one",
+    )
+    gap_by_city_df["pr_auc_gap"] = gap_by_city_df["within_city_pr_auc_mean"] - gap_by_city_df["cross_city_pr_auc"]
+    gap_by_city_df["recall_gap"] = (
+        gap_by_city_df["within_city_recall_at_top_10pct_mean"] - gap_by_city_df["cross_city_recall_at_top_10pct"]
+    )
+    gap_by_city_df = gap_by_city_df.sort_values(["climate_group", "city_name", "model_name"]).reset_index(drop=True)
+    gap_by_climate_df = build_within_city_all_cities_gap_by_climate(gap_by_city_df)
+
+    split_metrics_path = paths.tables_dir / "within_city_all_cities_repeat_metrics.csv"
+    city_summary_path = paths.tables_dir / "within_city_all_cities_city_summary.csv"
+    climate_summary_path = paths.tables_dir / "within_city_all_cities_climate_summary.csv"
+    gap_by_city_path = paths.tables_dir / "within_city_all_cities_cross_city_gap_by_city.csv"
+    gap_by_climate_path = paths.tables_dir / "within_city_all_cities_cross_city_gap_by_climate.csv"
+    predictions_path = paths.output_dir / "within_city_all_cities_predictions.parquet"
+    pr_auc_figure_path = paths.figures_dir / "within_city_all_cities_pr_auc_by_climate.png"
+    recall_figure_path = paths.figures_dir / "within_city_all_cities_recall_by_climate.png"
+    gap_figure_path = paths.figures_dir / "within_city_all_cities_within_vs_cross_gap.png"
+    summary_markdown_path = paths.output_dir / "within_city_all_cities_summary.md"
+
+    split_metrics_df.to_csv(split_metrics_path, index=False)
+    city_summary_df.to_csv(city_summary_path, index=False)
+    climate_summary_df.to_csv(climate_summary_path, index=False)
+    gap_by_city_df.to_csv(gap_by_city_path, index=False)
+    gap_by_climate_df.to_csv(gap_by_climate_path, index=False)
+    predictions_df.to_parquet(predictions_path, index=False)
+    plot_within_city_all_cities_pr_auc_by_climate(climate_summary_df, pr_auc_figure_path)
+    plot_within_city_all_cities_recall_by_climate(climate_summary_df, recall_figure_path)
+    plot_within_city_all_cities_gap_patterns(gap_by_city_df, gap_figure_path)
+
+    transfer_diagnostic_df = gap_by_city_df.loc[
+        gap_by_city_df["model_name"].isin(["logistic_saga", "random_forest"])
+    ].copy()
+    largest_positive_gap_df = transfer_diagnostic_df.sort_values(
+        ["pr_auc_gap", "recall_gap", "city_name", "model_name"],
+        ascending=[False, False, True, True],
+    ).head(6)
+    hardest_even_within_city_df = city_summary_df.sort_values(
+        [
+            "within_city_pr_auc_mean",
+            "within_city_recall_at_top_10pct_mean",
+            "city_name",
+            "model_name",
+        ],
+        ascending=[True, True, True, True],
+    ).head(6)
+
+    markdown_lines = [
+        "# All-City Within-City Supplemental Pass",
+        "",
+        "This summary is supplemental and easier than the canonical benchmark because each evaluation uses repeated random splits inside the same city.",
+        "The project benchmark remains the cross-city city-held-out evaluation, and these within-city random-split results must not be treated as benchmark-equivalent.",
+        (
+            "The all-city pass keeps the same six-feature contract, caps each city at up to "
+            f"{int(sample_rows_per_city):,} rows, and uses {len(split_seeds)} repeated stratified 80/20 splits "
+            "with smoke-sized within-city tuning only."
+        ),
+        "",
+        "Interpretation guardrail:",
+        "- Cities with relatively strong within-city random-split performance but weak retained cross-city performance are more suggestive of transfer difficulty under the six-feature contract.",
+        "- Cities that remain weak even under within-city random splits are more suggestive of intrinsic difficulty under the same limited feature contract.",
+        "- These patterns are diagnostic support for the benchmark story, not a replacement for held-out-city evaluation.",
+        "",
+        "## Climate-Group Within-City Summary",
+        "",
+        _dataframe_to_markdown(
+            climate_summary_df[
+                [
+                    "climate_group",
+                    "model_name",
+                    "city_count",
+                    "mean_city_within_city_pr_auc",
+                    "mean_city_within_city_recall_at_top_10pct",
+                ]
+            ],
+            decimal_columns={
+                "mean_city_within_city_pr_auc",
+                "mean_city_within_city_recall_at_top_10pct",
+            },
+        ),
+        "",
+        "## Climate-Group Within-vs-Cross Gap Summary",
+        "",
+        _dataframe_to_markdown(
+            gap_by_climate_df[
+                [
+                    "climate_group",
+                    "model_name",
+                    "city_count",
+                    "mean_city_within_city_pr_auc",
+                    "mean_city_cross_city_pr_auc",
+                    "mean_city_pr_auc_gap",
+                    "mean_city_within_city_recall_at_top_10pct",
+                    "mean_city_cross_city_recall_at_top_10pct",
+                    "mean_city_recall_gap",
+                ]
+            ],
+            decimal_columns={
+                "mean_city_within_city_pr_auc",
+                "mean_city_cross_city_pr_auc",
+                "mean_city_pr_auc_gap",
+                "mean_city_within_city_recall_at_top_10pct",
+                "mean_city_cross_city_recall_at_top_10pct",
+                "mean_city_recall_gap",
+            },
+        ),
+        "",
+        "## Largest Positive Within-vs-Cross PR AUC Gaps",
+        "",
+        _dataframe_to_markdown(
+            largest_positive_gap_df[
+                [
+                    "city_name",
+                    "climate_group",
+                    "model_name",
+                    "within_city_pr_auc_mean",
+                    "cross_city_pr_auc",
+                    "pr_auc_gap",
+                    "within_city_recall_at_top_10pct_mean",
+                    "cross_city_recall_at_top_10pct",
+                    "recall_gap",
+                ]
+            ],
+            decimal_columns={
+                "within_city_pr_auc_mean",
+                "cross_city_pr_auc",
+                "pr_auc_gap",
+                "within_city_recall_at_top_10pct_mean",
+                "cross_city_recall_at_top_10pct",
+                "recall_gap",
+            },
+        ),
+        "",
+        "## Hardest Cities Even Under Within-City Random Splits",
+        "",
+        _dataframe_to_markdown(
+            hardest_even_within_city_df[
+                [
+                    "city_name",
+                    "climate_group",
+                    "model_name",
+                    "within_city_pr_auc_mean",
+                    "within_city_recall_at_top_10pct_mean",
+                ]
+            ],
+            decimal_columns={
+                "within_city_pr_auc_mean",
+                "within_city_recall_at_top_10pct_mean",
+            },
+        ),
+        "",
+        f"Figure: `{pr_auc_figure_path}`",
+        f"Figure: `{recall_figure_path}`",
+        f"Figure: `{gap_figure_path}`",
+        "",
+    ]
+    summary_markdown_path.write_text("\n".join(markdown_lines), encoding="utf-8")
+
+    _write_json(
+        paths.metadata_path,
+        {
+            "dataset_path": str(_resolve_project_path(dataset_path)),
+            "city_error_table_path": str(_resolve_project_path(city_error_table_path)),
+            "selected_feature_columns": list(feature_columns),
+            "sample_rows_per_city": int(sample_rows_per_city),
+            "split_seeds": [int(seed) for seed in split_seeds],
+            "test_size": float(test_size),
+            "logistic_tuning_preset": logistic_tuning_preset,
+            "random_forest_tuning_preset": random_forest_tuning_preset,
+            "grid_search_n_jobs": int(grid_search_n_jobs),
+            "model_n_jobs": model_n_jobs,
+            "city_count": int(city_selection_df["city_id"].nunique()),
+            "supplemental_within_city_baseline_model": SUPPLEMENTAL_WITHIN_CITY_BASELINE_MODEL_NAME,
+            "cross_city_reference_source": "cross_city_benchmark_report_city_error_comparison",
+            "timing_seconds": {
+                "total_wall_clock": float(perf_counter() - start),
+            },
+            "output_files": {
+                "summary_markdown": str(summary_markdown_path),
+                "repeat_metrics": str(split_metrics_path),
+                "city_summary": str(city_summary_path),
+                "climate_summary": str(climate_summary_path),
+                "gap_by_city": str(gap_by_city_path),
+                "gap_by_climate": str(gap_by_climate_path),
+                "predictions": str(predictions_path),
+                "pr_auc_by_climate_figure": str(pr_auc_figure_path),
+                "recall_by_climate_figure": str(recall_figure_path),
+                "gap_figure": str(gap_figure_path),
+            },
+        },
+    )
+
+    return WithinCityAllCitiesSupplementResult(
+        summary_markdown_path=summary_markdown_path,
+        split_metrics_path=split_metrics_path,
+        city_summary_path=city_summary_path,
+        climate_summary_path=climate_summary_path,
+        gap_by_city_path=gap_by_city_path,
+        gap_by_climate_path=gap_by_climate_path,
+        predictions_path=predictions_path,
+        metadata_path=paths.metadata_path,
+        pr_auc_figure_path=pr_auc_figure_path,
+        recall_figure_path=recall_figure_path,
+        gap_figure_path=gap_figure_path,
     )
 
 

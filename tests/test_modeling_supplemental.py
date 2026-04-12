@@ -4,17 +4,25 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.modeling_config import DEFAULT_FEATURE_COLUMNS
 from src.modeling_runner import run_logistic_saga_model, run_random_forest_model
 from src.modeling_supplemental import (
     assign_within_city_spatial_blocks,
+    build_within_city_all_cities_climate_summary,
+    build_within_city_all_cities_gap_by_climate,
     generate_feature_importance_artifacts,
+    generate_within_city_all_cities_supplemental_artifacts,
     generate_within_city_spatial_sensitivity_artifacts,
     generate_within_city_supplemental_artifacts,
     make_within_city_spatial_block_splits,
+    plot_within_city_all_cities_gap_patterns,
+    plot_within_city_all_cities_pr_auc_by_climate,
+    plot_within_city_all_cities_recall_by_climate,
     plot_within_city_recall_contrast,
     plot_within_city_spatial_pr_auc_contrast,
+    select_all_within_city_cities,
     select_representative_within_city_cities,
 )
 
@@ -130,6 +138,81 @@ def _build_grouped_folds() -> pd.DataFrame:
     )
 
 
+def _build_grouped_city_error_comparison() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "outer_fold": 0,
+                "city_id": 1,
+                "city_name": "Phoenix",
+                "climate_group": "hot_arid",
+                "row_count": 32,
+                "positive_count": 10,
+                "prevalence": 10 / 32,
+                "pr_auc_logistic": 0.21,
+                "pr_auc_rf": 0.29,
+                "pr_auc_delta_rf_minus_logistic": 0.08,
+                "pr_auc_winner": "random_forest",
+                "recall_at_top_10pct_logistic": 0.24,
+                "recall_at_top_10pct_rf": 0.31,
+                "recall_delta_rf_minus_logistic": 0.07,
+                "recall_winner": "random_forest",
+            },
+            {
+                "outer_fold": 0,
+                "city_id": 2,
+                "city_name": "Tucson",
+                "climate_group": "hot_arid",
+                "row_count": 32,
+                "positive_count": 10,
+                "prevalence": 10 / 32,
+                "pr_auc_logistic": 0.19,
+                "pr_auc_rf": 0.27,
+                "pr_auc_delta_rf_minus_logistic": 0.08,
+                "pr_auc_winner": "random_forest",
+                "recall_at_top_10pct_logistic": 0.22,
+                "recall_at_top_10pct_rf": 0.29,
+                "recall_delta_rf_minus_logistic": 0.07,
+                "recall_winner": "random_forest",
+            },
+            {
+                "outer_fold": 1,
+                "city_id": 3,
+                "city_name": "Charlotte",
+                "climate_group": "hot_humid",
+                "row_count": 32,
+                "positive_count": 10,
+                "prevalence": 10 / 32,
+                "pr_auc_logistic": 0.24,
+                "pr_auc_rf": 0.33,
+                "pr_auc_delta_rf_minus_logistic": 0.09,
+                "pr_auc_winner": "random_forest",
+                "recall_at_top_10pct_logistic": 0.27,
+                "recall_at_top_10pct_rf": 0.35,
+                "recall_delta_rf_minus_logistic": 0.08,
+                "recall_winner": "random_forest",
+            },
+            {
+                "outer_fold": 1,
+                "city_id": 4,
+                "city_name": "Atlanta",
+                "climate_group": "hot_humid",
+                "row_count": 32,
+                "positive_count": 10,
+                "prevalence": 10 / 32,
+                "pr_auc_logistic": 0.23,
+                "pr_auc_rf": 0.32,
+                "pr_auc_delta_rf_minus_logistic": 0.09,
+                "pr_auc_winner": "random_forest",
+                "recall_at_top_10pct_logistic": 0.26,
+                "recall_at_top_10pct_rf": 0.34,
+                "recall_delta_rf_minus_logistic": 0.08,
+                "recall_winner": "random_forest",
+            },
+        ]
+    )
+
+
 def test_select_representative_within_city_cities_prefers_nearest_median_defaults(tmp_path: Path) -> None:
     comparison_path = tmp_path / "city_error.csv"
     pd.DataFrame(
@@ -147,6 +230,267 @@ def test_select_representative_within_city_cities_prefers_nearest_median_default
 
     assert selected_df["city_name"].tolist() == ["Reno", "Charlotte", "Detroit"]
     assert set(selected_df["selection_rule"]) == {"nearest_median_logistic_pr_auc_within_climate_group"}
+
+
+def test_select_all_within_city_cities_iterates_retained_city_roster(tmp_path: Path) -> None:
+    comparison_path = tmp_path / "city_error.csv"
+    _build_grouped_city_error_comparison().to_csv(comparison_path, index=False)
+
+    selected_df = select_all_within_city_cities(city_error_table_path=comparison_path)
+
+    assert selected_df["city_name"].tolist() == ["Phoenix", "Tucson", "Atlanta", "Charlotte"]
+    assert selected_df["city_id"].tolist() == [1, 2, 4, 3]
+
+
+def test_build_within_city_all_cities_climate_and_gap_summaries_group_by_climate() -> None:
+    city_summary_df = pd.DataFrame(
+        [
+            {
+                "city_id": 1,
+                "city_name": "Phoenix",
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "repeat_count": 3,
+                "effective_city_row_count": 32,
+                "within_city_pr_auc_mean": 0.61,
+                "within_city_recall_at_top_10pct_mean": 0.42,
+            },
+            {
+                "city_id": 2,
+                "city_name": "Tucson",
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "repeat_count": 3,
+                "effective_city_row_count": 32,
+                "within_city_pr_auc_mean": 0.57,
+                "within_city_recall_at_top_10pct_mean": 0.39,
+            },
+            {
+                "city_id": 3,
+                "city_name": "Charlotte",
+                "climate_group": "hot_humid",
+                "model_name": "random_forest",
+                "repeat_count": 3,
+                "effective_city_row_count": 32,
+                "within_city_pr_auc_mean": 0.64,
+                "within_city_recall_at_top_10pct_mean": 0.45,
+            },
+            {
+                "city_id": 4,
+                "city_name": "Atlanta",
+                "climate_group": "hot_humid",
+                "model_name": "random_forest",
+                "repeat_count": 3,
+                "effective_city_row_count": 32,
+                "within_city_pr_auc_mean": 0.60,
+                "within_city_recall_at_top_10pct_mean": 0.41,
+            },
+        ]
+    )
+    gap_by_city_df = pd.DataFrame(
+        [
+            {
+                "city_id": 1,
+                "city_name": "Phoenix",
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "within_city_pr_auc_mean": 0.61,
+                "cross_city_pr_auc": 0.21,
+                "pr_auc_gap": 0.40,
+                "within_city_recall_at_top_10pct_mean": 0.42,
+                "cross_city_recall_at_top_10pct": 0.24,
+                "recall_gap": 0.18,
+            },
+            {
+                "city_id": 2,
+                "city_name": "Tucson",
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "within_city_pr_auc_mean": 0.57,
+                "cross_city_pr_auc": 0.19,
+                "pr_auc_gap": 0.38,
+                "within_city_recall_at_top_10pct_mean": 0.39,
+                "cross_city_recall_at_top_10pct": 0.22,
+                "recall_gap": 0.17,
+            },
+        ]
+    )
+
+    climate_summary_df = build_within_city_all_cities_climate_summary(city_summary_df)
+    gap_by_climate_df = build_within_city_all_cities_gap_by_climate(gap_by_city_df)
+
+    hot_arid_row = climate_summary_df.loc[
+        (climate_summary_df["climate_group"] == "hot_arid")
+        & (climate_summary_df["model_name"] == "logistic_saga")
+    ].iloc[0]
+    assert hot_arid_row["city_count"] == 2
+    assert hot_arid_row["mean_city_within_city_pr_auc"] == pytest.approx(0.59)
+    assert hot_arid_row["mean_city_within_city_recall_at_top_10pct"] == pytest.approx(0.405)
+
+    gap_row = gap_by_climate_df.loc[
+        (gap_by_climate_df["climate_group"] == "hot_arid")
+        & (gap_by_climate_df["model_name"] == "logistic_saga")
+    ].iloc[0]
+    assert gap_row["city_count"] == 2
+    assert gap_row["mean_city_pr_auc_gap"] == pytest.approx(0.39)
+    assert gap_row["mean_city_recall_gap"] == pytest.approx(0.175)
+
+
+def test_generate_within_city_all_cities_supplemental_artifacts_write_tables_markdown_and_figures(
+    tmp_path: Path,
+) -> None:
+    dataset_path = tmp_path / "final_dataset.parquet"
+    comparison_path = tmp_path / "city_error.csv"
+    _build_grouped_fixture().to_parquet(dataset_path, index=False)
+    _build_grouped_city_error_comparison().to_csv(comparison_path, index=False)
+
+    result = generate_within_city_all_cities_supplemental_artifacts(
+        dataset_path=dataset_path,
+        city_error_table_path=comparison_path,
+        output_dir=tmp_path / "outputs" / "modeling" / "supplemental" / "within_city_all_cities",
+        figures_dir=tmp_path / "figures" / "modeling" / "supplemental" / "within_city_all_cities",
+        sample_rows_per_city=32,
+        split_seeds=[7, 8, 9],
+        grid_search_n_jobs=1,
+        model_n_jobs=1,
+    )
+
+    assert result.summary_markdown_path.exists()
+    assert result.split_metrics_path.exists()
+    assert result.city_summary_path.exists()
+    assert result.climate_summary_path.exists()
+    assert result.gap_by_city_path.exists()
+    assert result.gap_by_climate_path.exists()
+    assert result.predictions_path.exists()
+    assert result.pr_auc_figure_path.exists()
+    assert result.recall_figure_path.exists()
+    assert result.gap_figure_path.exists()
+
+    assert result.city_summary_path == (
+        tmp_path
+        / "outputs"
+        / "modeling"
+        / "supplemental"
+        / "within_city_all_cities"
+        / "tables"
+        / "within_city_all_cities_city_summary.csv"
+    )
+    assert result.pr_auc_figure_path == (
+        tmp_path
+        / "figures"
+        / "modeling"
+        / "supplemental"
+        / "within_city_all_cities"
+        / "within_city_all_cities_pr_auc_by_climate.png"
+    )
+
+    repeat_metrics_df = pd.read_csv(result.split_metrics_path)
+    city_summary_df = pd.read_csv(result.city_summary_path)
+    climate_summary_df = pd.read_csv(result.climate_summary_path)
+    gap_by_city_df = pd.read_csv(result.gap_by_city_path)
+    gap_by_climate_df = pd.read_csv(result.gap_by_climate_path)
+    predictions_df = pd.read_parquet(result.predictions_path)
+
+    assert repeat_metrics_df["city_id"].nunique() == 4
+    assert set(repeat_metrics_df["model_name"]) == {
+        "city_prevalence_baseline",
+        "logistic_saga",
+        "random_forest",
+    }
+    assert len(city_summary_df) == 12
+    assert len(climate_summary_df) == 6
+    assert len(gap_by_city_df) == 12
+    assert len(gap_by_climate_df) == 6
+    baseline_gap_rows = gap_by_city_df.loc[gap_by_city_df["model_name"] == "city_prevalence_baseline"]
+    assert baseline_gap_rows["cross_city_pr_auc"].isna().all()
+    assert baseline_gap_rows["cross_city_recall_at_top_10pct"].isna().all()
+    assert predictions_df["city_id"].nunique() == 4
+
+    summary_text = result.summary_markdown_path.read_text(encoding="utf-8")
+    assert "benchmark remains the cross-city city-held-out evaluation" in summary_text
+    assert "transfer difficulty" in summary_text
+    assert "intrinsic difficulty" in summary_text
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    assert metadata["city_count"] == 4
+    assert metadata["sample_rows_per_city"] == 32
+    assert metadata["cross_city_reference_source"] == "cross_city_benchmark_report_city_error_comparison"
+    assert metadata["output_files"]["gap_by_city"] == str(result.gap_by_city_path)
+
+
+def test_plot_within_city_all_cities_figures_write_files(tmp_path: Path) -> None:
+    climate_summary_df = pd.DataFrame(
+        [
+            {
+                "climate_group": "hot_arid",
+                "model_name": "city_prevalence_baseline",
+                "mean_city_within_city_pr_auc": 0.11,
+                "mean_city_within_city_recall_at_top_10pct": 0.10,
+            },
+            {
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "mean_city_within_city_pr_auc": 0.58,
+                "mean_city_within_city_recall_at_top_10pct": 0.40,
+            },
+            {
+                "climate_group": "hot_arid",
+                "model_name": "random_forest",
+                "mean_city_within_city_pr_auc": 0.66,
+                "mean_city_within_city_recall_at_top_10pct": 0.48,
+            },
+            {
+                "climate_group": "hot_humid",
+                "model_name": "city_prevalence_baseline",
+                "mean_city_within_city_pr_auc": 0.10,
+                "mean_city_within_city_recall_at_top_10pct": 0.10,
+            },
+            {
+                "climate_group": "hot_humid",
+                "model_name": "logistic_saga",
+                "mean_city_within_city_pr_auc": 0.54,
+                "mean_city_within_city_recall_at_top_10pct": 0.37,
+            },
+            {
+                "climate_group": "hot_humid",
+                "model_name": "random_forest",
+                "mean_city_within_city_pr_auc": 0.63,
+                "mean_city_within_city_recall_at_top_10pct": 0.44,
+            },
+        ]
+    )
+    gap_by_city_df = pd.DataFrame(
+        [
+            {
+                "city_name": "Phoenix",
+                "climate_group": "hot_arid",
+                "model_name": "logistic_saga",
+                "pr_auc_gap": 0.36,
+                "recall_gap": 0.15,
+            },
+            {
+                "city_name": "Charlotte",
+                "climate_group": "hot_humid",
+                "model_name": "random_forest",
+                "pr_auc_gap": 0.28,
+                "recall_gap": 0.12,
+            },
+        ]
+    )
+
+    pr_auc_path = tmp_path / "figures" / "within_city_all_cities_pr_auc_by_climate.png"
+    recall_path = tmp_path / "figures" / "within_city_all_cities_recall_by_climate.png"
+    gap_path = tmp_path / "figures" / "within_city_all_cities_within_vs_cross_gap.png"
+
+    assert plot_within_city_all_cities_pr_auc_by_climate(climate_summary_df, pr_auc_path) == pr_auc_path
+    assert plot_within_city_all_cities_recall_by_climate(climate_summary_df, recall_path) == recall_path
+    assert plot_within_city_all_cities_gap_patterns(gap_by_city_df, gap_path) == gap_path
+    assert pr_auc_path.exists()
+    assert recall_path.exists()
+    assert gap_path.exists()
+    assert pr_auc_path.stat().st_size > 0
+    assert recall_path.stat().st_size > 0
+    assert gap_path.stat().st_size > 0
 
 
 def test_generate_within_city_supplemental_artifacts_integrates_city_prevalence_baseline(tmp_path: Path) -> None:
