@@ -1,0 +1,18 @@
+{
+  "outer_fold": 4,
+  "train_row_count": 120000,
+  "test_row_count": 30000,
+  "train_city_count": 24,
+  "test_city_count": 6,
+  "inner_cv_splits": 3,
+  "param_candidate_count": 4,
+  "estimated_inner_fit_count": 12,
+  "data_load_seconds": 0.04980580002302304,
+  "preprocess_build_seconds": 4.499999340623617e-05,
+  "preprocess_probe_fit_transform_seconds": 0.5876982000190765,
+  "preprocess_output_row_count": 120000,
+  "preprocess_output_feature_count": 33,
+  "preprocess_output_density": 1.0,
+  "grid_search_seconds": 409.76536850002594,
+  "fold_wall_clock_seconds": 410.57114779995754
+}

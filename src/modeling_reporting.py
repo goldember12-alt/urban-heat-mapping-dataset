@@ -75,6 +75,13 @@ class ModelingReportingResult:
     benchmark_metrics_figure_path: Path
     runtime_figure_path: Path
     city_delta_figure_path: Path
+    phase1_candidate_table_path: Path | None = None
+    phase1_candidate_climate_summary_path: Path | None = None
+    phase2_candidate_table_path: Path | None = None
+    phase2_candidate_climate_summary_path: Path | None = None
+    phase2_candidate_disparity_summary_path: Path | None = None
+    phase3_candidate_table_path: Path | None = None
+    phase3_candidate_climate_summary_path: Path | None = None
 
 
 def resolve_modeling_report_paths(
@@ -206,56 +213,86 @@ def build_benchmark_comparison_table(
     return combined
 
 
+def _build_pairwise_city_metric_comparison(
+    *,
+    left_run_dir: Path,
+    right_run_dir: Path,
+    left_model_label: str,
+    right_model_label: str,
+    left_short_label: str,
+    right_short_label: str,
+) -> pd.DataFrame:
+    left_city_path = _require_file(left_run_dir / "metrics_by_city.csv")
+    right_city_path = _require_file(right_run_dir / "metrics_by_city.csv")
+    left_df = pd.read_csv(left_city_path).rename(
+        columns={
+            "model_name": f"model_name_{left_short_label}",
+            "row_count": f"row_count_{left_short_label}",
+            "positive_count": f"positive_count_{left_short_label}",
+            "prevalence": f"prevalence_{left_short_label}",
+            "pr_auc": f"pr_auc_{left_short_label}",
+            "recall_at_top_10pct": f"recall_at_top_10pct_{left_short_label}",
+        }
+    )
+    right_df = pd.read_csv(right_city_path).rename(
+        columns={
+            "model_name": f"model_name_{right_short_label}",
+            "row_count": f"row_count_{right_short_label}",
+            "positive_count": f"positive_count_{right_short_label}",
+            "prevalence": f"prevalence_{right_short_label}",
+            "pr_auc": f"pr_auc_{right_short_label}",
+            "recall_at_top_10pct": f"recall_at_top_10pct_{right_short_label}",
+        }
+    )
+    merged = left_df.merge(
+        right_df,
+        on=["outer_fold", "city_id", "city_name", "climate_group"],
+        how="inner",
+        validate="one_to_one",
+    )
+    merged[f"pr_auc_delta_{right_short_label}_minus_{left_short_label}"] = (
+        merged[f"pr_auc_{right_short_label}"] - merged[f"pr_auc_{left_short_label}"]
+    )
+    merged[f"recall_delta_{right_short_label}_minus_{left_short_label}"] = (
+        merged[f"recall_at_top_10pct_{right_short_label}"] - merged[f"recall_at_top_10pct_{left_short_label}"]
+    )
+    merged["pr_auc_winner"] = np.where(
+        merged[f"pr_auc_delta_{right_short_label}_minus_{left_short_label}"] > 0,
+        right_model_label,
+        np.where(
+            merged[f"pr_auc_delta_{right_short_label}_minus_{left_short_label}"] < 0,
+            left_model_label,
+            "tie",
+        ),
+    )
+    merged["recall_winner"] = np.where(
+        merged[f"recall_delta_{right_short_label}_minus_{left_short_label}"] > 0,
+        right_model_label,
+        np.where(
+            merged[f"recall_delta_{right_short_label}_minus_{left_short_label}"] < 0,
+            left_model_label,
+            "tie",
+        ),
+    )
+    merged["row_count"] = merged[f"row_count_{left_short_label}"]
+    merged["positive_count"] = merged[f"positive_count_{left_short_label}"]
+    merged["prevalence"] = merged[f"prevalence_{left_short_label}"]
+    return merged
+
+
 def build_city_error_comparison(
     logistic_run_dir: Path = DEFAULT_LOGISTIC_5K_RUN_DIR,
     random_forest_run_dir: Path = DEFAULT_RF_FRONTIER_RUN_DIR,
 ) -> pd.DataFrame:
     """Compare city-level metrics between the matched logistic and RF reporting slices."""
-    logistic_city_path = _require_file(logistic_run_dir / "metrics_by_city.csv")
-    rf_city_path = _require_file(random_forest_run_dir / "metrics_by_city.csv")
-    logistic_df = pd.read_csv(logistic_city_path).rename(
-        columns={
-            "model_name": "model_name_logistic",
-            "row_count": "row_count_logistic",
-            "positive_count": "positive_count_logistic",
-            "prevalence": "prevalence_logistic",
-            "pr_auc": "pr_auc_logistic",
-            "recall_at_top_10pct": "recall_at_top_10pct_logistic",
-        }
+    merged = _build_pairwise_city_metric_comparison(
+        left_run_dir=logistic_run_dir,
+        right_run_dir=random_forest_run_dir,
+        left_model_label="logistic_saga",
+        right_model_label="random_forest",
+        left_short_label="logistic",
+        right_short_label="rf",
     )
-    rf_df = pd.read_csv(rf_city_path).rename(
-        columns={
-            "model_name": "model_name_rf",
-            "row_count": "row_count_rf",
-            "positive_count": "positive_count_rf",
-            "prevalence": "prevalence_rf",
-            "pr_auc": "pr_auc_rf",
-            "recall_at_top_10pct": "recall_at_top_10pct_rf",
-        }
-    )
-    merged = logistic_df.merge(
-        rf_df,
-        on=["outer_fold", "city_id", "city_name", "climate_group"],
-        how="inner",
-        validate="one_to_one",
-    )
-    merged["pr_auc_delta_rf_minus_logistic"] = merged["pr_auc_rf"] - merged["pr_auc_logistic"]
-    merged["recall_delta_rf_minus_logistic"] = (
-        merged["recall_at_top_10pct_rf"] - merged["recall_at_top_10pct_logistic"]
-    )
-    merged["pr_auc_winner"] = np.where(
-        merged["pr_auc_delta_rf_minus_logistic"] > 0,
-        "random_forest",
-        np.where(merged["pr_auc_delta_rf_minus_logistic"] < 0, "logistic_saga", "tie"),
-    )
-    merged["recall_winner"] = np.where(
-        merged["recall_delta_rf_minus_logistic"] > 0,
-        "random_forest",
-        np.where(merged["recall_delta_rf_minus_logistic"] < 0, "logistic_saga", "tie"),
-    )
-    merged["row_count"] = merged["row_count_logistic"]
-    merged["positive_count"] = merged["positive_count_logistic"]
-    merged["prevalence"] = merged["prevalence_logistic"]
     columns = [
         "outer_fold",
         "city_id",
@@ -274,6 +311,114 @@ def build_city_error_comparison(
         "recall_winner",
     ]
     return merged[columns].sort_values("pr_auc_delta_rf_minus_logistic", ascending=False).reset_index(drop=True)
+
+
+def build_phase1_candidate_comparison(
+    *,
+    hist_gradient_boosting_run_dir: Path,
+    random_forest_run_dir: Path = DEFAULT_RF_FRONTIER_RUN_DIR,
+) -> pd.DataFrame:
+    """Compare the bounded Phase 1 HGB checkpoint against the retained RF frontier run."""
+    merged = _build_pairwise_city_metric_comparison(
+        left_run_dir=random_forest_run_dir,
+        right_run_dir=hist_gradient_boosting_run_dir,
+        left_model_label="random_forest",
+        right_model_label="hist_gradient_boosting",
+        left_short_label="rf",
+        right_short_label="hgb",
+    )
+    columns = [
+        "outer_fold",
+        "city_id",
+        "city_name",
+        "climate_group",
+        "row_count",
+        "positive_count",
+        "prevalence",
+        "pr_auc_rf",
+        "pr_auc_hgb",
+        "pr_auc_delta_hgb_minus_rf",
+        "pr_auc_winner",
+        "recall_at_top_10pct_rf",
+        "recall_at_top_10pct_hgb",
+        "recall_delta_hgb_minus_rf",
+        "recall_winner",
+    ]
+    return merged[columns].sort_values("pr_auc_delta_hgb_minus_rf", ascending=False).reset_index(drop=True)
+
+
+def build_phase2_candidate_comparison(
+    *,
+    logistic_run_dir: Path = DEFAULT_LOGISTIC_5K_RUN_DIR,
+    logistic_climate_interactions_run_dir: Path,
+) -> pd.DataFrame:
+    """Compare the Phase 2 climate-conditioned logistic run against the retained logistic benchmark slice."""
+    merged = _build_pairwise_city_metric_comparison(
+        left_run_dir=logistic_run_dir,
+        right_run_dir=logistic_climate_interactions_run_dir,
+        left_model_label="logistic_saga",
+        right_model_label="logistic_saga_climate_interactions",
+        left_short_label="logistic",
+        right_short_label="logistic_climate_interactions",
+    )
+    columns = [
+        "outer_fold",
+        "city_id",
+        "city_name",
+        "climate_group",
+        "row_count",
+        "positive_count",
+        "prevalence",
+        "pr_auc_logistic",
+        "pr_auc_logistic_climate_interactions",
+        "pr_auc_delta_logistic_climate_interactions_minus_logistic",
+        "pr_auc_winner",
+        "recall_at_top_10pct_logistic",
+        "recall_at_top_10pct_logistic_climate_interactions",
+        "recall_delta_logistic_climate_interactions_minus_logistic",
+        "recall_winner",
+    ]
+    return merged[columns].sort_values(
+        "pr_auc_delta_logistic_climate_interactions_minus_logistic",
+        ascending=False,
+    ).reset_index(drop=True)
+
+
+def build_phase3_candidate_comparison(
+    *,
+    logistic_run_dir: Path = DEFAULT_LOGISTIC_5K_RUN_DIR,
+    richer_predictor_run_dir: Path,
+) -> pd.DataFrame:
+    """Compare the bounded Phase 3 richer-predictor logistic run against the retained logistic benchmark slice."""
+    merged = _build_pairwise_city_metric_comparison(
+        left_run_dir=logistic_run_dir,
+        right_run_dir=richer_predictor_run_dir,
+        left_model_label="logistic_saga",
+        right_model_label="logistic_saga_phase3a",
+        left_short_label="logistic",
+        right_short_label="phase3a",
+    )
+    columns = [
+        "outer_fold",
+        "city_id",
+        "city_name",
+        "climate_group",
+        "row_count",
+        "positive_count",
+        "prevalence",
+        "pr_auc_logistic",
+        "pr_auc_phase3a",
+        "pr_auc_delta_phase3a_minus_logistic",
+        "pr_auc_winner",
+        "recall_at_top_10pct_logistic",
+        "recall_at_top_10pct_phase3a",
+        "recall_delta_phase3a_minus_logistic",
+        "recall_winner",
+    ]
+    return merged[columns].sort_values(
+        "pr_auc_delta_phase3a_minus_logistic",
+        ascending=False,
+    ).reset_index(drop=True)
 
 
 def summarize_city_error_by_climate(city_error_df: pd.DataFrame) -> pd.DataFrame:
@@ -298,6 +443,165 @@ def summarize_city_error_by_climate(city_error_df: pd.DataFrame) -> pd.DataFrame
     return summary
 
 
+def summarize_phase1_candidate_by_climate(candidate_df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize HGB-vs-RF city-level deltas by climate group for the optional Phase 1 checkpoint."""
+    summary = (
+        candidate_df.groupby("climate_group", dropna=False)
+        .agg(
+            city_count=("city_id", "count"),
+            hgb_pr_auc_wins=("pr_auc_winner", lambda values: int((pd.Series(values) == "hist_gradient_boosting").sum())),
+            rf_pr_auc_wins=("pr_auc_winner", lambda values: int((pd.Series(values) == "random_forest").sum())),
+            hgb_recall_wins=("recall_winner", lambda values: int((pd.Series(values) == "hist_gradient_boosting").sum())),
+            rf_recall_wins=("recall_winner", lambda values: int((pd.Series(values) == "random_forest").sum())),
+            mean_pr_auc_delta=("pr_auc_delta_hgb_minus_rf", "mean"),
+            median_pr_auc_delta=("pr_auc_delta_hgb_minus_rf", "median"),
+            mean_recall_delta=("recall_delta_hgb_minus_rf", "mean"),
+            median_recall_delta=("recall_delta_hgb_minus_rf", "median"),
+        )
+        .reset_index()
+        .sort_values("climate_group")
+        .reset_index(drop=True)
+    )
+    return summary
+
+
+def summarize_phase2_candidate_by_climate(candidate_df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize climate-conditioned logistic deltas by climate group."""
+    summary = (
+        candidate_df.groupby("climate_group", dropna=False)
+        .agg(
+            city_count=("city_id", "count"),
+            mean_pr_auc_logistic=("pr_auc_logistic", "mean"),
+            mean_pr_auc_logistic_climate_interactions=("pr_auc_logistic_climate_interactions", "mean"),
+            interaction_pr_auc_wins=(
+                "pr_auc_winner",
+                lambda values: int((pd.Series(values) == "logistic_saga_climate_interactions").sum()),
+            ),
+            logistic_pr_auc_wins=("pr_auc_winner", lambda values: int((pd.Series(values) == "logistic_saga").sum())),
+            mean_pr_auc_delta=("pr_auc_delta_logistic_climate_interactions_minus_logistic", "mean"),
+            median_pr_auc_delta=("pr_auc_delta_logistic_climate_interactions_minus_logistic", "median"),
+            mean_recall_at_top_10pct_logistic=("recall_at_top_10pct_logistic", "mean"),
+            mean_recall_at_top_10pct_logistic_climate_interactions=(
+                "recall_at_top_10pct_logistic_climate_interactions",
+                "mean",
+            ),
+            interaction_recall_wins=(
+                "recall_winner",
+                lambda values: int((pd.Series(values) == "logistic_saga_climate_interactions").sum()),
+            ),
+            logistic_recall_wins=(
+                "recall_winner",
+                lambda values: int((pd.Series(values) == "logistic_saga").sum()),
+            ),
+            mean_recall_delta=("recall_delta_logistic_climate_interactions_minus_logistic", "mean"),
+            median_recall_delta=("recall_delta_logistic_climate_interactions_minus_logistic", "median"),
+        )
+        .reset_index()
+        .sort_values("climate_group")
+        .reset_index(drop=True)
+    )
+    return summary
+
+
+def summarize_phase2_climate_disparity(candidate_climate_df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize whether the Phase 2 variant narrows mean climate-group performance spread."""
+    if candidate_climate_df.empty:
+        return pd.DataFrame(
+            columns=[
+                "metric",
+                "baseline_climate_group_range",
+                "interaction_climate_group_range",
+                "range_delta_interaction_minus_baseline",
+            ]
+        )
+
+    disparity_df = pd.DataFrame(
+        [
+            {
+                "metric": "pr_auc",
+                "baseline_climate_group_range": (
+                    candidate_climate_df["mean_pr_auc_logistic"].max()
+                    - candidate_climate_df["mean_pr_auc_logistic"].min()
+                ),
+                "interaction_climate_group_range": (
+                    candidate_climate_df["mean_pr_auc_logistic_climate_interactions"].max()
+                    - candidate_climate_df["mean_pr_auc_logistic_climate_interactions"].min()
+                ),
+            },
+            {
+                "metric": "recall_at_top_10pct",
+                "baseline_climate_group_range": (
+                    candidate_climate_df["mean_recall_at_top_10pct_logistic"].max()
+                    - candidate_climate_df["mean_recall_at_top_10pct_logistic"].min()
+                ),
+                "interaction_climate_group_range": (
+                    candidate_climate_df["mean_recall_at_top_10pct_logistic_climate_interactions"].max()
+                    - candidate_climate_df["mean_recall_at_top_10pct_logistic_climate_interactions"].min()
+                ),
+            },
+        ]
+    )
+    disparity_df["range_delta_interaction_minus_baseline"] = (
+        disparity_df["interaction_climate_group_range"] - disparity_df["baseline_climate_group_range"]
+    )
+    return disparity_df
+
+
+def summarize_phase3_candidate_by_climate(candidate_df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize the richer-predictor Phase 3 checkpoint by climate group."""
+    summary = (
+        candidate_df.groupby("climate_group", dropna=False)
+        .agg(
+            city_count=("city_id", "count"),
+            mean_pr_auc_logistic=("pr_auc_logistic", "mean"),
+            mean_pr_auc_phase3a=("pr_auc_phase3a", "mean"),
+            phase3a_pr_auc_wins=("pr_auc_winner", lambda values: int((pd.Series(values) == "logistic_saga_phase3a").sum())),
+            logistic_pr_auc_wins=("pr_auc_winner", lambda values: int((pd.Series(values) == "logistic_saga").sum())),
+            mean_pr_auc_delta=("pr_auc_delta_phase3a_minus_logistic", "mean"),
+            median_pr_auc_delta=("pr_auc_delta_phase3a_minus_logistic", "median"),
+            mean_recall_at_top_10pct_logistic=("recall_at_top_10pct_logistic", "mean"),
+            mean_recall_at_top_10pct_phase3a=("recall_at_top_10pct_phase3a", "mean"),
+            phase3a_recall_wins=(
+                "recall_winner",
+                lambda values: int((pd.Series(values) == "logistic_saga_phase3a").sum()),
+            ),
+            logistic_recall_wins=("recall_winner", lambda values: int((pd.Series(values) == "logistic_saga").sum())),
+            mean_recall_delta=("recall_delta_phase3a_minus_logistic", "mean"),
+            median_recall_delta=("recall_delta_phase3a_minus_logistic", "median"),
+        )
+        .reset_index()
+        .sort_values("climate_group")
+        .reset_index(drop=True)
+    )
+    return summary
+
+
+def _benchmark_display_label(row: pd.Series) -> str:
+    run_label = str(row["run_label"])
+    model_family = str(row["model_family"])
+    preset = str(row["preset"])
+    rows_per_city = row["rows_per_city"]
+
+    if run_label == "impervious_only_baseline":
+        return "Imp.\nbase"
+    if run_label == "land_cover_only_baseline":
+        return "LC\nbase"
+    if model_family == "logistic_saga":
+        return f"Log\n{int(rows_per_city) // 1000}k" if pd.notna(rows_per_city) else "Log"
+    if model_family == "logistic_saga_climate_interactions":
+        return f"Log+CI\n{int(rows_per_city) // 1000}k" if pd.notna(rows_per_city) else "Log+CI"
+    if model_family == "random_forest":
+        if preset == "smoke":
+            return "RF\nsmoke"
+        if preset == "frontier":
+            return "RF\nfrontier"
+        if preset == "full":
+            return "RF\nfull"
+    if model_family == "hist_gradient_boosting":
+        return "HGB\nsmoke" if preset == "smoke" else "HGB"
+    return run_label
+
+
 def _format_scalar(value: object, decimals: int = 4) -> str:
     if pd.isna(value):
         return "n/a"
@@ -310,6 +614,19 @@ def _format_scalar(value: object, decimals: int = 4) -> str:
 
 def _dataframe_to_markdown(df: pd.DataFrame, decimal_columns: set[str] | None = None) -> str:
     decimal_columns = decimal_columns or set()
+    integer_like_columns = {
+        "param_candidate_count",
+        "estimated_total_inner_fits",
+        "city_count",
+        "rf_pr_auc_wins",
+        "logistic_pr_auc_wins",
+        "rf_recall_wins",
+        "logistic_recall_wins",
+        "hgb_pr_auc_wins",
+        "hgb_recall_wins",
+        "interaction_pr_auc_wins",
+        "interaction_recall_wins",
+    }
     header = "| " + " | ".join(df.columns.astype(str)) + " |"
     separator = "| " + " | ".join(["---"] * len(df.columns)) + " |"
     rows: list[str] = [header, separator]
@@ -317,7 +634,20 @@ def _dataframe_to_markdown(df: pd.DataFrame, decimal_columns: set[str] | None = 
         formatted = []
         for column_name in df.columns:
             value = row[column_name]
-            formatted.append(_format_scalar(value, decimals=4 if column_name in decimal_columns else 1 if column_name == "runtime_minutes" else 0 if column_name in {"param_candidate_count", "estimated_total_inner_fits", "city_count", "rf_pr_auc_wins", "logistic_pr_auc_wins", "rf_recall_wins", "logistic_recall_wins"} else 4))
+            formatted.append(
+                _format_scalar(
+                    value,
+                    decimals=(
+                        4
+                        if column_name in decimal_columns
+                        else 1
+                        if column_name == "runtime_minutes"
+                        else 0
+                        if column_name in integer_like_columns
+                        else 4
+                    ),
+                )
+            )
         rows.append("| " + " | ".join(formatted) + " |")
     return "\n".join(rows)
 
@@ -325,16 +655,7 @@ def _dataframe_to_markdown(df: pd.DataFrame, decimal_columns: set[str] | None = 
 def plot_benchmark_metric_comparison(benchmark_df: pd.DataFrame, output_path: Path) -> Path:
     """Write a benchmark comparison figure across retained runs."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    display_labels = [
-        "Imp.\nbase" if label == "impervious_only_baseline" else
-        "LC\nbase" if label == "land_cover_only_baseline" else
-        "Log\n5k" if label == "full_allfolds_s5000_sampled-full-allfolds_2026-04-07_235825" else
-        "Log\n10k" if label == "full_allfolds_s10000_samplecurve-10k_2026-04-08_004723" else
-        "Log\n20k" if label == "full_allfolds_s20000_samplecurve-20k_2026-04-08_021152" else
-        "RF\nsmoke" if label == "smoke_allfolds_s5000_nonlinear-check_2026-04-11_163814" else
-        "RF\nfrontier"
-        for label in benchmark_df["run_label"].tolist()
-    ]
+    display_labels = [_benchmark_display_label(row) for _, row in benchmark_df.iterrows()]
     metric_specs = [
         ("pooled_pr_auc", "Pooled PR AUC"),
         ("mean_city_pr_auc", "Mean City PR AUC"),
@@ -343,7 +664,9 @@ def plot_benchmark_metric_comparison(benchmark_df: pd.DataFrame, output_path: Pa
     colors = {
         "baseline": "#8f6f4f",
         "logistic_saga": "#2f6c8f",
+        "logistic_saga_climate_interactions": "#4f8d5d",
         "random_forest": "#9b3d2f",
+        "hist_gradient_boosting": "#3f7d3a",
     }
     fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(13, 4.5), constrained_layout=True)
     x = np.arange(len(benchmark_df))
@@ -358,7 +681,7 @@ def plot_benchmark_metric_comparison(benchmark_df: pd.DataFrame, output_path: Pa
         axis.set_xticklabels(display_labels, fontsize=9)
         axis.set_ylim(0.0, max(0.22, benchmark_df[metric_column].max() * 1.15))
         axis.grid(axis="y", alpha=0.25)
-    fig.suptitle("Cross-City Benchmark Metrics: Logistic vs Random Forest", fontsize=13)
+    fig.suptitle("Cross-City Benchmark Metrics", fontsize=13)
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_path
@@ -369,7 +692,12 @@ def plot_runtime_vs_performance(benchmark_df: pd.DataFrame, output_path: Path) -
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tuned_df = benchmark_df.loc[benchmark_df["runtime_minutes"].notna()].copy().reset_index(drop=True)
     fig, ax = plt.subplots(figsize=(7, 5))
-    color_map = {"logistic_saga": "#2f6c8f", "random_forest": "#9b3d2f"}
+    color_map = {
+        "logistic_saga": "#2f6c8f",
+        "logistic_saga_climate_interactions": "#4f8d5d",
+        "random_forest": "#9b3d2f",
+        "hist_gradient_boosting": "#3f7d3a",
+    }
     for _, row in tuned_df.iterrows():
         ax.scatter(
             float(row["runtime_minutes"]),
@@ -378,7 +706,7 @@ def plot_runtime_vs_performance(benchmark_df: pd.DataFrame, output_path: Path) -
             color=color_map.get(str(row["model_family"]), "#666666"),
         )
         ax.annotate(
-            str(row["run_label"]).replace("full_allfolds_", "").replace("_2026-04-07_235825", "").replace("_2026-04-08_004723", "").replace("_2026-04-08_021152", "").replace("_2026-04-11_163814", "").replace("_2026-04-11_173430", ""),
+            _benchmark_display_label(row),
             (float(row["runtime_minutes"]), float(row["pooled_pr_auc"])),
             textcoords="offset points",
             xytext=(5, 4),
@@ -450,6 +778,13 @@ def write_modeling_report_markdown(
     benchmark_metrics_figure_path: Path,
     runtime_figure_path: Path,
     city_delta_figure_path: Path,
+    phase1_candidate_df: pd.DataFrame | None = None,
+    phase1_candidate_climate_df: pd.DataFrame | None = None,
+    phase2_candidate_df: pd.DataFrame | None = None,
+    phase2_candidate_climate_df: pd.DataFrame | None = None,
+    phase2_candidate_disparity_df: pd.DataFrame | None = None,
+    phase3_candidate_df: pd.DataFrame | None = None,
+    phase3_candidate_climate_df: pd.DataFrame | None = None,
 ) -> Path:
     """Write the markdown report for the current benchmark and city-error analysis."""
     benchmark_display = benchmark_df.copy()
@@ -548,6 +883,145 @@ def write_modeling_report_markdown(
         "That supports the current project conclusion: RF adds a real but uneven nonlinear benefit, and the current frontier checkpoint is informative enough for reporting without automatically justifying a broader RF search.",
         "",
     ]
+    if phase1_candidate_df is not None and phase1_candidate_climate_df is not None:
+        hgb_pr_auc_wins = int((phase1_candidate_df["pr_auc_delta_hgb_minus_rf"] > 0).sum())
+        rf_phase1_pr_auc_wins = int((phase1_candidate_df["pr_auc_delta_hgb_minus_rf"] < 0).sum())
+        hgb_recall_wins = int((phase1_candidate_df["recall_delta_hgb_minus_rf"] > 0).sum())
+        rf_phase1_recall_wins = int((phase1_candidate_df["recall_delta_hgb_minus_rf"] < 0).sum())
+        report_lines.extend(
+            [
+                "## Phase 1 Candidate Checkpoint",
+                "",
+                "This section is optional and does not replace the retained logistic/RF benchmark story. "
+                "It records how the bounded histogram-gradient-boosting smoke run compares with the retained RF frontier checkpoint on the same six-feature contract.",
+                "",
+                f"- HGB smoke beats RF frontier on PR AUC in `{hgb_pr_auc_wins}` city-fold rows and trails in `{rf_phase1_pr_auc_wins}`.",
+                f"- HGB smoke beats RF frontier on recall at top 10% in `{hgb_recall_wins}` city-fold rows and trails in `{rf_phase1_recall_wins}`.",
+                f"- Mean PR AUC delta (HGB minus RF frontier) is `{phase1_candidate_df['pr_auc_delta_hgb_minus_rf'].mean():.4f}`.",
+                f"- Mean recall-at-top-10% delta (HGB minus RF frontier) is `{phase1_candidate_df['recall_delta_hgb_minus_rf'].mean():.4f}`.",
+                "",
+                "### HGB vs RF Frontier Climate Summary",
+                "",
+                _dataframe_to_markdown(
+                    phase1_candidate_climate_df,
+                    decimal_columns={
+                        "mean_pr_auc_delta",
+                        "median_pr_auc_delta",
+                        "mean_recall_delta",
+                        "median_recall_delta",
+                    },
+                ),
+                "",
+            ]
+        )
+    if (
+        phase2_candidate_df is not None
+        and phase2_candidate_climate_df is not None
+        and phase2_candidate_disparity_df is not None
+    ):
+        interaction_pr_auc_wins = int(
+            (phase2_candidate_df["pr_auc_delta_logistic_climate_interactions_minus_logistic"] > 0).sum()
+        )
+        logistic_phase2_pr_auc_wins = int(
+            (phase2_candidate_df["pr_auc_delta_logistic_climate_interactions_minus_logistic"] < 0).sum()
+        )
+        interaction_recall_wins = int(
+            (phase2_candidate_df["recall_delta_logistic_climate_interactions_minus_logistic"] > 0).sum()
+        )
+        logistic_phase2_recall_wins = int(
+            (phase2_candidate_df["recall_delta_logistic_climate_interactions_minus_logistic"] < 0).sum()
+        )
+        report_lines.extend(
+            [
+                "## Phase 2 Climate-Conditioned Checkpoint",
+                "",
+                "This section is optional and does not replace the retained logistic/RF benchmark story. "
+                "It records how a separate logistic SAGA variant with training-only climate-by-numeric interactions "
+                "compares against the retained logistic benchmark slice on the same six-feature contract.",
+                "",
+                f"- The climate-interaction logistic variant beats retained logistic on PR AUC in `{interaction_pr_auc_wins}` city-fold rows and trails in `{logistic_phase2_pr_auc_wins}`.",
+                f"- The climate-interaction logistic variant beats retained logistic on recall at top 10% in `{interaction_recall_wins}` city-fold rows and trails in `{logistic_phase2_recall_wins}`.",
+                (
+                    f"- Mean PR AUC delta (interaction logistic minus retained logistic) is "
+                    f"`{phase2_candidate_df['pr_auc_delta_logistic_climate_interactions_minus_logistic'].mean():.4f}`."
+                ),
+                (
+                    f"- Mean recall-at-top-10% delta (interaction logistic minus retained logistic) is "
+                    f"`{phase2_candidate_df['recall_delta_logistic_climate_interactions_minus_logistic'].mean():.4f}`."
+                ),
+                "",
+                "### Climate Summary",
+                "",
+                _dataframe_to_markdown(
+                    phase2_candidate_climate_df,
+                    decimal_columns={
+                        "mean_pr_auc_logistic",
+                        "mean_pr_auc_logistic_climate_interactions",
+                        "mean_pr_auc_delta",
+                        "median_pr_auc_delta",
+                        "mean_recall_at_top_10pct_logistic",
+                        "mean_recall_at_top_10pct_logistic_climate_interactions",
+                        "mean_recall_delta",
+                        "median_recall_delta",
+                    },
+                ),
+                "",
+                "### Climate-Group Disparity Summary",
+                "",
+                _dataframe_to_markdown(
+                    phase2_candidate_disparity_df,
+                    decimal_columns={
+                        "baseline_climate_group_range",
+                        "interaction_climate_group_range",
+                        "range_delta_interaction_minus_baseline",
+                    },
+                ),
+                "",
+            ]
+        )
+    if phase3_candidate_df is not None and phase3_candidate_climate_df is not None:
+        phase3_pr_auc_wins = int((phase3_candidate_df["pr_auc_delta_phase3a_minus_logistic"] > 0).sum())
+        logistic_phase3_pr_auc_wins = int((phase3_candidate_df["pr_auc_delta_phase3a_minus_logistic"] < 0).sum())
+        phase3_recall_wins = int((phase3_candidate_df["recall_delta_phase3a_minus_logistic"] > 0).sum())
+        logistic_phase3_recall_wins = int((phase3_candidate_df["recall_delta_phase3a_minus_logistic"] < 0).sum())
+        report_lines.extend(
+            [
+                "## Phase 3 Richer-Predictor Checkpoint",
+                "",
+                "This section is optional and does not replace the retained six-feature benchmark story. "
+                "It records one bounded Phase 3A expansion: a logistic SAGA run on the retained `5000` rows-per-city "
+                "slice with an NLCD neighborhood-context bundle added to the frozen six-feature contract. "
+                "The added predictors are a `270 m` tree-cover proxy, a `270 m` vegetated-cover proxy, and a `270 m` local impervious mean.",
+                "",
+                f"- The richer-feature logistic variant beats retained logistic on PR AUC in `{phase3_pr_auc_wins}` city-fold rows and trails in `{logistic_phase3_pr_auc_wins}`.",
+                f"- The richer-feature logistic variant beats retained logistic on recall at top 10% in `{phase3_recall_wins}` city-fold rows and trails in `{logistic_phase3_recall_wins}`.",
+                (
+                    f"- Mean PR AUC delta (Phase 3A richer logistic minus retained logistic) is "
+                    f"`{phase3_candidate_df['pr_auc_delta_phase3a_minus_logistic'].mean():.4f}`."
+                ),
+                (
+                    f"- Mean recall-at-top-10% delta (Phase 3A richer logistic minus retained logistic) is "
+                    f"`{phase3_candidate_df['recall_delta_phase3a_minus_logistic'].mean():.4f}`."
+                ),
+                "",
+                "### Climate Summary",
+                "",
+                _dataframe_to_markdown(
+                    phase3_candidate_climate_df,
+                    decimal_columns={
+                        "mean_pr_auc_logistic",
+                        "mean_pr_auc_phase3a",
+                        "mean_pr_auc_delta",
+                        "median_pr_auc_delta",
+                        "mean_recall_at_top_10pct_logistic",
+                        "mean_recall_at_top_10pct_phase3a",
+                        "mean_recall_delta",
+                        "median_recall_delta",
+                    },
+                ),
+                "",
+            ]
+        )
     paths.output_dir.mkdir(parents=True, exist_ok=True)
     paths.markdown_path.write_text("\n".join(report_lines), encoding="utf-8")
     return paths.markdown_path
@@ -559,6 +1033,9 @@ def generate_modeling_reporting_artifacts(
     baseline_summary_path: Path = DEFAULT_BASELINE_SUMMARY_PATH,
     logistic_run_dir: Path = DEFAULT_LOGISTIC_5K_RUN_DIR,
     random_forest_run_dir: Path = DEFAULT_RF_FRONTIER_RUN_DIR,
+    hist_gradient_boosting_run_dir: Path | None = None,
+    logistic_climate_interactions_run_dir: Path | None = None,
+    phase3_richer_logistic_run_dir: Path | None = None,
     benchmark_run_specs: list[BenchmarkRunSpec] | None = None,
     outputs_root: Path = MODELING_REPORTING_OUTPUTS,
     figures_root: Path = MODELING_REPORTING_FIGURES,
@@ -569,15 +1046,60 @@ def generate_modeling_reporting_artifacts(
     paths.tables_dir.mkdir(parents=True, exist_ok=True)
     paths.figures_dir.mkdir(parents=True, exist_ok=True)
 
+    resolved_run_specs = _default_benchmark_run_specs() if benchmark_run_specs is None else list(benchmark_run_specs)
+    if hist_gradient_boosting_run_dir is not None:
+        resolved_hgb_dir = hist_gradient_boosting_run_dir.resolve()
+        if all(spec.run_dir.resolve() != resolved_hgb_dir for spec in resolved_run_specs):
+            resolved_run_specs.append(
+                BenchmarkRunSpec(
+                    label="hist_gradient_boosting_smoke_5k",
+                    run_dir=resolved_hgb_dir,
+                    notes="Bounded Phase 1 better-learner checkpoint on the fixed six-feature contract",
+                )
+            )
+    if logistic_climate_interactions_run_dir is not None:
+        resolved_phase2_dir = logistic_climate_interactions_run_dir.resolve()
+        if all(spec.run_dir.resolve() != resolved_phase2_dir for spec in resolved_run_specs):
+            resolved_run_specs.append(
+                BenchmarkRunSpec(
+                    label="logistic_saga_climate_interactions",
+                    run_dir=resolved_phase2_dir,
+                    notes=(
+                        "Phase 2 climate-conditioned logistic benchmark on the fixed six-feature contract "
+                        "with training-only climate-by-numeric interactions"
+                    ),
+                )
+            )
+    if phase3_richer_logistic_run_dir is not None:
+        resolved_phase3_dir = phase3_richer_logistic_run_dir.resolve()
+        if all(spec.run_dir.resolve() != resolved_phase3_dir for spec in resolved_run_specs):
+            resolved_run_specs.append(
+                BenchmarkRunSpec(
+                    label="logistic_saga_phase3a",
+                    run_dir=resolved_phase3_dir,
+                    notes=(
+                        "Phase 3A richer-predictor logistic checkpoint with bounded NLCD neighborhood-context "
+                        "features added to the retained six-feature contract"
+                    ),
+                )
+            )
+
     benchmark_df = build_benchmark_comparison_table(
         baseline_summary_path=baseline_summary_path,
-        run_specs=benchmark_run_specs,
+        run_specs=resolved_run_specs,
     )
     city_error_df = build_city_error_comparison(
         logistic_run_dir=logistic_run_dir,
         random_forest_run_dir=random_forest_run_dir,
     )
     climate_summary_df = summarize_city_error_by_climate(city_error_df)
+    phase1_candidate_df: pd.DataFrame | None = None
+    phase1_candidate_climate_df: pd.DataFrame | None = None
+    phase2_candidate_df: pd.DataFrame | None = None
+    phase2_candidate_climate_df: pd.DataFrame | None = None
+    phase2_candidate_disparity_df: pd.DataFrame | None = None
+    phase3_candidate_df: pd.DataFrame | None = None
+    phase3_candidate_climate_df: pd.DataFrame | None = None
 
     benchmark_table_path = paths.tables_dir / f"{report_slug}_benchmark_table.csv"
     city_error_table_path = paths.tables_dir / f"{report_slug}_city_error_comparison.csv"
@@ -585,6 +1107,54 @@ def generate_modeling_reporting_artifacts(
     benchmark_df.to_csv(benchmark_table_path, index=False)
     city_error_df.to_csv(city_error_table_path, index=False)
     climate_summary_df.to_csv(climate_summary_path, index=False)
+    phase1_candidate_table_path: Path | None = None
+    phase1_candidate_climate_summary_path: Path | None = None
+    phase2_candidate_table_path: Path | None = None
+    phase2_candidate_climate_summary_path: Path | None = None
+    phase2_candidate_disparity_summary_path: Path | None = None
+    phase3_candidate_table_path: Path | None = None
+    phase3_candidate_climate_summary_path: Path | None = None
+    if hist_gradient_boosting_run_dir is not None:
+        phase1_candidate_df = build_phase1_candidate_comparison(
+            hist_gradient_boosting_run_dir=hist_gradient_boosting_run_dir,
+            random_forest_run_dir=random_forest_run_dir,
+        )
+        phase1_candidate_climate_df = summarize_phase1_candidate_by_climate(phase1_candidate_df)
+        phase1_candidate_table_path = paths.tables_dir / f"{report_slug}_phase1_hgb_vs_rf.csv"
+        phase1_candidate_climate_summary_path = (
+            paths.tables_dir / f"{report_slug}_phase1_hgb_vs_rf_by_climate.csv"
+        )
+        phase1_candidate_df.to_csv(phase1_candidate_table_path, index=False)
+        phase1_candidate_climate_df.to_csv(phase1_candidate_climate_summary_path, index=False)
+    if logistic_climate_interactions_run_dir is not None:
+        phase2_candidate_df = build_phase2_candidate_comparison(
+            logistic_run_dir=logistic_run_dir,
+            logistic_climate_interactions_run_dir=logistic_climate_interactions_run_dir,
+        )
+        phase2_candidate_climate_df = summarize_phase2_candidate_by_climate(phase2_candidate_df)
+        phase2_candidate_disparity_df = summarize_phase2_climate_disparity(phase2_candidate_climate_df)
+        phase2_candidate_table_path = paths.tables_dir / f"{report_slug}_phase2_logistic_ci_vs_logistic.csv"
+        phase2_candidate_climate_summary_path = (
+            paths.tables_dir / f"{report_slug}_phase2_logistic_ci_vs_logistic_by_climate.csv"
+        )
+        phase2_candidate_disparity_summary_path = (
+            paths.tables_dir / f"{report_slug}_phase2_logistic_ci_vs_logistic_disparity.csv"
+        )
+        phase2_candidate_df.to_csv(phase2_candidate_table_path, index=False)
+        phase2_candidate_climate_df.to_csv(phase2_candidate_climate_summary_path, index=False)
+        phase2_candidate_disparity_df.to_csv(phase2_candidate_disparity_summary_path, index=False)
+    if phase3_richer_logistic_run_dir is not None:
+        phase3_candidate_df = build_phase3_candidate_comparison(
+            logistic_run_dir=logistic_run_dir,
+            richer_predictor_run_dir=phase3_richer_logistic_run_dir,
+        )
+        phase3_candidate_climate_df = summarize_phase3_candidate_by_climate(phase3_candidate_df)
+        phase3_candidate_table_path = paths.tables_dir / f"{report_slug}_phase3_richer_vs_logistic.csv"
+        phase3_candidate_climate_summary_path = (
+            paths.tables_dir / f"{report_slug}_phase3_richer_vs_logistic_by_climate.csv"
+        )
+        phase3_candidate_df.to_csv(phase3_candidate_table_path, index=False)
+        phase3_candidate_climate_df.to_csv(phase3_candidate_climate_summary_path, index=False)
 
     benchmark_metrics_figure_path = paths.figures_dir / f"{report_slug}_benchmark_metrics.png"
     runtime_figure_path = paths.figures_dir / f"{report_slug}_runtime_vs_pr_auc.png"
@@ -601,6 +1171,13 @@ def generate_modeling_reporting_artifacts(
         benchmark_metrics_figure_path=benchmark_metrics_figure_path,
         runtime_figure_path=runtime_figure_path,
         city_delta_figure_path=city_delta_figure_path,
+        phase1_candidate_df=phase1_candidate_df,
+        phase1_candidate_climate_df=phase1_candidate_climate_df,
+        phase2_candidate_df=phase2_candidate_df,
+        phase2_candidate_climate_df=phase2_candidate_climate_df,
+        phase2_candidate_disparity_df=phase2_candidate_disparity_df,
+        phase3_candidate_df=phase3_candidate_df,
+        phase3_candidate_climate_df=phase3_candidate_climate_df,
     )
     logger.info("Wrote cross-city modeling reporting artifacts under %s", paths.output_dir)
     return ModelingReportingResult(
@@ -611,4 +1188,11 @@ def generate_modeling_reporting_artifacts(
         benchmark_metrics_figure_path=benchmark_metrics_figure_path,
         runtime_figure_path=runtime_figure_path,
         city_delta_figure_path=city_delta_figure_path,
+        phase1_candidate_table_path=phase1_candidate_table_path,
+        phase1_candidate_climate_summary_path=phase1_candidate_climate_summary_path,
+        phase2_candidate_table_path=phase2_candidate_table_path,
+        phase2_candidate_climate_summary_path=phase2_candidate_climate_summary_path,
+        phase2_candidate_disparity_summary_path=phase2_candidate_disparity_summary_path,
+        phase3_candidate_table_path=phase3_candidate_table_path,
+        phase3_candidate_climate_summary_path=phase3_candidate_climate_summary_path,
     )

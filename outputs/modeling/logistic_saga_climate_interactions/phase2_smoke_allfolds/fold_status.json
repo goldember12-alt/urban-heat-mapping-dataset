@@ -1,0 +1,151 @@
+{
+  "run_id": "a0e22a1ed9e947b49b555f4c78414454",
+  "output_dir": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds",
+  "model_family": "logistic_saga_climate_interactions",
+  "tuning_preset": "smoke",
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "dataset_path": "data_processed\\final\\final_dataset.parquet",
+  "folds_path": "data_processed\\modeling\\city_outer_folds.parquet",
+  "feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "sample_rows_per_city": 5000,
+  "random_state": 42,
+  "candidate_count": 4,
+  "inner_cv_splits_requested": 3,
+  "estimated_total_inner_fits": 60,
+  "run_started_at_utc": "2026-04-13T03:33:10.196151+00:00",
+  "last_updated_utc": "2026-04-13T03:58:56.217609+00:00",
+  "completed_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "remaining_outer_folds": [],
+  "folds": {
+    "0": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T03:34:02.294580+00:00",
+      "last_updated_utc": "2026-04-13T03:38:52.826231+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T03:38:52.826231+00:00",
+      "best_inner_cv_average_precision": 0.15859623417936816,
+      "fold_wall_clock_seconds": 290.2443921000231,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_00\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_00\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_00\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_00\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_00\\runtime.json"
+      }
+    },
+    "1": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T03:38:52.950697+00:00",
+      "last_updated_utc": "2026-04-13T03:42:05.114127+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T03:42:05.114127+00:00",
+      "best_inner_cv_average_precision": 0.17557839488131544,
+      "fold_wall_clock_seconds": 192.01289949996863,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_01\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_01\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_01\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_01\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_01\\runtime.json"
+      }
+    },
+    "2": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T03:42:05.202530+00:00",
+      "last_updated_utc": "2026-04-13T03:48:28.086278+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T03:48:28.086278+00:00",
+      "best_inner_cv_average_precision": 0.17861137597585297,
+      "fold_wall_clock_seconds": 382.6689771999954,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_02\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_02\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_02\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_02\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_02\\runtime.json"
+      }
+    },
+    "3": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T03:48:28.185418+00:00",
+      "last_updated_utc": "2026-04-13T03:52:04.632102+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T03:52:04.632102+00:00",
+      "best_inner_cv_average_precision": 0.1772794915302519,
+      "fold_wall_clock_seconds": 216.21991210000124,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_03\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_03\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_03\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_03\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_03\\runtime.json"
+      }
+    },
+    "4": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T03:52:04.730981+00:00",
+      "last_updated_utc": "2026-04-13T03:58:55.529391+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T03:58:55.529391+00:00",
+      "best_inner_cv_average_precision": 0.15845687880645262,
+      "fold_wall_clock_seconds": 410.57114779995754,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_04\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_04\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_04\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_04\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\logistic_saga_climate_interactions\\phase2_smoke_allfolds\\fold_artifacts\\outer_fold_04\\runtime.json"
+      }
+    }
+  },
+  "last_error": null
+}

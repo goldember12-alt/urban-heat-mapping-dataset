@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -190,7 +191,8 @@ def main() -> None:
     if result.final_dataset_result is not None:
         _print_if_path(result.final_dataset_result.parquet_path)
         _print_if_path(result.final_dataset_result.csv_path)
-        print(f"rows={len(result.final_dataset_result.final_df)}")
+        artifact_summary = json.loads(result.final_dataset_result.artifact_summary_path.read_text(encoding="utf-8"))
+        print(f"rows={artifact_summary['row_count']}")
 
     if result.blocked_stages:
         print(f"blocked_stages={';'.join(result.blocked_stages)}")

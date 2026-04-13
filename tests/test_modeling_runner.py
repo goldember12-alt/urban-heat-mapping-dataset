@@ -3,6 +3,7 @@ import warnings
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from sklearn.model_selection import ParameterGrid
@@ -10,6 +11,8 @@ from sklearn.model_selection import ParameterGrid
 from src.modeling_baselines import run_modeling_baselines
 from src.modeling_config import (
     DEFAULT_FEATURE_COLUMNS,
+    DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER,
+    DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT,
     DEFAULT_LOGISTIC_MAX_ITER,
     DEFAULT_LOGISTIC_TOL,
     get_model_tuning_spec,
@@ -35,12 +38,18 @@ from src.modeling_tuning_history import (
     refresh_tuning_history_artifacts,
 )
 from src.modeling_runner import (
+    build_hist_gradient_boosting_pipeline,
+    build_logistic_saga_climate_interactions_pipeline,
     build_logistic_saga_pipeline,
     build_random_forest_pipeline,
     _get_pipeline_cache_base_dir,
+    run_hist_gradient_boosting_model,
+    run_logistic_saga_climate_interactions_model,
     run_logistic_saga_model,
     run_random_forest_model,
 )
+from src.run_hist_gradient_boosting import _build_arg_parser as build_hgb_arg_parser
+from src.run_logistic_saga_climate_interactions import _build_arg_parser as build_logistic_ci_arg_parser
 from src.run_logistic_saga import _build_arg_parser as build_logistic_arg_parser
 from src.run_random_forest import _build_arg_parser as build_random_forest_arg_parser
 
@@ -157,6 +166,8 @@ def _build_mixed_type_feature_fixture() -> tuple[pd.DataFrame, pd.Series]:
 def _minimal_param_grid_for(model_name: str) -> list[dict[str, object]]:
     if model_name == "logistic_saga":
         return [{"model__C": [0.1], "model__l1_ratio": [0.0]}]
+    if model_name == "logistic_saga_climate_interactions":
+        return [{"model__C": [0.1], "model__l1_ratio": [0.0]}]
     if model_name == "random_forest":
         return [
             {
@@ -166,14 +177,27 @@ def _minimal_param_grid_for(model_name: str) -> list[dict[str, object]]:
                 "model__min_samples_leaf": [1],
             }
         ]
+    if model_name == "hist_gradient_boosting":
+        return [
+            {
+                "model__learning_rate": [0.1],
+                "model__max_leaf_nodes": [15],
+                "model__min_samples_leaf": [20],
+                "model__l2_regularization": [0.0],
+            }
+        ]
     raise ValueError(f"Unsupported model_name: {model_name}")
 
 
 def _runner_for(model_name: str):
     if model_name == "logistic_saga":
         return run_logistic_saga_model
+    if model_name == "logistic_saga_climate_interactions":
+        return run_logistic_saga_climate_interactions_model
     if model_name == "random_forest":
         return run_random_forest_model
+    if model_name == "hist_gradient_boosting":
+        return run_hist_gradient_boosting_model
     raise ValueError(f"Unsupported model_name: {model_name}")
 
 
@@ -184,8 +208,12 @@ def _output_dir_for(workspace_tmp_path: Path, model_name: str) -> Path:
 def _runner_extra_kwargs_for(model_name: str) -> dict[str, object]:
     if model_name == "logistic_saga":
         return {}
+    if model_name == "logistic_saga_climate_interactions":
+        return {}
     if model_name == "random_forest":
         return {"model_n_jobs": 1}
+    if model_name == "hist_gradient_boosting":
+        return {}
     raise ValueError(f"Unsupported model_name: {model_name}")
 
 
@@ -232,6 +260,32 @@ def test_logistic_preprocessor_routes_contract_categoricals_away_from_numeric_br
     assert "land_cover_class" not in transformer_columns["numeric"]
 
 
+def test_logistic_climate_interaction_preprocessor_keeps_base_six_feature_contract():
+    X, y = _build_mixed_type_feature_fixture()
+    pipeline = build_logistic_saga_climate_interactions_pipeline(DEFAULT_FEATURE_COLUMNS)
+    preprocessor = pipeline.named_steps["preprocess"]
+    transformed = preprocessor.fit_transform(X, y)
+    feature_names = preprocessor.get_feature_names_out().tolist()
+
+    assert preprocessor.feature_columns == tuple(DEFAULT_FEATURE_COLUMNS)
+    assert preprocessor.climate_column == "climate_group"
+    assert transformed.shape[1] == len(feature_names)
+    assert any("__x__climate_group_" in feature_name for feature_name in feature_names)
+    assert any(feature_name == "impervious_pct" for feature_name in feature_names)
+    assert any(feature_name.startswith("land_cover_class_") for feature_name in feature_names)
+
+
+def test_hist_gradient_boosting_preprocessor_routes_contract_categoricals_away_from_numeric_branch():
+    pipeline = build_hist_gradient_boosting_pipeline(DEFAULT_FEATURE_COLUMNS)
+    preprocessor = pipeline.named_steps["preprocess"]
+    transformer_columns = {name: columns for name, _, columns in preprocessor.transformers}
+
+    assert "climate_group" in transformer_columns["categorical"]
+    assert "climate_group" not in transformer_columns["numeric"]
+    assert "land_cover_class" in transformer_columns["categorical"]
+    assert "land_cover_class" not in transformer_columns["numeric"]
+
+
 def test_logistic_pipeline_defaults_to_configured_max_iter():
     pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS)
 
@@ -239,11 +293,27 @@ def test_logistic_pipeline_defaults_to_configured_max_iter():
     assert pipeline.named_steps["model"].tol == DEFAULT_LOGISTIC_TOL
 
 
+def test_logistic_climate_interaction_pipeline_defaults_to_configured_max_iter():
+    pipeline = build_logistic_saga_climate_interactions_pipeline(DEFAULT_FEATURE_COLUMNS)
+
+    assert pipeline.named_steps["model"].max_iter == DEFAULT_LOGISTIC_MAX_ITER
+    assert pipeline.named_steps["model"].tol == DEFAULT_LOGISTIC_TOL
+
+
+def test_hist_gradient_boosting_pipeline_defaults_to_configured_max_iter_and_disables_early_stopping():
+    pipeline = build_hist_gradient_boosting_pipeline(DEFAULT_FEATURE_COLUMNS)
+
+    assert pipeline.named_steps["model"].max_iter == DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER
+    assert pipeline.named_steps["model"].early_stopping is False
+
+
 @pytest.mark.parametrize(
     ("builder", "builder_kwargs"),
     [
         (build_logistic_saga_pipeline, {"max_iter": 200}),
+        (build_logistic_saga_climate_interactions_pipeline, {"max_iter": 200}),
         (build_random_forest_pipeline, {"n_jobs": 1}),
+        (build_hist_gradient_boosting_pipeline, {"max_iter": 50}),
     ],
 )
 def test_tuned_pipelines_fit_with_mixed_type_categorical_missing_values(builder, builder_kwargs):
@@ -256,19 +326,71 @@ def test_tuned_pipelines_fit_with_mixed_type_categorical_missing_values(builder,
     assert probabilities.shape == (len(X), 2)
 
 
-def test_run_logistic_and_random_forest_write_expected_artifacts(workspace_tmp_path: Path):
+def test_logistic_climate_interactions_use_training_fitted_climate_levels_only():
+    train_X = pd.DataFrame(
+        {
+            "impervious_pct": [10.0, 20.0, 30.0, 40.0],
+            "elevation_m": [100.0, 110.0, 120.0, 130.0],
+            "dist_to_water_m": [500.0, 450.0, 400.0, 350.0],
+            "ndvi_median_may_aug": [0.20, 0.18, 0.25, 0.22],
+            "land_cover_class": [21, 21, 24, 24],
+            "climate_group": ["hot_arid", "hot_arid", "mild_cool", "mild_cool"],
+        }
+    )
+    test_X = pd.DataFrame(
+        {
+            "impervious_pct": [15.0, 25.0],
+            "elevation_m": [105.0, 115.0],
+            "dist_to_water_m": [480.0, 430.0],
+            "ndvi_median_may_aug": [0.19, 0.21],
+            "land_cover_class": [21, 24],
+            "climate_group": ["hot_humid", "mild_cool"],
+        }
+    )
+    y = pd.Series([0, 0, 1, 1], dtype="int8")
+    preprocessor = build_logistic_saga_climate_interactions_pipeline(DEFAULT_FEATURE_COLUMNS).named_steps["preprocess"]
+
+    train_matrix = preprocessor.fit_transform(train_X, y)
+    test_matrix = preprocessor.transform(test_X)
+    feature_names = preprocessor.get_feature_names_out().tolist()
+
+    climate_feature_names = [name for name in feature_names if name.startswith("climate_group_")]
+    interaction_feature_names = [name for name in feature_names if "__x__climate_group_" in name]
+
+    assert "climate_group_hot_humid" not in climate_feature_names
+    assert all("hot_humid" not in feature_name for feature_name in interaction_feature_names)
+    assert train_matrix.shape[1] == test_matrix.shape[1] == len(feature_names)
+
+    unseen_row = test_matrix[0]
+    unseen_climate_indices = [feature_names.index(name) for name in climate_feature_names]
+    unseen_interaction_indices = [feature_names.index(name) for name in interaction_feature_names]
+    assert np.allclose(unseen_row[unseen_climate_indices], 0.0)
+    assert np.allclose(unseen_row[unseen_interaction_indices], 0.0)
+
+
+def test_tuned_runners_write_expected_artifacts(workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
     logistic_output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    logistic_ci_output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga_climate_interactions"
     random_forest_output_dir = workspace_tmp_path / "outputs" / "modeling" / "random_forest"
+    hgb_output_dir = workspace_tmp_path / "outputs" / "modeling" / "hist_gradient_boosting"
 
     logistic_result = run_logistic_saga_model(
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=logistic_output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=[{"model__C": [0.1, 1.0], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+    logistic_ci_result = run_logistic_saga_climate_interactions_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=logistic_ci_output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         param_grid=[{"model__C": [0.1, 1.0], "model__l1_ratio": [0.0]}],
         grid_search_n_jobs=1,
@@ -288,8 +410,24 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(workspace_tmp_p
         ],
         grid_search_n_jobs=1,
     )
+    hgb_result = run_hist_gradient_boosting_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=hgb_output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=[
+            {
+                "model__learning_rate": [0.1],
+                "model__max_leaf_nodes": [15],
+                "model__min_samples_leaf": [20],
+                "model__l2_regularization": [0.0],
+            }
+        ],
+        grid_search_n_jobs=1,
+        max_iter=50,
+    )
 
-    for result in (logistic_result, forest_result):
+    for result in (logistic_result, logistic_ci_result, forest_result, hgb_result):
         assert result.fold_metrics_path.exists()
         assert result.city_metrics_path.exists()
         assert result.summary_metrics_path.exists()
@@ -307,12 +445,103 @@ def test_run_logistic_and_random_forest_write_expected_artifacts(workspace_tmp_p
         predictions = pd.read_parquet(result.predictions_path)
         assert {"predicted_probability", "centroid_lon", "centroid_lat"}.issubset(predictions.columns)
 
+    logistic_ci_contract = json.loads((logistic_ci_output_dir / "feature_contract.json").read_text(encoding="utf-8"))
+    assert logistic_ci_contract["selected_feature_columns"] == DEFAULT_FEATURE_COLUMNS
+
+
+def test_hist_gradient_boosting_runner_enforces_six_feature_contract(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "hist_gradient_boosting"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    with pytest.raises(ValueError, match="leakage-prone"):
+        run_hist_gradient_boosting_model(
+            dataset_path=dataset_path,
+            folds_path=folds_path,
+            output_dir=output_dir,
+            feature_columns=[*DEFAULT_FEATURE_COLUMNS, "city_id"],
+            param_grid=_minimal_param_grid_for("hist_gradient_boosting"),
+            grid_search_n_jobs=1,
+            max_iter=50,
+        )
+
+
+def test_logistic_climate_interactions_runner_enforces_six_feature_contract(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga_climate_interactions"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    with pytest.raises(ValueError, match="leakage-prone"):
+        run_logistic_saga_climate_interactions_model(
+            dataset_path=dataset_path,
+            folds_path=folds_path,
+            output_dir=output_dir,
+            feature_columns=[*DEFAULT_FEATURE_COLUMNS, "city_id"],
+            param_grid=_minimal_param_grid_for("logistic_saga_climate_interactions"),
+            grid_search_n_jobs=1,
+        )
+
+
+def test_hist_gradient_boosting_predictions_follow_grouped_outer_fold_contract(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "hist_gradient_boosting"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_hist_gradient_boosting_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        param_grid=_minimal_param_grid_for("hist_gradient_boosting"),
+        grid_search_n_jobs=1,
+        max_iter=50,
+    )
+
+    predictions = pd.read_parquet(result.predictions_path)
+
+    assert sorted(predictions["outer_fold"].unique().tolist()) == [0]
+    assert sorted(predictions["city_id"].unique().tolist()) == [1, 2]
+    assert set(predictions["city_id"]).isdisjoint({3, 4})
+
+
+def test_logistic_climate_interactions_predictions_follow_grouped_outer_fold_contract(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga_climate_interactions"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_logistic_saga_climate_interactions_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        param_grid=_minimal_param_grid_for("logistic_saga_climate_interactions"),
+        grid_search_n_jobs=1,
+    )
+
+    predictions = pd.read_parquet(result.predictions_path)
+
+    assert sorted(predictions["outer_fold"].unique().tolist()) == [0]
+    assert sorted(predictions["city_id"].unique().tolist()) == [1, 2]
+    assert set(predictions["city_id"]).isdisjoint({3, 4})
+
 
 def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
     logistic_output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga"
+    logistic_ci_output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga_climate_interactions"
     random_forest_output_dir = workspace_tmp_path / "outputs" / "modeling" / "random_forest"
+    hgb_output_dir = workspace_tmp_path / "outputs" / "modeling" / "hist_gradient_boosting"
     _build_modeling_fixture().to_parquet(dataset_path, index=False)
     _build_fold_fixture().to_parquet(folds_path, index=False)
 
@@ -320,6 +549,14 @@ def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
         dataset_path=dataset_path,
         folds_path=folds_path,
         output_dir=logistic_output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
+        grid_search_n_jobs=1,
+    )
+    logistic_ci_result = run_logistic_saga_climate_interactions_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=logistic_ci_output_dir,
         feature_columns=DEFAULT_FEATURE_COLUMNS,
         param_grid=[{"model__C": [0.1], "model__l1_ratio": [0.0]}],
         grid_search_n_jobs=1,
@@ -338,6 +575,15 @@ def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
             }
         ],
         grid_search_n_jobs=1,
+    )
+    hgb_result = run_hist_gradient_boosting_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=hgb_output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        param_grid=_minimal_param_grid_for("hist_gradient_boosting"),
+        grid_search_n_jobs=1,
+        max_iter=50,
     )
 
     record_model_run(
@@ -368,11 +614,44 @@ def test_record_model_run_appends_registry_entries(workspace_tmp_path: Path):
         metadata_path=random_forest_result.metadata_path,
         status="success",
     )
+    record_model_run(
+        model_type="logistic_saga_climate_interactions",
+        preset="smoke",
+        command="python -m src.run_logistic_saga_climate_interactions",
+        output_dir=logistic_ci_output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=None,
+        grid_search_n_jobs=1,
+        summary_metrics_path=logistic_ci_result.summary_metrics_path,
+        metadata_path=logistic_ci_result.metadata_path,
+        status="success",
+    )
+    record_model_run(
+        model_type="hist_gradient_boosting",
+        preset="smoke",
+        command="python -m src.run_hist_gradient_boosting",
+        output_dir=hgb_output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=None,
+        grid_search_n_jobs=1,
+        summary_metrics_path=hgb_result.summary_metrics_path,
+        metadata_path=hgb_result.metadata_path,
+        status="success",
+    )
 
     registry_path = infer_run_registry_path(logistic_output_dir)
     records = [json.loads(line) for line in registry_path.read_text(encoding="utf-8").splitlines()]
 
-    assert [record["model_type"] for record in records] == ["logistic_saga", "random_forest"]
+    assert [record["model_type"] for record in records] == [
+        "logistic_saga",
+        "random_forest",
+        "logistic_saga_climate_interactions",
+        "hist_gradient_boosting",
+    ]
     assert all(record["status"] == "success" for record in records)
     assert all(record["dataset_format"] == "parquet" for record in records)
     assert all("pooled_pr_auc" in record["metrics"] for record in records)
@@ -529,19 +808,66 @@ def test_resolve_model_output_dir_preserves_explicit_output_dir_override(workspa
     assert resolved_output_dir == explicit_output_dir
 
 
+def test_resolve_model_output_dir_generates_hist_gradient_boosting_root(workspace_tmp_path: Path):
+    base_output_root = workspace_tmp_path / "outputs" / "modeling" / "hist_gradient_boosting"
+    base_output_root.mkdir(parents=True, exist_ok=True)
+
+    resolved_output_dir, was_generated = resolve_model_output_dir(
+        model_name="hist_gradient_boosting",
+        output_dir=None,
+        tuning_preset="smoke",
+        selected_outer_folds=[0],
+        sample_rows_per_city=5000,
+        run_label="phase1 check",
+        now=datetime(2026, 4, 12, 14, 5, 30),
+        base_output_root=base_output_root,
+    )
+
+    assert was_generated is True
+    assert resolved_output_dir.parent == base_output_root
+    assert resolved_output_dir.name == "smoke_f0_s5000_phase1-check_2026-04-12_140530"
+
+
+def test_resolve_model_output_dir_generates_logistic_climate_interactions_root(workspace_tmp_path: Path):
+    base_output_root = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga_climate_interactions"
+    base_output_root.mkdir(parents=True, exist_ok=True)
+
+    resolved_output_dir, was_generated = resolve_model_output_dir(
+        model_name="logistic_saga_climate_interactions",
+        output_dir=None,
+        tuning_preset="smoke",
+        selected_outer_folds=[0],
+        sample_rows_per_city=5000,
+        run_label="phase2 check",
+        now=datetime(2026, 4, 12, 14, 7, 30),
+        base_output_root=base_output_root,
+    )
+
+    assert was_generated is True
+    assert resolved_output_dir.parent == base_output_root
+    assert resolved_output_dir.name == "smoke_f0_s5000_phase2-check_2026-04-12_140730"
+
+
 def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     logistic_smoke = get_model_tuning_spec("logistic_saga", "smoke")
     logistic_full = get_model_tuning_spec("logistic_saga", "full")
+    logistic_ci_smoke = get_model_tuning_spec("logistic_saga_climate_interactions", "smoke")
+    logistic_ci_full = get_model_tuning_spec("logistic_saga_climate_interactions", "full")
     forest_smoke = get_model_tuning_spec("random_forest", "smoke")
     forest_frontier = get_model_tuning_spec("random_forest", "frontier")
     forest_full = get_model_tuning_spec("random_forest", "full")
+    hgb_smoke = get_model_tuning_spec("hist_gradient_boosting", "smoke")
 
     assert len(list(ParameterGrid(logistic_smoke.param_grid))) < len(list(ParameterGrid(logistic_full.param_grid)))
+    assert len(list(ParameterGrid(logistic_ci_smoke.param_grid))) < len(list(ParameterGrid(logistic_ci_full.param_grid)))
     assert len(list(ParameterGrid(forest_smoke.param_grid))) < len(list(ParameterGrid(forest_frontier.param_grid)))
     assert len(list(ParameterGrid(forest_frontier.param_grid))) < len(list(ParameterGrid(forest_full.param_grid)))
     assert logistic_smoke.inner_cv_splits < logistic_full.inner_cv_splits
+    assert logistic_ci_smoke.inner_cv_splits < logistic_ci_full.inner_cv_splits
     assert forest_smoke.inner_cv_splits <= forest_frontier.inner_cv_splits
     assert forest_frontier.inner_cv_splits <= forest_full.inner_cv_splits
+    assert len(list(ParameterGrid(hgb_smoke.param_grid))) == 4
+    assert hgb_smoke.inner_cv_splits == 3
     assert all("model__penalty" not in candidate for candidate in logistic_smoke.param_grid)
     assert all("model__penalty" not in candidate for candidate in logistic_full.param_grid)
     assert _logistic_penalty_families_from_grid(logistic_smoke.param_grid) == {"l2", "l1", "elasticnet"}
@@ -553,9 +879,22 @@ def test_tuning_specs_make_smoke_mode_smaller_than_full_mode():
     [
         ("logistic_saga", "smoke", "l1_ratio_family_complete", "family-complete"),
         ("logistic_saga", "full", "l1_ratio_family_complete", "family-complete"),
+        (
+            "logistic_saga_climate_interactions",
+            "smoke",
+            "climate_numeric_interactions",
+            "training-only climate-by-numeric interactions",
+        ),
+        (
+            "logistic_saga_climate_interactions",
+            "full",
+            "climate_numeric_interactions",
+            "training-only climate-by-numeric interactions",
+        ),
         ("random_forest", "smoke", "depth_feature_leaf_smoke", "smoke grid"),
         ("random_forest", "frontier", "targeted_frontier", "targeted frontier"),
         ("random_forest", "full", "depth_feature_leaf_full", "full grid"),
+        ("hist_gradient_boosting", "smoke", "phase1_smoke_lr_leaf", "Phase 1 smoke grid"),
     ],
 )
 def test_tuning_history_contract_descriptors_identify_current_benchmark_grids(
@@ -622,12 +961,118 @@ def test_random_forest_frontier_metadata_and_history_reflect_staged_preset(works
     assert "targeted frontier" in history_df.loc[0, "search_contract_descriptor"]
 
 
+def test_logistic_climate_interactions_metadata_and_history_reflect_phase2_contract(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "logistic_saga_climate_interactions"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_logistic_saga_climate_interactions_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        tuning_preset="smoke",
+        grid_search_n_jobs=1,
+    )
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    record_model_run(
+        model_type="logistic_saga_climate_interactions",
+        preset="smoke",
+        command="python -m src.run_logistic_saga_climate_interactions --tuning-preset smoke",
+        output_dir=output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=[0],
+        grid_search_n_jobs=1,
+        summary_metrics_path=result.summary_metrics_path,
+        metadata_path=result.metadata_path,
+        status="success",
+    )
+    registry_path = infer_run_registry_path(output_dir)
+    history_df = pd.read_csv(infer_tuning_history_path(registry_path), dtype="string").fillna("")
+
+    assert metadata["tuning_preset"] == "smoke"
+    assert metadata["search_space"]["param_candidate_count"] == len(
+        list(ParameterGrid(get_model_tuning_spec("logistic_saga_climate_interactions", "smoke").param_grid))
+    )
+    assert metadata["inner_cv_splits_requested"] == get_model_tuning_spec(
+        "logistic_saga_climate_interactions", "smoke"
+    ).inner_cv_splits
+    assert history_df.loc[0, "preset"] == "smoke"
+    assert "climate_numeric_interactions" in history_df.loc[0, "search_contract_version"]
+    assert "training-only climate-by-numeric interactions" in history_df.loc[0, "search_contract_descriptor"]
+
+
+def test_hist_gradient_boosting_metadata_and_history_reflect_phase1_smoke_contract(workspace_tmp_path: Path):
+    dataset_path = workspace_tmp_path / "final_dataset.parquet"
+    folds_path = workspace_tmp_path / "city_outer_folds.parquet"
+    output_dir = workspace_tmp_path / "outputs" / "modeling" / "hist_gradient_boosting"
+    _build_modeling_fixture().to_parquet(dataset_path, index=False)
+    _build_fold_fixture().to_parquet(folds_path, index=False)
+
+    result = run_hist_gradient_boosting_model(
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=DEFAULT_FEATURE_COLUMNS,
+        selected_outer_folds=[0],
+        tuning_preset="smoke",
+        grid_search_n_jobs=1,
+        max_iter=50,
+    )
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    record_model_run(
+        model_type="hist_gradient_boosting",
+        preset="smoke",
+        command="python -m src.run_hist_gradient_boosting --tuning-preset smoke",
+        output_dir=output_dir,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        sample_rows_per_city=None,
+        selected_outer_folds=[0],
+        grid_search_n_jobs=1,
+        summary_metrics_path=result.summary_metrics_path,
+        metadata_path=result.metadata_path,
+        status="success",
+    )
+    registry_path = infer_run_registry_path(output_dir)
+    history_df = pd.read_csv(infer_tuning_history_path(registry_path), dtype="string").fillna("")
+
+    assert metadata["tuning_preset"] == "smoke"
+    assert metadata["search_space"]["param_candidate_count"] == len(
+        list(ParameterGrid(get_model_tuning_spec("hist_gradient_boosting", "smoke").param_grid))
+    )
+    assert metadata["inner_cv_splits_requested"] == get_model_tuning_spec(
+        "hist_gradient_boosting", "smoke"
+    ).inner_cv_splits
+    assert history_df.loc[0, "preset"] == "smoke"
+    assert "phase1_smoke_lr_leaf" in history_df.loc[0, "search_contract_version"]
+    assert "Phase 1 smoke grid" in history_df.loc[0, "search_contract_descriptor"]
+
+
 def test_logistic_cli_rejects_random_forest_only_frontier_preset():
     with pytest.raises(SystemExit):
         build_logistic_arg_parser().parse_args(["--tuning-preset", "frontier"])
 
 
-@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+def test_logistic_climate_interactions_cli_rejects_random_forest_only_frontier_preset():
+    with pytest.raises(SystemExit):
+        build_logistic_ci_arg_parser().parse_args(["--tuning-preset", "frontier"])
+
+
+def test_hist_gradient_boosting_cli_rejects_non_smoke_presets():
+    with pytest.raises(SystemExit):
+        build_hgb_arg_parser().parse_args(["--tuning-preset", "frontier"])
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    ["logistic_saga", "logistic_saga_climate_interactions", "random_forest", "hist_gradient_boosting"],
+)
 def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(
     model_name: str, workspace_tmp_path: Path
 ):
@@ -663,18 +1108,27 @@ def test_tuned_runner_metadata_records_runtime_and_smoke_preset_defaults(
     assert metadata["fold_runtime"][0]["inner_cv_splits"] == 2
     assert metadata["fold_runtime"][0]["preprocess_output_feature_count"] >= len(DEFAULT_FEATURE_COLUMNS)
     assert metadata["fold_runtime"][0]["grid_search_seconds"] >= 0.0
-    if model_name == "logistic_saga":
+    if model_name in {"logistic_saga", "logistic_saga_climate_interactions"}:
         assert metadata["model_n_jobs"] is None
         assert metadata["pipeline_builder_kwargs"] == {
             "max_iter": DEFAULT_LOGISTIC_MAX_ITER,
             "tol": DEFAULT_LOGISTIC_TOL,
         }
-    else:
+    elif model_name == "random_forest":
         assert metadata["model_n_jobs"] == 1
         assert metadata["pipeline_builder_kwargs"] == {}
+    else:
+        assert metadata["model_n_jobs"] is None
+        assert metadata["pipeline_builder_kwargs"] == {
+            "max_iter": DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER,
+            "thread_limit": DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT,
+        }
 
 
-@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+@pytest.mark.parametrize(
+    "model_name",
+    ["logistic_saga", "logistic_saga_climate_interactions", "random_forest", "hist_gradient_boosting"],
+)
 def test_sampled_tuned_runs_preload_city_rows_once(
     model_name: str, monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path
 ):
@@ -730,7 +1184,10 @@ def test_sampled_tuned_runs_preload_city_rows_once(
     assert metadata["timing_seconds"]["sampled_city_preload"] is not None
 
 
-@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+@pytest.mark.parametrize(
+    "model_name",
+    ["logistic_saga", "logistic_saga_climate_interactions", "random_forest", "hist_gradient_boosting"],
+)
 def test_tuned_runner_writes_progress_and_fold_status_artifacts(model_name: str, workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
@@ -765,7 +1222,10 @@ def test_tuned_runner_writes_progress_and_fold_status_artifacts(model_name: str,
     assert Path(fold_status["folds"]["0"]["artifact_paths"]["predictions"]).exists()
 
 
-@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+@pytest.mark.parametrize(
+    "model_name",
+    ["logistic_saga", "logistic_saga_climate_interactions", "random_forest", "hist_gradient_boosting"],
+)
 def test_tuned_runner_rerun_skips_completed_folds(
     model_name: str, monkeypatch: pytest.MonkeyPatch, workspace_tmp_path: Path
 ):
@@ -816,7 +1276,10 @@ def test_tuned_runner_rerun_skips_completed_folds(
     assert list(fold_metrics["outer_fold"]) == [0, 1]
 
 
-@pytest.mark.parametrize("model_name", ["logistic_saga", "random_forest"])
+@pytest.mark.parametrize(
+    "model_name",
+    ["logistic_saga", "logistic_saga_climate_interactions", "random_forest", "hist_gradient_boosting"],
+)
 def test_sampled_tuned_runs_write_signal_preservation_diagnostics(model_name: str, workspace_tmp_path: Path):
     dataset_path = workspace_tmp_path / "final_dataset.parquet"
     folds_path = workspace_tmp_path / "city_outer_folds.parquet"
@@ -862,30 +1325,42 @@ def test_sampled_tuned_runs_write_signal_preservation_diagnostics(model_name: st
 
 def test_logistic_l1_ratio_tuning_avoids_penalty_future_warning():
     X, y = _build_mixed_type_feature_fixture()
-    for l1_ratio in (0.0, 1.0, 0.5):
-        pipeline = build_logistic_saga_pipeline(DEFAULT_FEATURE_COLUMNS, max_iter=200)
+    for builder in (build_logistic_saga_pipeline, build_logistic_saga_climate_interactions_pipeline):
+        for l1_ratio in (0.0, 1.0, 0.5):
+            pipeline = builder(DEFAULT_FEATURE_COLUMNS, max_iter=200)
 
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            pipeline.set_params(model__C=1.0, model__l1_ratio=l1_ratio)
-            pipeline.fit(X, y)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                pipeline.set_params(model__C=1.0, model__l1_ratio=l1_ratio)
+                pipeline.fit(X, y)
 
-        messages = [str(item.message) for item in caught]
-        assert not any("'penalty' was deprecated" in message for message in messages)
+            messages = [str(item.message) for item in caught]
+            assert not any("'penalty' was deprecated" in message for message in messages)
 
 
 def test_tuned_runner_clis_default_to_explicit_smoke_preset():
     logistic_args = build_logistic_arg_parser().parse_args([])
+    logistic_ci_args = build_logistic_ci_arg_parser().parse_args([])
     forest_args = build_random_forest_arg_parser().parse_args([])
+    hgb_args = build_hgb_arg_parser().parse_args([])
 
     assert logistic_args.tuning_preset == "smoke"
     assert logistic_args.output_dir is None
     assert logistic_args.max_iter == DEFAULT_LOGISTIC_MAX_ITER
     assert logistic_args.tol == DEFAULT_LOGISTIC_TOL
+    assert logistic_ci_args.tuning_preset == "smoke"
+    assert logistic_ci_args.output_dir is None
+    assert logistic_ci_args.max_iter == DEFAULT_LOGISTIC_MAX_ITER
+    assert logistic_ci_args.tol == DEFAULT_LOGISTIC_TOL
     assert forest_args.tuning_preset == "smoke"
     assert forest_args.output_dir is None
+    assert hgb_args.tuning_preset == "smoke"
+    assert hgb_args.output_dir is None
+    assert hgb_args.max_iter == DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER
     assert logistic_args.inner_cv_splits is None
+    assert logistic_ci_args.inner_cv_splits is None
     assert forest_args.inner_cv_splits is None
+    assert hgb_args.inner_cv_splits is None
 
     forest_frontier_args = build_random_forest_arg_parser().parse_args(["--tuning-preset", "frontier"])
     assert forest_frontier_args.tuning_preset == "frontier"
@@ -893,15 +1368,23 @@ def test_tuned_runner_clis_default_to_explicit_smoke_preset():
 
 def test_tuned_runner_cli_help_reflects_parquet_first_defaults_and_csv_fallback():
     logistic_help = build_logistic_arg_parser().format_help()
+    logistic_ci_help = build_logistic_ci_arg_parser().format_help()
     forest_help = build_random_forest_arg_parser().format_help()
+    hgb_help = build_hgb_arg_parser().format_help()
 
-    for help_text in (logistic_help, forest_help):
+    for help_text in (logistic_help, logistic_ci_help, forest_help, hgb_help):
         assert "final_dataset.parquet" in help_text
         assert "compatibility fallback only" in help_text
         assert "prefers city_outer_folds.parquet" in help_text
-        assert "bounded default verification" in help_text
 
+    assert "bounded default verification" in logistic_help
+    assert "Phase 2" in logistic_ci_help
+    assert "broader tuning search" in logistic_ci_help
+    assert "same six-" in logistic_ci_help or "same six-feature contract" in logistic_ci_help
+    assert "bounded default verification" in forest_help
     assert "broader tuning search" in logistic_help
     assert "cheap nonlinear comparison against logistic" in forest_help
     assert "targeted follow-up search" in forest_help
     assert "confirmation only after earlier RF stages justify it" in forest_help
+    assert "Phase 1" in hgb_help
+    assert "intentionally disabled" in hgb_help

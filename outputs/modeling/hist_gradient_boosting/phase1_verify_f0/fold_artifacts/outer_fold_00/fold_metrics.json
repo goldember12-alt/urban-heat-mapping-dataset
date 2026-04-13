@@ -1,0 +1,21 @@
+{
+  "model_name": "hist_gradient_boosting",
+  "outer_fold": 0,
+  "train_city_count": 24,
+  "test_city_count": 6,
+  "train_row_count": 120000,
+  "test_row_count": 30000,
+  "test_positive_count": 3000,
+  "test_prevalence": 0.1,
+  "pr_auc": 0.16007626423418575,
+  "recall_at_top_10pct": 0.20233333333333334,
+  "inner_cv_splits": 3,
+  "best_inner_cv_average_precision": 0.14922866266220958,
+  "param_candidate_count": 4,
+  "estimated_inner_fit_count": 12,
+  "data_load_seconds": 0.06621339998673648,
+  "preprocess_build_seconds": 0.003720099979545921,
+  "preprocess_probe_fit_transform_seconds": 0.35587269999086857,
+  "grid_search_seconds": 80.12845129997004,
+  "fold_wall_clock_seconds": 80.76446820003912
+}

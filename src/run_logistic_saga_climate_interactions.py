@@ -1,0 +1,184 @@
+from __future__ import annotations
+
+import argparse
+import logging
+from pathlib import Path
+
+from src.modeling_config import (
+    DEFAULT_FEATURE_COLUMNS,
+    DEFAULT_FINAL_DATASET_PATH,
+    DEFAULT_LOGISTIC_MAX_ITER,
+    DEFAULT_LOGISTIC_TOL,
+    DEFAULT_TUNING_PRESET,
+    get_tuning_preset_help_text,
+    get_valid_tuning_presets,
+)
+from src.modeling_output_naming import resolve_model_output_dir
+from src.modeling_run_registry import build_cli_command, record_model_run
+from src.modeling_runner import run_logistic_saga_climate_interactions_model
+
+
+def _parse_csv_list(raw_value: str) -> list[str]:
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+def _parse_fold_list(raw_value: str | None) -> list[int] | None:
+    if raw_value is None:
+        return None
+    return [int(item.strip()) for item in raw_value.split(",") if item.strip()]
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run grouped logistic SAGA hotspot modeling with training-only climate-by-numeric interactions "
+            "on the canonical parquet-first dataset."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--dataset-path",
+        type=Path,
+        default=DEFAULT_FINAL_DATASET_PATH,
+        help="Canonical modeling input. Defaults to final_dataset.parquet; CSV remains supported as a compatibility fallback only.",
+    )
+    parser.add_argument(
+        "--folds-path",
+        type=Path,
+        default=None,
+        help="Optional explicit folds path. When omitted, the runner prefers city_outer_folds.parquet and falls back to CSV only if parquet is absent.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional explicit output directory. When omitted, the CLI generates a unique run directory under outputs/modeling/logistic_saga_climate_interactions/.",
+    )
+    parser.add_argument("--feature-columns", default=",".join(DEFAULT_FEATURE_COLUMNS))
+    parser.add_argument("--outer-folds", default=None, help="Optional comma-delimited subset of outer folds")
+    parser.add_argument(
+        "--run-label",
+        default=None,
+        help="Optional short label appended to an auto-generated output directory name. Ignored if --output-dir is provided.",
+    )
+    parser.add_argument(
+        "--sample-rows-per-city",
+        type=int,
+        default=None,
+        help="Optional per-city sample cap for bounded Phase 2 verification without changing the parquet-first default input path.",
+    )
+    parser.add_argument("--random-state", type=int, default=42)
+    parser.add_argument("--inner-cv-splits", type=int, default=None)
+    parser.add_argument(
+        "--max-iter",
+        type=int,
+        default=DEFAULT_LOGISTIC_MAX_ITER,
+        help="Maximum SAGA iterations for each logistic fit.",
+    )
+    parser.add_argument(
+        "--tol",
+        type=float,
+        default=DEFAULT_LOGISTIC_TOL,
+        help="SAGA convergence tolerance for the climate-interaction variant.",
+    )
+    parser.add_argument(
+        "--grid-search-n-jobs",
+        type=int,
+        default=-1,
+        help="GridSearchCV worker count. Keep the default for normal runs; constrained sandboxes may still prefer 1 for bounded verification.",
+    )
+    parser.add_argument(
+        "--tuning-preset",
+        choices=get_valid_tuning_presets("logistic_saga_climate_interactions"),
+        default=DEFAULT_TUNING_PRESET,
+        help=get_tuning_preset_help_text("logistic_saga_climate_interactions"),
+    )
+    return parser
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    args = _build_arg_parser().parse_args()
+    command = build_cli_command()
+    selected_outer_folds = _parse_fold_list(args.outer_folds)
+    resolved_output_dir, output_dir_was_generated = resolve_model_output_dir(
+        model_name="logistic_saga_climate_interactions",
+        output_dir=args.output_dir,
+        tuning_preset=args.tuning_preset,
+        selected_outer_folds=selected_outer_folds,
+        sample_rows_per_city=args.sample_rows_per_city,
+        run_label=args.run_label,
+    )
+    if output_dir_was_generated:
+        logging.getLogger(__name__).info("Auto-generated output directory: %s", resolved_output_dir)
+    elif args.run_label:
+        logging.getLogger(__name__).info("--run-label was ignored because --output-dir was supplied explicitly.")
+    notes = (
+        [
+            "CSV compatibility fallback input used; do not assume equivalence to canonical parquet without an explicit artifact audit.",
+            "Phase 2 climate-conditioned logistic variant preserves the six base features and adds training-only climate-by-numeric interactions.",
+        ]
+        if args.dataset_path.suffix.lower() == ".csv"
+        else [
+            "Phase 2 climate-conditioned logistic variant preserves the six base features and adds training-only climate-by-numeric interactions."
+        ]
+    )
+    try:
+        result = run_logistic_saga_climate_interactions_model(
+            dataset_path=args.dataset_path,
+            folds_path=args.folds_path,
+            output_dir=resolved_output_dir,
+            feature_columns=_parse_csv_list(args.feature_columns),
+            selected_outer_folds=selected_outer_folds,
+            sample_rows_per_city=args.sample_rows_per_city,
+            random_state=args.random_state,
+            inner_cv_splits=args.inner_cv_splits,
+            grid_search_n_jobs=args.grid_search_n_jobs,
+            max_iter=args.max_iter,
+            tol=args.tol,
+            tuning_preset=args.tuning_preset,
+            command=command,
+        )
+    except Exception as exc:
+        record_model_run(
+            model_type="logistic_saga_climate_interactions",
+            preset=args.tuning_preset,
+            command=command,
+            output_dir=resolved_output_dir,
+            dataset_path=args.dataset_path,
+            folds_path=args.folds_path,
+            sample_rows_per_city=args.sample_rows_per_city,
+            selected_outer_folds=selected_outer_folds,
+            grid_search_n_jobs=args.grid_search_n_jobs,
+            status="failure",
+            notes=notes,
+            error=exc,
+        )
+        raise
+
+    record_model_run(
+        model_type="logistic_saga_climate_interactions",
+        preset=args.tuning_preset,
+        command=command,
+        output_dir=resolved_output_dir,
+        dataset_path=args.dataset_path,
+        folds_path=args.folds_path,
+        sample_rows_per_city=args.sample_rows_per_city,
+        selected_outer_folds=selected_outer_folds,
+        grid_search_n_jobs=args.grid_search_n_jobs,
+        summary_metrics_path=result.summary_metrics_path,
+        metadata_path=result.metadata_path,
+        status="success",
+        notes=notes,
+    )
+    print(result.fold_metrics_path)
+    print(result.city_metrics_path)
+    print(result.summary_metrics_path)
+    print(result.best_params_path)
+    print(result.predictions_path)
+    print(result.calibration_curve_path)
+    print(result.metadata_path)
+
+
+if __name__ == "__main__":
+    main()

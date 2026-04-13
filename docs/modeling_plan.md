@@ -53,6 +53,7 @@ First-pass modeling stage:
 
 - `src.run_modeling_baselines`
 - `src.run_logistic_saga`
+- `src.run_logistic_saga_climate_interactions`
 - `src.run_random_forest`
 - `src.run_modeling_reporting`
 - `src.run_modeling_supplemental`
@@ -69,6 +70,11 @@ Current implemented main models:
 - logistic regression with `solver="saga"` in an sklearn `Pipeline`
 - random forest in an sklearn `Pipeline`
 
+Current benchmark-strengthening candidates:
+
+- histogram gradient boosting in an sklearn `Pipeline`, bounded to a Phase 1 smoke-only checkpoint on the same six-feature contract
+- logistic SAGA with explicit training-only climate-by-numeric interactions, bounded to a Phase 2 smoke-only checkpoint on the same six-feature contract
+
 Current implemented evaluation outputs:
 
 - fold-level PR AUC
@@ -79,6 +85,9 @@ Current implemented evaluation outputs:
 - per-fold best-parameter summaries for tuned models
 - city-level RF-vs-logistic error comparison tables by city and climate group
 - benchmark comparison markdown and benchmark figures under the modeling reporting layer
+- optional Phase 1 HGB-vs-RF comparison tables under the shared modeling reporting layer when an HGB checkpoint is supplied
+- optional Phase 2 logistic-climate-interaction comparison and climate-disparity tables under the shared modeling reporting layer when a climate-interaction checkpoint is supplied
+- optional Phase 3 richer-predictor comparison tables under the shared modeling reporting layer when a richer-feature checkpoint is supplied
 - representative held-out-city predicted-hotspot, true-hotspot, and categorical error maps under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/`
 - a bounded final-train transfer package under `outputs/modeling/final_train/` that reuses the retained six-feature benchmark selection without changing the canonical evaluation methodology
 - an application-only transfer inference path under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` that applies the retained transfer package to one new-city feature parquet without computing new held-out-city benchmark metrics
@@ -95,7 +104,7 @@ Honest implementation status:
 
 ## Candidate Feature Contract
 
-Safe initial feature candidates for the first hotspot models:
+Retained first-pass feature contract for the headline benchmark:
 
 - `impervious_pct`
 - `land_cover_class`
@@ -119,6 +128,14 @@ Reason:
 
 - These excluded columns are either the target, direct target ingredients, identifiers, or location fields that are not part of the intended portable baseline feature contract
 - `lst_median_may_aug` is excluded explicitly because `hotspot_10pct` is derived from ECOSTRESS LST
+
+Current bounded richer-feature expansion contract:
+
+- keep the retained six-feature benchmark contract frozen
+- add the Phase 3A NLCD neighborhood-context bundle only in explicitly richer-feature runs:
+  - `tree_cover_proxy_pct_270m`
+  - `vegetated_cover_proxy_pct_270m`
+  - `impervious_pct_mean_270m`
 
 ## Evaluation Plan
 
@@ -225,6 +242,298 @@ Reporting-oriented status after the current retained runs:
 - keep the retained logistic sampled `full` ladder at `5000`, `10000`, and `20000` rows per city as the linear reference path already used in reporting
 - keep RF `smoke` and RF `frontier` at `5000` rows per city as the retained nonlinear checkpoints already used in reporting
 - do not schedule more routine logistic or RF benchmark expansion now; RF `full` remains a reserved confirmation path only if a later decision explicitly reopens it
+
+## Next Benchmark-Strengthening Roadmap
+
+Purpose:
+
+- improve the benchmark in deliberate stages without rewriting the project narrative
+- separate gains from model class, climate conditioning, and richer predictors
+- keep each step small enough that future agents can implement, test, and document it cleanly
+
+Global guardrails for all phases:
+
+- keep the canonical benchmark as cross-city city-held-out evaluation by `city_id`
+- do not replace the retained logistic / RF checkpoints as the historical first-pass benchmark record
+- do not report supplemental within-city results as benchmark-equivalent evidence
+- keep parquet-first behavior, deterministic output paths, and raw-data immutability
+- fit all preprocessing, encoding, interactions, imputation, selection, and tuning on training-city rows only
+- update `README.md`, `docs/workflow.md`, `docs/data_dictionary.md`, `docs/modeling_plan.md`, and `docs/chat_handoff.md` whenever a phase lands
+
+Recommended execution order:
+
+1. Phase 1: better learner with the same six features
+2. Phase 2: climate-conditioned structure with the same six features
+3. Phase 3: richer predictor bundles, introduced one theme at a time
+
+### Phase 1: Better Learner With The Same Six Features
+
+Goal:
+
+- test whether a stronger tabular learner improves held-out-city transfer without changing the feature contract
+
+Primary candidate:
+
+- histogram gradient boosting as the first new benchmark model family
+
+Why this phase comes first:
+
+- current retained logistic and RF tuning has largely plateaued
+- the fastest remaining question is whether model class still matters under the exact same six-feature contract
+- this phase preserves the cleanest apples-to-apples comparison with the retained benchmark
+
+Feature contract for this phase:
+
+- `impervious_pct`
+- `elevation_m`
+- `dist_to_water_m`
+- `ndvi_median_may_aug`
+- `land_cover_class`
+- `climate_group`
+
+Modeling and tuning scope:
+
+- add one new runner, likely `src.run_hist_gradient_boosting`
+- add one shared pipeline builder in `src.modeling_runner`
+- start with a bounded `smoke` preset only
+- use the same grouped outer folds and training-city-only preprocessing contract as logistic / RF
+- if the model cannot natively handle categorical columns in the desired sklearn version, keep preprocessing explicit and training-only
+- do not add a frontier/full expansion in the same task unless the smoke result clearly beats the retained RF frontier checkpoint
+
+Likely code touchpoints:
+
+- `src/modeling_config.py`
+- `src/modeling_runner.py`
+- `src/modeling_reporting.py`
+- `src/modeling_run_registry.py`
+- `src/run_modeling_reporting.py`
+- new CLI entrypoint such as `src/run_hist_gradient_boosting.py`
+- optional new helper module only if shared code would otherwise become messy
+
+Expected outputs:
+
+- a new run root under `outputs/modeling/hist_gradient_boosting/`
+- standard run outputs matching current tuned-runner conventions:
+  - metrics summary
+  - fold metrics
+  - city metrics
+  - held-out predictions
+  - calibration table
+  - best-parameter summary
+  - run metadata
+- refreshed reporting comparisons through `src.run_modeling_reporting`, not through ad hoc tables
+
+Tests required before calling the phase complete:
+
+- feature-contract and leakage-safe grouped-fold parity with existing tuned runners
+- deterministic default output-path generation if auto-naming is used
+- preprocessing compatibility for mixed numeric/categorical six-feature inputs
+- run-metadata and reporting-table integration
+- at least one focused CLI-level test analogous to the current logistic / RF runner tests
+
+Manual verification target:
+
+- one bounded real smoke run on the canonical parquet with serial worker settings
+- one reporting refresh after the retained result is available
+
+Decision rule after Phase 1:
+
+- if the better learner does not meaningfully beat the retained RF frontier result on pooled PR AUC and does not improve the city-level story, stop and keep it as a negative-result checkpoint
+- if it improves pooled PR AUC only in a narrow subset of cities, note that honestly and continue to Phase 2 before considering any larger tuning expansion
+- only consider a broader search for this learner if the smoke result changes the benchmark story enough to justify more runtime
+
+Current Phase 1 status after the implemented smoke checkpoint:
+
+- `src.run_hist_gradient_boosting` now exists and reuses the shared grouped-city runner, six-feature contract, parquet-first data path, deterministic output structure, run registry, tuning history, and `src.run_modeling_reporting` integration
+- the current retained Phase 1 checkpoint is `outputs/modeling/hist_gradient_boosting/phase1_smoke_allfolds/`
+- sampled all-fold smoke metrics on the canonical parquet at `5000` rows per city are:
+  - pooled PR AUC `0.1408`
+  - mean city PR AUC `0.1761`
+  - pooled recall at top 10% `0.1751`
+- retained RF frontier at the same sampled slice remains stronger:
+  - pooled PR AUC `0.1486`
+  - mean city PR AUC `0.1781`
+  - pooled recall at top 10% `0.1961`
+- the optional reporting comparison under `cross_city_benchmark_report_phase1_smoke_phase1_hgb_vs_rf.csv` shows HGB wins `17` city-fold PR AUC rows and loses `13`, but the overall mean PR AUC delta is still negative at `-0.0020`, with mild-cool cities especially weaker on average
+- treat Phase 1 as implemented and currently closed as a negative-result checkpoint; do not widen HGB tuning unless a later explicit decision reopens it
+
+### Phase 2: Climate-Conditioned Structure With The Same Six Features
+
+Goal:
+
+- test whether climate heterogeneity is a major source of transfer failure under the current six-feature contract
+
+Priority implementation order inside this phase:
+
+1. logistic climate-interaction benchmark
+2. climate-aware version of the better Phase 1 learner if still warranted
+3. same-climate transfer appendix as a supplemental diagnostic only
+
+Phase 2A: logistic climate interactions
+
+- keep the canonical six features unchanged
+- add explicit interactions between `climate_group` and the numeric predictors inside the training-only preprocessing pipeline
+- preserve the same grouped held-out-city evaluation
+- keep this as a separate benchmark runner or explicit model variant, not a silent change to the retained logistic path
+
+Phase 2B: climate-aware nonlinear structure
+
+- if the better learner from Phase 1 remains promising, allow it to exploit climate-conditioned structure explicitly while still training only on training cities
+- do not let this become a feature-expansion task; the only change here is how the same six features are modeled
+
+Phase 2C: same-climate supplemental appendix
+
+- optional and explicitly supplemental
+- for each held-out city, train only on training cities in the same `climate_group`
+- write results under a separate supplemental root if implemented
+- never present this appendix as a replacement for the all-city held-out benchmark
+
+Likely code touchpoints:
+
+- `src/modeling_runner.py`
+- `src/modeling_config.py`
+- `src/modeling_reporting.py`
+- `src/run_modeling_reporting.py`
+- `src.run_logistic_saga_climate_interactions`
+- supplemental reporting code only if Phase 2C is implemented
+
+Expected outputs:
+
+- one new benchmark run family or variant with normal tuned-runner outputs
+- refreshed reporting tables showing whether climate-conditioned structure reduces climate-group disparity
+- if Phase 2C is implemented, a separate supplemental appendix root rather than new canonical benchmark paths
+
+Tests required before calling the phase complete:
+
+- training-only interaction construction with no leakage from held-out cities
+- parity of grouped fold behavior and feature-contract enforcement
+- reporting-table integration for the new benchmark family or variant
+- explicit tests that any same-climate appendix remains separate from the canonical benchmark reporting layer
+
+Manual verification target:
+
+- one bounded real benchmark run for the interaction model or climate-aware learner
+- inspection of reporting tables by climate group before deciding whether this phase materially improves the story
+
+Decision rule after Phase 2:
+
+- if climate-conditioned structure narrows the hot-arid / hot-humid / mild-cool performance spread meaningfully, keep it as a serious candidate for the next benchmark rung
+- if it only improves within one climate group and complicates interpretation heavily, document that and move to richer predictors instead of widening modeling complexity further
+
+Current Phase 2 status after the implemented smoke checkpoint:
+
+- `src.run_logistic_saga_climate_interactions` now exists and reuses the shared grouped-city runner, six-feature contract, parquet-first data path, deterministic output structure, run registry, tuning history, and `src.run_modeling_reporting` integration while keeping the retained logistic path untouched
+- the current retained Phase 2 checkpoint is `outputs/modeling/logistic_saga_climate_interactions/phase2_smoke_allfolds/`
+- sampled all-fold smoke metrics on the canonical parquet at `5000` rows per city are:
+  - pooled PR AUC `0.1480`
+  - mean city PR AUC `0.1814`
+  - pooled recall at top 10% `0.1801`
+- versus retained logistic `5000`, that smoke checkpoint improves pooled PR AUC from `0.1421` to `0.1480`, mean city PR AUC from `0.1803` to `0.1814`, and pooled recall at top 10% from `0.1647` to `0.1801`
+- the optional reporting comparison under `cross_city_benchmark_report_phase2_smoke_phase2_logistic_ci_vs_logistic_by_climate.csv` shows the gains are concentrated mainly in `hot_arid`, `hot_humid` is nearly flat, and `mild_cool` degrades on both PR AUC and recall
+- the new disparity table under `cross_city_benchmark_report_phase2_smoke_phase2_logistic_ci_vs_logistic_disparity.csv` shows narrower climate-group spread, with PR AUC range reduced by `0.0193` and recall range reduced by `0.0172`
+- treat Phase 2 as implemented and currently closed as a mixed-result checkpoint: it suggests climate heterogeneity matters, but not cleanly enough to replace the retained benchmark or to justify widening Phase 2B/2C before moving to richer predictors
+
+### Phase 3: Richer Predictor Bundles
+
+Goal:
+
+- raise the benchmark meaningfully once model-class-only and climate-structure-only gains are exhausted
+
+Principle:
+
+- add predictors in small themed bundles so we can attribute gains and keep the data pipeline maintainable
+
+Recommended bundle order:
+
+1. tree canopy / vegetation structure
+2. urban form / density / morphology
+3. surface reflectance or albedo proxies
+4. building intensity / height proxies
+5. finer water / coastal exposure detail if justified
+
+Recommended first bundle:
+
+- canopy cover
+- one additional vegetation or moisture proxy beyond NDVI
+- one urban morphology bundle such as road density, intersection density, building coverage, or local built-form summary at one or more radii
+
+Implemented Phase 3A first bundle:
+
+- the landed first bundle uses the lowest-risk existing-source path rather than adding a new national acquisition dependency
+- the current bundle is an NLCD neighborhood-context bundle built from the prepared/aligned land-cover and impervious rasters already in the repo workflow
+- the three landed columns are:
+  - `tree_cover_proxy_pct_270m`
+  - `vegetated_cover_proxy_pct_270m`
+  - `impervious_pct_mean_270m`
+- these should be described as bounded local context proxies, not as a replacement for a dedicated national canopy product or a full morphology stack
+
+Implementation requirements:
+
+- each bundle must have a documented raw-to-processed acquisition and feature-assembly path
+- raw data remain immutable and cached under the established raw/support-layer contracts
+- new per-city features must integrate into `data_processed/city_features/*.parquet` and the final assembly contract deliberately
+- do not add a large kitchen-sink feature set in one pass
+- after each bundle lands, rerun the dataset audit and fold-compatible modeling path before claiming benchmark improvement
+
+Likely code touchpoints:
+
+- acquisition or support-layer modules for the new data source
+- per-city feature assembly modules
+- final dataset assembly and audit modules
+- `src.run_phase3a_nlcd_bundle` for deterministic parquet-first backfill of the Phase 3A bundle into existing per-city feature artifacts
+- `docs/data_dictionary.md` for schema additions
+- modeling runners only after the new features are fully integrated and audited
+
+Expected outputs:
+
+- new deterministic raw/support/intermediate artifacts for the bundle
+- updated final dataset schema and audit outputs
+- one new benchmark comparison against the frozen six-feature benchmark
+
+Tests required before calling the phase complete:
+
+- raw or support-layer acquisition helper tests as needed
+- feature-assembly tests for the new columns
+- final-dataset audit coverage for the expanded schema
+- modeling feature-contract tests if a new feature bundle becomes an approved benchmark contract
+
+Manual verification target:
+
+- one bounded city-level preprocessing verification for the new feature bundle
+- one full-dataset audit refresh
+- one benchmark run at a bounded sampled slice before any broader expansion
+
+Decision rule after each Phase 3 bundle:
+
+- if the bundle does not move the held-out-city benchmark materially, stop and record it as non-essential
+- if the bundle improves the benchmark but adds large operational cost, keep both the frozen six-feature benchmark and the expanded-feature benchmark clearly separated in reporting
+
+Current Phase 3A status after the implemented first bundle:
+
+- `src.run_phase3a_nlcd_bundle` now backfills the bounded Phase 3A NLCD neighborhood-context bundle into existing per-city feature parquets and intermediate feature tables without rerunning NDVI or ECOSTRESS acquisition
+- the canonical final dataset has been refreshed and now carries `17` columns, with the three new Phase 3A columns added alongside the retained historical schema
+- `src.audit_final_dataset` now audits the richer nine-feature candidate contract by default, while `src.modeling_prep.validate_required_final_columns(...)` still keeps the legacy core final columns as the minimum compatibility requirement
+- the current bounded richer-feature benchmark is `outputs/modeling/logistic_saga/full_allfolds_s5000_phase3a-nlcd-context_2026-04-13_142451/`
+- relative to retained logistic `5000`, that Phase 3A run improves pooled PR AUC from `0.1421` to `0.1450`, mean city PR AUC from `0.1803` to `0.1807`, and pooled recall at top `10%` from `0.1647` to `0.1699`
+- the optional reporting comparison under `outputs/modeling/reporting/cross_city_benchmark_report_phase3a_nlcd_context.md` shows the gains are modest overall, stronger in `hot_arid` and `mild_cool`, and weaker in `hot_humid`
+- treat Phase 3A as implemented and currently closed as a modest-gain richer-feature checkpoint: keep the frozen six-feature benchmark as the headline story, keep Phase 3A separate in reporting, and only add another richer bundle after an explicit follow-on decision
+
+## Phase 1 Handoff Checklist
+
+When a future agent starts Phase 1, the implementation target is:
+
+- add one better learner under the same six-feature contract
+- keep the retained benchmark story frozen
+- avoid expanding routine logistic / RF search
+- add focused tests, one bounded real smoke run if feasible, and full doc / handoff updates
+
+Minimum completion bar for Phase 1:
+
+- code landed
+- targeted tests passed
+- at least one bounded real run command recorded or an honest blocker documented
+- reporting integration completed or explicitly deferred with rationale
+- `docs/chat_handoff.md` updated with exact verification status and next step
 
 ## Bounded Supplemental Analysis Layer
 

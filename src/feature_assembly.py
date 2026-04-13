@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import re
@@ -10,6 +11,8 @@ from typing import Callable
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from rasterio.enums import Resampling
 from shapely import wkt
 
@@ -36,16 +39,28 @@ from src.config import (
 )
 from src.load_cities import load_cities
 from src.final_dataset_contract import FINAL_COLUMNS
+from src.phase3a_nlcd_bundle import (
+    IMPERVIOUS_MEAN_270M_COLUMN,
+    TREE_COVER_PROXY_COLUMN,
+    VEGETATED_COVER_PROXY_COLUMN,
+    compute_phase3a_nlcd_bundle,
+    get_phase3a_final_columns,
+    get_phase3a_window_radius_cells,
+)
 from src.support_layers import discover_prepared_support_sources
 from src.vector_io import write_gpkg_atomic
 from src.raster_features import (
     RasterNormalizationSpec,
+    align_raster_to_grid,
     align_and_extract_raster_values,
+    build_grid_alignment_spec,
     choose_city_or_global_files,
     discover_rasters,
+    extract_grid_values_from_aligned_array,
     filter_valid_raster_paths,
     first_existing,
     raster_exists,
+    save_aligned_raster,
     sample_median_from_raster_stack,
 )
 from src.water_features import compute_dist_to_water_m
@@ -107,8 +122,26 @@ class BatchFeatureResult:
 
 
 @dataclass(frozen=True)
+class CityFeatureBackfillResult:
+    city: pd.Series
+    n_rows: int
+    updated_columns: list[str]
+    city_features_gpkg_path: Path | None
+    city_features_parquet_path: Path | None
+    intermediate_unfiltered_path: Path | None
+    intermediate_filtered_path: Path | None
+    blocked_stages: list[str]
+
+
+@dataclass(frozen=True)
+class BatchFeatureBackfillResult:
+    summary: pd.DataFrame
+    summary_path: Path
+
+
+@dataclass(frozen=True)
 class FinalDatasetResult:
-    final_df: pd.DataFrame
+    final_df: pd.DataFrame | None
     parquet_path: Path
     csv_path: Path
     artifact_summary_path: Path
@@ -351,6 +384,79 @@ def expected_city_feature_output_paths(
     )
 
 
+def _phase3a_aligned_output_paths(aligned_dir: Path) -> dict[str, Path]:
+    return {
+        TREE_COVER_PROXY_COLUMN: aligned_dir / f"{TREE_COVER_PROXY_COLUMN}_aligned.tif",
+        VEGETATED_COVER_PROXY_COLUMN: aligned_dir / f"{VEGETATED_COVER_PROXY_COLUMN}_aligned.tif",
+        IMPERVIOUS_MEAN_270M_COLUMN: aligned_dir / f"{IMPERVIOUS_MEAN_270M_COLUMN}_aligned.tif",
+    }
+
+
+def _phase3a_bundle_columns() -> list[str]:
+    return get_phase3a_final_columns()
+
+
+def _build_phase3a_feature_frame(
+    *,
+    grid_gdf: gpd.GeoDataFrame,
+    land_cover_aligned: np.ndarray | None,
+    impervious_aligned: np.ndarray | None,
+    resolution: float,
+    aligned_dir: Path,
+    save_outputs: bool,
+) -> pd.DataFrame:
+    bundle_columns = _phase3a_bundle_columns()
+    empty_frame = pd.DataFrame({column_name: np.full(len(grid_gdf), np.nan) for column_name in bundle_columns})
+    if land_cover_aligned is None or impervious_aligned is None:
+        return empty_frame
+
+    bundle = compute_phase3a_nlcd_bundle(
+        land_cover_aligned=land_cover_aligned,
+        impervious_aligned=impervious_aligned,
+        radius_cells=get_phase3a_window_radius_cells(resolution),
+    )
+    spec = build_grid_alignment_spec(grid_gdf=grid_gdf, resolution=resolution)
+    aligned_output_paths = _phase3a_aligned_output_paths(aligned_dir=aligned_dir)
+    extracted_columns: dict[str, np.ndarray] = {}
+
+    for column_name, aligned_array in bundle.as_dict().items():
+        extracted_columns[column_name] = extract_grid_values_from_aligned_array(
+            grid_gdf=grid_gdf,
+            aligned_array=aligned_array,
+            spec=spec,
+        )
+        if save_outputs:
+            save_aligned_raster(
+                aligned_array=aligned_array.astype(np.float32, copy=False),
+                output_path=aligned_output_paths[column_name],
+                spec=spec,
+            )
+
+    return pd.DataFrame(extracted_columns)
+
+
+def _merge_columns_by_cell_id(
+    base_df: pd.DataFrame,
+    update_df: pd.DataFrame,
+    *,
+    join_columns: list[str],
+) -> pd.DataFrame:
+    update_columns = [column for column in update_df.columns if column not in join_columns]
+    merged = base_df.drop(columns=[column for column in update_columns if column in base_df.columns]).copy()
+
+    if join_columns == ["city_id", "cell_id"] and not update_df.empty:
+        city_ids = update_df["city_id"].dropna().unique()
+        if len(city_ids) == 1:
+            lookup = update_df.set_index("cell_id")[update_columns]
+            aligned = lookup.reindex(merged["cell_id"])
+            for column in update_columns:
+                merged[column] = aligned[column].to_numpy()
+            return merged
+
+    merged = merged.merge(update_df, on=join_columns, how="left", validate="one_to_one")
+    return merged
+
+
 def _base_city_features(grid_gdf: gpd.GeoDataFrame, city: pd.Series) -> gpd.GeoDataFrame:
     base = grid_gdf[["cell_id", "geometry"]].copy()
     base["city_id"] = int(city["city_id"])
@@ -532,6 +638,7 @@ def assemble_city_features(
     blocked_stages: list[str] = []
     city_features = _base_city_features(grid, city)
     city_features = _annotate_cell_context(city_features, study_area_path=study_area_path)
+    grid_alignment_spec = build_grid_alignment_spec(grid_gdf=city_features, resolution=resolution)
 
     aligned_dir = _aligned_stage_dir(intermediate_dir, stem)
     if save_outputs:
@@ -552,32 +659,72 @@ def assemble_city_features(
         city_features["elevation_m"] = np.nan
 
     # NLCD
+    land_cover_aligned_array: np.ndarray | None = None
     if raster_exists(feature_sources.nlcd_land_cover_raster):
-        land_cover_aligned = aligned_dir / "nlcd_land_cover_aligned.tif" if save_outputs else None
-        land_cover = align_and_extract_raster_values(
-            grid_gdf=city_features,
+        land_cover_aligned_path = aligned_dir / "nlcd_land_cover_aligned.tif" if save_outputs else None
+        land_cover_aligned_array = align_raster_to_grid(
             raster_path=feature_sources.nlcd_land_cover_raster,
-            resolution=resolution,
+            spec=grid_alignment_spec,
             resampling=Resampling.nearest,
-            aligned_output_path=land_cover_aligned,
+        )
+        if land_cover_aligned_path is not None:
+            save_aligned_raster(
+                aligned_array=land_cover_aligned_array.astype(np.float32, copy=False),
+                output_path=land_cover_aligned_path,
+                spec=grid_alignment_spec,
+            )
+        land_cover = extract_grid_values_from_aligned_array(
+            grid_gdf=city_features,
+            aligned_array=land_cover_aligned_array,
+            spec=grid_alignment_spec,
         )
         city_features["land_cover_class"] = pd.Series(land_cover).round().astype("Int64")
     else:
         blocked_stages.append("nlcd_land_cover")
         city_features["land_cover_class"] = pd.Series(pd.array([pd.NA] * len(city_features), dtype="Int64"))
 
+    impervious_aligned_array: np.ndarray | None = None
     if raster_exists(feature_sources.nlcd_impervious_raster):
-        impervious_aligned = aligned_dir / "nlcd_impervious_aligned.tif" if save_outputs else None
-        city_features["impervious_pct"] = align_and_extract_raster_values(
-            grid_gdf=city_features,
+        impervious_aligned_path = aligned_dir / "nlcd_impervious_aligned.tif" if save_outputs else None
+        impervious_aligned_array = align_raster_to_grid(
             raster_path=feature_sources.nlcd_impervious_raster,
-            resolution=resolution,
+            spec=grid_alignment_spec,
             resampling=Resampling.bilinear,
-            aligned_output_path=impervious_aligned,
+        )
+        if impervious_aligned_path is not None:
+            save_aligned_raster(
+                aligned_array=impervious_aligned_array.astype(np.float32, copy=False),
+                output_path=impervious_aligned_path,
+                spec=grid_alignment_spec,
+            )
+        city_features["impervious_pct"] = extract_grid_values_from_aligned_array(
+            grid_gdf=city_features,
+            aligned_array=impervious_aligned_array,
+            spec=grid_alignment_spec,
         )
     else:
         blocked_stages.append("nlcd_impervious")
         city_features["impervious_pct"] = np.nan
+
+    phase3a_bundle_df = _build_phase3a_feature_frame(
+        grid_gdf=city_features,
+        land_cover_aligned=land_cover_aligned_array,
+        impervious_aligned=impervious_aligned_array,
+        resolution=resolution,
+        aligned_dir=aligned_dir,
+        save_outputs=save_outputs,
+    )
+    for column_name in _phase3a_bundle_columns():
+        city_features[column_name] = phase3a_bundle_df[column_name].to_numpy(dtype=np.float64, copy=False)
+    if land_cover_aligned_array is None:
+        blocked_stages.extend(
+            [
+                "phase3a_tree_cover_proxy",
+                "phase3a_vegetated_cover_proxy",
+            ]
+        )
+    if impervious_aligned_array is None:
+        blocked_stages.append("phase3a_impervious_context")
 
     # Hydro distance-to-water
     if feature_sources.hydro_vector is not None and feature_sources.hydro_vector.exists():
@@ -766,6 +913,237 @@ def extract_features_for_all_cities(
     return BatchFeatureResult(summary=summary, summary_path=summary_path)
 
 
+def _load_aligned_array(path: Path) -> np.ndarray:
+    import rasterio
+
+    with rasterio.open(path) as src:
+        array = src.read(1).astype(np.float64)
+        if src.nodata is not None:
+            nodata = float(src.nodata)
+            if np.isnan(nodata):
+                array[np.isnan(array)] = np.nan
+            else:
+                array[np.isclose(array, nodata)] = np.nan
+    return array
+
+
+def _ensure_phase3a_backfill_frame(
+    *,
+    city: pd.Series,
+    resolution: float,
+    city_grids_dir: Path,
+    city_features_gpkg_path: Path | None,
+    support_layers_dir: Path,
+    intermediate_dir: Path,
+) -> pd.DataFrame:
+    sources = discover_prepared_support_sources(city=city, support_layers_dir=support_layers_dir)
+    if not raster_exists(sources.nlcd_land_cover_raster):
+        raise FileNotFoundError(f"Prepared NLCD land-cover raster not found for city_id={int(city['city_id'])}")
+    if not raster_exists(sources.nlcd_impervious_raster):
+        raise FileNotFoundError(f"Prepared NLCD impervious raster not found for city_id={int(city['city_id'])}")
+
+    stem = city_stem(city)
+    aligned_dir = _aligned_stage_dir(intermediate_dir, stem)
+    grid_path = _resolve_city_grid_path(city=city, resolution=resolution, city_grids_dir=city_grids_dir)
+    try:
+        grid = _read_city_grid(grid_path=grid_path)
+    except Exception:
+        if city_features_gpkg_path is None or not city_features_gpkg_path.exists():
+            raise
+        logger.warning(
+            "Falling back to city feature GeoPackage geometry for Phase 3A backfill because the grid could not be read: %s",
+            grid_path,
+        )
+        city_feature_gdf = gpd.read_file(city_features_gpkg_path)
+        if "cell_id" not in city_feature_gdf.columns:
+            raise ValueError(f"City feature GeoPackage is missing cell_id for fallback geometry: {city_features_gpkg_path}")
+        grid = gpd.GeoDataFrame(city_feature_gdf[["cell_id", "geometry"]].copy(), geometry="geometry", crs=city_feature_gdf.crs)
+    spec = build_grid_alignment_spec(grid_gdf=grid, resolution=resolution)
+    phase3a_aligned_paths = _phase3a_aligned_output_paths(aligned_dir=aligned_dir)
+
+    if all(path.exists() for path in phase3a_aligned_paths.values()):
+        extracted_columns = {
+            column_name: extract_grid_values_from_aligned_array(
+                grid_gdf=grid,
+                aligned_array=_load_aligned_array(path),
+                spec=spec,
+            )
+            for column_name, path in phase3a_aligned_paths.items()
+        }
+        phase3a_feature_df = pd.DataFrame(extracted_columns)
+        phase3a_feature_df.insert(0, "cell_id", grid["cell_id"].to_numpy())
+        phase3a_feature_df.insert(0, "city_id", int(city["city_id"]))
+        return phase3a_feature_df
+
+    land_cover_aligned_path = aligned_dir / "nlcd_land_cover_aligned.tif"
+    impervious_aligned_path = aligned_dir / "nlcd_impervious_aligned.tif"
+    if land_cover_aligned_path.exists() and impervious_aligned_path.exists():
+        land_cover_aligned = _load_aligned_array(land_cover_aligned_path)
+        impervious_aligned = _load_aligned_array(impervious_aligned_path)
+    else:
+        aligned_dir.mkdir(parents=True, exist_ok=True)
+        land_cover_aligned = align_raster_to_grid(
+            raster_path=sources.nlcd_land_cover_raster,
+            spec=spec,
+            resampling=Resampling.nearest,
+        )
+        impervious_aligned = align_raster_to_grid(
+            raster_path=sources.nlcd_impervious_raster,
+            spec=spec,
+            resampling=Resampling.bilinear,
+        )
+        save_aligned_raster(
+            aligned_array=land_cover_aligned.astype(np.float32, copy=False),
+            output_path=land_cover_aligned_path,
+            spec=spec,
+        )
+        save_aligned_raster(
+            aligned_array=impervious_aligned.astype(np.float32, copy=False),
+            output_path=impervious_aligned_path,
+            spec=spec,
+        )
+
+    phase3a_feature_df = _build_phase3a_feature_frame(
+        grid_gdf=grid,
+        land_cover_aligned=land_cover_aligned,
+        impervious_aligned=impervious_aligned,
+        resolution=resolution,
+        aligned_dir=aligned_dir,
+        save_outputs=True,
+    )
+    phase3a_feature_df.insert(0, "cell_id", grid["cell_id"].to_numpy())
+    phase3a_feature_df.insert(0, "city_id", int(city["city_id"]))
+    return phase3a_feature_df
+
+
+def backfill_phase3a_bundle_for_city(
+    *,
+    city_name: str | None = None,
+    city_id: int | None = None,
+    resolution: float = 30,
+    update_gpkg: bool = False,
+    city_grids_dir: Path = CITY_GRIDS,
+    city_features_dir: Path = CITY_FEATURES,
+    support_layers_dir: Path = SUPPORT_LAYERS,
+    intermediate_dir: Path = INTERMEDIATE,
+) -> CityFeatureBackfillResult:
+    """Backfill the bounded Phase 3A bundle into existing per-city artifacts without rerunning NDVI/LST acquisition."""
+    city = load_city_record(city_name=city_name, city_id=city_id)
+    output_paths = expected_city_feature_output_paths(
+        city=city,
+        city_features_dir=city_features_dir,
+        intermediate_dir=intermediate_dir,
+    )
+    if not output_paths.city_features_parquet_path.exists():
+        raise FileNotFoundError(f"Existing city feature parquet not found: {output_paths.city_features_parquet_path}")
+    if not output_paths.intermediate_unfiltered_path.exists():
+        raise FileNotFoundError(f"Existing unfiltered feature parquet not found: {output_paths.intermediate_unfiltered_path}")
+    if not output_paths.intermediate_filtered_path.exists():
+        raise FileNotFoundError(f"Existing filtered feature parquet not found: {output_paths.intermediate_filtered_path}")
+
+    phase3a_feature_df = _ensure_phase3a_backfill_frame(
+        city=city,
+        resolution=resolution,
+        city_grids_dir=city_grids_dir,
+        city_features_gpkg_path=output_paths.city_features_gpkg_path,
+        support_layers_dir=support_layers_dir,
+        intermediate_dir=intermediate_dir,
+    )
+    join_columns = ["city_id", "cell_id"]
+
+    unfiltered_df = pd.read_parquet(output_paths.intermediate_unfiltered_path)
+    unfiltered_updated = _merge_columns_by_cell_id(unfiltered_df, phase3a_feature_df, join_columns=join_columns)
+    unfiltered_updated.to_parquet(output_paths.intermediate_unfiltered_path, index=False)
+
+    filtered_df = pd.read_parquet(output_paths.intermediate_filtered_path)
+    filtered_updated = _merge_columns_by_cell_id(filtered_df, phase3a_feature_df, join_columns=join_columns)
+    filtered_updated.to_parquet(output_paths.intermediate_filtered_path, index=False)
+
+    city_feature_df = pd.read_parquet(output_paths.city_features_parquet_path)
+    city_feature_updated = _merge_columns_by_cell_id(city_feature_df, phase3a_feature_df, join_columns=join_columns)
+    city_feature_updated.to_parquet(output_paths.city_features_parquet_path, index=False)
+
+    city_features_gpkg_path: Path | None = None
+    if update_gpkg and output_paths.city_features_gpkg_path.exists():
+        city_feature_gdf = gpd.read_file(output_paths.city_features_gpkg_path)
+        city_feature_gdf = _merge_columns_by_cell_id(city_feature_gdf, phase3a_feature_df, join_columns=join_columns)
+        city_feature_gdf = gpd.GeoDataFrame(city_feature_gdf, geometry="geometry", crs=city_feature_gdf.crs)
+        write_gpkg_atomic(city_feature_gdf, output_paths.city_features_gpkg_path)
+        city_features_gpkg_path = output_paths.city_features_gpkg_path
+
+    return CityFeatureBackfillResult(
+        city=city,
+        n_rows=int(len(city_feature_updated)),
+        updated_columns=_phase3a_bundle_columns(),
+        city_features_gpkg_path=city_features_gpkg_path,
+        city_features_parquet_path=output_paths.city_features_parquet_path,
+        intermediate_unfiltered_path=output_paths.intermediate_unfiltered_path,
+        intermediate_filtered_path=output_paths.intermediate_filtered_path,
+        blocked_stages=[],
+    )
+
+
+def backfill_phase3a_bundle_for_all_cities(
+    *,
+    resolution: float = 30,
+    city_ids: list[int] | None = None,
+    continue_on_error: bool = True,
+    update_gpkg: bool = False,
+    city_grids_dir: Path = CITY_GRIDS,
+    city_features_dir: Path = CITY_FEATURES,
+    support_layers_dir: Path = SUPPORT_LAYERS,
+    intermediate_dir: Path = INTERMEDIATE,
+) -> BatchFeatureBackfillResult:
+    """Backfill the bounded Phase 3A bundle into existing per-city artifacts for multiple cities."""
+    cities = load_cities()
+    if city_ids:
+        cities = cities[cities["city_id"].isin(city_ids)].copy()
+
+    rows: list[dict[str, object]] = []
+    for _, city in cities.iterrows():
+        try:
+            result = backfill_phase3a_bundle_for_city(
+                city_id=int(city["city_id"]),
+                resolution=resolution,
+                update_gpkg=update_gpkg,
+                city_grids_dir=city_grids_dir,
+                city_features_dir=city_features_dir,
+                support_layers_dir=support_layers_dir,
+                intermediate_dir=intermediate_dir,
+            )
+            rows.append(
+                {
+                    "city_id": int(city["city_id"]),
+                    "city_name": str(city["city_name"]),
+                    "status": "ok",
+                    "n_rows": result.n_rows,
+                    "updated_columns": ";".join(result.updated_columns),
+                    "city_features_parquet_path": str(result.city_features_parquet_path or ""),
+                    "error": "",
+                }
+            )
+        except Exception as exc:  # pragma: no cover - exercised by real workspace runs
+            logger.exception("Phase 3A backfill failed for city_id=%s", int(city["city_id"]))
+            rows.append(
+                {
+                    "city_id": int(city["city_id"]),
+                    "city_name": str(city["city_name"]),
+                    "status": "error",
+                    "n_rows": 0,
+                    "updated_columns": "",
+                    "city_features_parquet_path": "",
+                    "error": str(exc),
+                }
+            )
+            if not continue_on_error:
+                raise
+
+    summary = pd.DataFrame(rows)
+    summary_path = city_features_dir / f"phase3a_backfill_summary_{int(resolution)}m.csv"
+    summary.to_csv(summary_path, index=False)
+    return BatchFeatureBackfillResult(summary=summary, summary_path=summary_path)
+
+
 def _enforce_final_drop_rules(final_df: pd.DataFrame) -> pd.DataFrame:
     """Apply final row-drop rules to keep the merged output consistent."""
     out = final_df.copy()
@@ -800,7 +1178,11 @@ def _write_dataframe_atomic(
 
 
 def _build_final_dataset_artifact_summary(
-    final_df: pd.DataFrame,
+    *,
+    row_count: int,
+    column_names: list[str],
+    dtypes: dict[str, str],
+    per_city_row_counts: dict[str, int],
     parquet_path: Path,
     csv_path: Path,
     source_tables: list[Path],
@@ -809,16 +1191,13 @@ def _build_final_dataset_artifact_summary(
     """Build a compact provenance summary for the final dataset artifacts."""
     return {
         "generated_at_utc": pd.Timestamp.now("UTC").isoformat(),
-        "row_count": int(len(final_df)),
-        "column_count": int(len(final_df.columns)),
+        "row_count": int(row_count),
+        "column_count": int(len(column_names)),
         "input_city_feature_row_count": int(input_row_count),
-        "dropped_row_count": int(input_row_count - len(final_df)),
-        "column_names": list(final_df.columns),
-        "dtypes": {column_name: str(dtype) for column_name, dtype in final_df.dtypes.items()},
-        "per_city_row_counts": {
-            str(int(city_id)): int(row_count)
-            for city_id, row_count in final_df.groupby("city_id").size().sort_index().items()
-        },
+        "dropped_row_count": int(input_row_count - row_count),
+        "column_names": list(column_names),
+        "dtypes": dtypes,
+        "per_city_row_counts": per_city_row_counts,
         "canonical_modeling_input": str(parquet_path),
         "csv_status": "compatibility_fallback_serialization",
         "artifacts_written_from_same_final_dataframe": True,
@@ -838,49 +1217,131 @@ def _build_final_dataset_artifact_summary(
     }
 
 
+def _coerce_final_output_dtypes(city_df: pd.DataFrame) -> pd.DataFrame:
+    coerced = city_df.copy()
+    string_columns = ["city_name", "climate_group"]
+    float_columns = [
+        "centroid_lon",
+        "centroid_lat",
+        "impervious_pct",
+        "elevation_m",
+        "dist_to_water_m",
+        "ndvi_median_may_aug",
+        "lst_median_may_aug",
+        TREE_COVER_PROXY_COLUMN,
+        VEGETATED_COVER_PROXY_COLUMN,
+        IMPERVIOUS_MEAN_270M_COLUMN,
+    ]
+    integer_columns = ["city_id", "cell_id"]
+    nullable_integer_columns = ["land_cover_class", "n_valid_ecostress_passes"]
+
+    for column_name in string_columns:
+        if column_name in coerced.columns:
+            coerced[column_name] = coerced[column_name].astype("string")
+    for column_name in float_columns:
+        if column_name in coerced.columns:
+            coerced[column_name] = pd.to_numeric(coerced[column_name], errors="coerce").astype("float64")
+    for column_name in integer_columns:
+        if column_name in coerced.columns:
+            coerced[column_name] = pd.to_numeric(coerced[column_name], errors="raise").astype("int64")
+    for column_name in nullable_integer_columns:
+        if column_name in coerced.columns:
+            coerced[column_name] = pd.to_numeric(coerced[column_name], errors="coerce").astype("Int64")
+    if "hotspot_10pct" in coerced.columns:
+        coerced["hotspot_10pct"] = pd.Series(coerced["hotspot_10pct"]).astype("boolean")
+    return coerced
+
+
 def assemble_final_dataset(
     city_features_dir: Path = CITY_FEATURES,
     final_dir: Path = FINAL,
 ) -> FinalDatasetResult:
-    """Merge per-city feature tables and write final parquet/csv outputs."""
+    """Merge per-city feature tables and write final parquet/csv outputs sequentially."""
     tables = sorted(city_features_dir.glob("*_features.parquet"))
     if len(tables) == 0:
         raise FileNotFoundError(f"No per-city feature parquet files found in {city_features_dir}")
-
-    frames = [pd.read_parquet(path) for path in tables]
-    final_df = pd.concat(frames, ignore_index=True)
-    input_row_count = len(final_df)
-
-    for column in FINAL_COLUMNS:
-        if column not in final_df.columns:
-            final_df[column] = np.nan
-
-    final_df = _enforce_final_drop_rules(final_df)
-
-    final_df["hotspot_10pct"] = pd.Series(pd.array([pd.NA] * len(final_df), dtype="boolean"))
-    for city_id, city_rows in final_df.groupby("city_id"):
-        valid = city_rows["lst_median_may_aug"].dropna()
-        if valid.empty:
-            continue
-        threshold = float(valid.quantile(0.9))
-        mask = (final_df["city_id"] == city_id) & final_df["lst_median_may_aug"].notna()
-        final_df.loc[mask, "hotspot_10pct"] = (final_df.loc[mask, "lst_median_may_aug"] >= threshold).astype("boolean")
-
-    if "land_cover_class" in final_df.columns:
-        final_df["land_cover_class"] = pd.Series(final_df["land_cover_class"]).astype("Int64")
-    if "n_valid_ecostress_passes" in final_df.columns:
-        final_df["n_valid_ecostress_passes"] = pd.Series(final_df["n_valid_ecostress_passes"]).astype("Int64")
-
-    final_df = final_df[FINAL_COLUMNS]
 
     final_dir.mkdir(parents=True, exist_ok=True)
     parquet_path = final_dir / "final_dataset.parquet"
     csv_path = final_dir / "final_dataset.csv"
     artifact_summary_path = final_dir / "final_dataset_artifact_summary.json"
-    _write_dataframe_atomic(final_df, parquet_path, lambda frame, path: frame.to_parquet(path, index=False))
-    _write_dataframe_atomic(final_df, csv_path, lambda frame, path: frame.to_csv(path, index=False))
+    parquet_temp_path = parquet_path.with_name(f"{parquet_path.name}.tmp")
+    csv_temp_path = csv_path.with_name(f"{csv_path.name}.tmp")
+    if parquet_temp_path.exists():
+        parquet_temp_path.unlink()
+    if csv_temp_path.exists():
+        csv_temp_path.unlink()
+
+    parquet_writer: pq.ParquetWriter | None = None
+    csv_handle = csv_temp_path.open("w", encoding="utf-8", newline="")
+    csv_writer: csv.writer | None = None
+    final_row_count = 0
+    input_row_count = 0
+    per_city_row_counts: dict[str, int] = {}
+    final_dtypes: dict[str, str] | None = None
+    try:
+        for table_path in tables:
+            city_df = pd.read_parquet(table_path)
+            input_row_count += int(len(city_df))
+            for column in FINAL_COLUMNS:
+                if column not in city_df.columns:
+                    city_df[column] = np.nan
+
+            city_df = _enforce_final_drop_rules(city_df)
+            city_df["hotspot_10pct"] = pd.Series(pd.array([pd.NA] * len(city_df), dtype="boolean"))
+            valid_lst = city_df["lst_median_may_aug"].dropna()
+            if not valid_lst.empty:
+                threshold = float(valid_lst.quantile(0.9))
+                valid_mask = city_df["lst_median_may_aug"].notna()
+                city_df.loc[valid_mask, "hotspot_10pct"] = (
+                    city_df.loc[valid_mask, "lst_median_may_aug"] >= threshold
+                ).astype("boolean")
+
+            city_df = city_df[FINAL_COLUMNS]
+            city_df = _coerce_final_output_dtypes(city_df)
+            city_row_count = int(len(city_df))
+            if city_row_count == 0:
+                continue
+
+            city_id = str(int(city_df["city_id"].iloc[0]))
+            per_city_row_counts[city_id] = city_row_count
+            final_row_count += city_row_count
+            if final_dtypes is None:
+                final_dtypes = {column_name: str(dtype) for column_name, dtype in city_df.dtypes.items()}
+
+            table = pa.Table.from_pandas(city_df, preserve_index=False)
+            if parquet_writer is None:
+                parquet_writer = pq.ParquetWriter(parquet_temp_path, table.schema)
+            parquet_writer.write_table(table)
+
+            if csv_writer is None:
+                csv_writer = csv.writer(csv_handle)
+                csv_writer.writerow(FINAL_COLUMNS)
+            csv_writer.writerows(city_df.itertuples(index=False, name=None))
+    except Exception:
+        if parquet_writer is not None:
+            parquet_writer.close()
+        csv_handle.close()
+        if parquet_temp_path.exists():
+            parquet_temp_path.unlink()
+        if csv_temp_path.exists():
+            csv_temp_path.unlink()
+        raise
+    else:
+        if parquet_writer is not None:
+            parquet_writer.close()
+        csv_handle.close()
+
+    if parquet_writer is None:
+        raise ValueError("Final dataset assembly produced zero rows after filtering")
+
+    parquet_temp_path.replace(parquet_path)
+    csv_temp_path.replace(csv_path)
     artifact_summary = _build_final_dataset_artifact_summary(
-        final_df=final_df,
+        row_count=final_row_count,
+        column_names=list(FINAL_COLUMNS),
+        dtypes=final_dtypes or {},
+        per_city_row_counts=per_city_row_counts,
         parquet_path=parquet_path,
         csv_path=csv_path,
         source_tables=tables,
@@ -892,7 +1353,7 @@ def assemble_final_dataset(
     logger.info("Saved final csv: %s", csv_path)
     logger.info("Saved final artifact summary: %s", artifact_summary_path)
     return FinalDatasetResult(
-        final_df=final_df,
+        final_df=None,
         parquet_path=parquet_path,
         csv_path=csv_path,
         artifact_summary_path=artifact_summary_path,

@@ -11,6 +11,7 @@ from src.modeling_config import (
     DEFAULT_FINAL_DATASET_PATH,
     FEATURE_TYPE_CATEGORICAL,
     FEATURE_TYPE_NUMERIC,
+    PHASE3A_FEATURE_COLUMNS,
     get_feature_type_map,
 )
 from src.modeling_data import (
@@ -102,6 +103,25 @@ def test_feature_type_contract_keeps_climate_group_categorical():
     assert feature_type_map["impervious_pct"] == FEATURE_TYPE_NUMERIC
     assert feature_type_map["climate_group"] == FEATURE_TYPE_CATEGORICAL
     assert feature_type_map["land_cover_class"] == FEATURE_TYPE_CATEGORICAL
+
+
+def test_phase3a_feature_contract_adds_numeric_neighborhood_bundle():
+    available_columns = [
+        *_build_modeling_fixture().columns.tolist(),
+        "tree_cover_proxy_pct_270m",
+        "vegetated_cover_proxy_pct_270m",
+        "impervious_pct_mean_270m",
+    ]
+    selected = validate_model_feature_columns(
+        feature_columns=PHASE3A_FEATURE_COLUMNS,
+        available_columns=available_columns,
+    )
+    feature_type_map = get_feature_type_map(PHASE3A_FEATURE_COLUMNS)
+
+    assert selected == PHASE3A_FEATURE_COLUMNS
+    assert feature_type_map["tree_cover_proxy_pct_270m"] == FEATURE_TYPE_NUMERIC
+    assert feature_type_map["vegetated_cover_proxy_pct_270m"] == FEATURE_TYPE_NUMERIC
+    assert feature_type_map["impervious_pct_mean_270m"] == FEATURE_TYPE_NUMERIC
 
 
 def test_modeling_prep_import_does_not_pull_geospatial_stack(monkeypatch: pytest.MonkeyPatch):

@@ -233,11 +233,33 @@ def _describe_search_contract(
         )
         return version, descriptor
 
+    if model_type == "logistic_saga_climate_interactions":
+        logistic_contract_slug, logistic_contract_text = _describe_logistic_contract(param_grid)
+        version = (
+            f"{model_type}__{preset or 'custom'}__{logistic_contract_slug}"
+            f"__climate_numeric_interactions__cv{inner_cv_splits or 'na'}__pc{param_candidate_count or 'na'}"
+        )
+        descriptor = (
+            f"logistic_saga_climate_interactions preset={preset or 'custom'}; "
+            f"{logistic_contract_text} with training-only climate-by-numeric interactions; "
+            f"inner_cv={inner_cv_splits or 'na'}; candidates={param_candidate_count or 'na'}"
+        )
+        return version, descriptor
+
     if model_type == "random_forest":
         forest_contract_slug, forest_contract_text = _describe_random_forest_contract(param_grid)
         version = f"{model_type}__{preset or 'custom'}__{forest_contract_slug}__cv{inner_cv_splits or 'na'}__pc{param_candidate_count or 'na'}"
         descriptor = (
             f"random_forest preset={preset or 'custom'}; {forest_contract_text}; "
+            f"inner_cv={inner_cv_splits or 'na'}; candidates={param_candidate_count or 'na'}"
+        )
+        return version, descriptor
+
+    if model_type == "hist_gradient_boosting":
+        hgb_contract_slug, hgb_contract_text = _describe_hist_gradient_boosting_contract(param_grid)
+        version = f"{model_type}__{preset or 'custom'}__{hgb_contract_slug}__cv{inner_cv_splits or 'na'}__pc{param_candidate_count or 'na'}"
+        descriptor = (
+            f"hist_gradient_boosting preset={preset or 'custom'}; {hgb_contract_text}; "
             f"inner_cv={inner_cv_splits or 'na'}; candidates={param_candidate_count or 'na'}"
         )
         return version, descriptor
@@ -316,6 +338,32 @@ def _describe_random_forest_contract(param_grid: list[dict[str, Any]]) -> tuple[
     if set(observed_grid) == expected_rf_keys:
         return "depth_feature_leaf_custom", "depth/feature/leaf custom grid"
     return "custom_rf_grid", "custom random-forest grid"
+
+
+def _describe_hist_gradient_boosting_contract(param_grid: list[dict[str, Any]]) -> tuple[str, str]:
+    expected_smoke_grid = {
+        "model__learning_rate": {0.05, 0.1},
+        "model__max_leaf_nodes": {15, 31},
+        "model__min_samples_leaf": {20},
+        "model__l2_regularization": {0.0},
+    }
+
+    observed_grid: dict[str, set[Any]] = {}
+    for candidate in param_grid:
+        if not isinstance(candidate, dict):
+            continue
+        for param_name, raw_values in candidate.items():
+            values = raw_values if isinstance(raw_values, list) else [raw_values]
+            observed_values = observed_grid.setdefault(param_name, set())
+            observed_values.update(values)
+
+    if observed_grid == expected_smoke_grid:
+        return "phase1_smoke_lr_leaf", "Phase 1 smoke grid on learning-rate and leaf-count capacity"
+
+    expected_hgb_keys = set(expected_smoke_grid)
+    if set(observed_grid) == expected_hgb_keys:
+        return "phase1_custom_lr_leaf", "Phase 1 custom histogram-gradient-boosting grid"
+    return "custom_hgb_grid", "custom histogram-gradient-boosting grid"
 
 
 def _add_frontier_fields(history_df: pd.DataFrame) -> pd.DataFrame:

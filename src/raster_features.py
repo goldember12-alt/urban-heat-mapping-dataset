@@ -396,6 +396,84 @@ def sample_median_from_raster_stack(
     return median, n_valid
 
 
+def _window_sum_from_integral_image(
+    integral_image: np.ndarray,
+    radius_cells: int,
+) -> np.ndarray:
+    """Return centered square-window sums from a padded 2D integral image."""
+    if radius_cells < 0:
+        raise ValueError("radius_cells must be non-negative")
+
+    height = integral_image.shape[0] - 1
+    width = integral_image.shape[1] - 1
+    if height <= 0 or width <= 0:
+        return np.empty((0, 0), dtype=np.float64)
+
+    row_indices = np.arange(height, dtype=np.int64)
+    col_indices = np.arange(width, dtype=np.int64)
+    row_start = np.clip(row_indices - radius_cells, 0, height - 1)
+    row_end = np.clip(row_indices + radius_cells, 0, height - 1) + 1
+    col_start = np.clip(col_indices - radius_cells, 0, width - 1)
+    col_end = np.clip(col_indices + radius_cells, 0, width - 1) + 1
+
+    return (
+        integral_image[row_end[:, None], col_end[None, :]]
+        - integral_image[row_start[:, None], col_end[None, :]]
+        - integral_image[row_end[:, None], col_start[None, :]]
+        + integral_image[row_start[:, None], col_start[None, :]]
+    )
+
+
+def compute_local_mean_from_aligned_array(
+    aligned_array: np.ndarray,
+    radius_cells: int,
+) -> np.ndarray:
+    """Compute centered square-window means from an aligned raster with NaN-aware masking."""
+    working = np.asarray(aligned_array, dtype=np.float64)
+    if working.ndim != 2:
+        raise ValueError("aligned_array must be 2D")
+
+    valid_mask = ~np.isnan(working)
+    value_sums = np.where(valid_mask, working, 0.0)
+    padded_value_sums = np.pad(value_sums, ((1, 0), (1, 0)), mode="constant", constant_values=0.0)
+    padded_value_integral = padded_value_sums.cumsum(axis=0).cumsum(axis=1)
+
+    padded_count_sums = np.pad(valid_mask.astype(np.int32), ((1, 0), (1, 0)), mode="constant", constant_values=0)
+    padded_count_integral = padded_count_sums.cumsum(axis=0).cumsum(axis=1)
+
+    window_value_sums = _window_sum_from_integral_image(padded_value_integral, radius_cells=radius_cells)
+    window_counts = _window_sum_from_integral_image(padded_count_integral, radius_cells=radius_cells)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        local_mean = np.divide(
+            window_value_sums,
+            window_counts,
+            out=np.full(window_value_sums.shape, np.nan, dtype=np.float64),
+            where=window_counts > 0,
+        )
+    return local_mean.astype(np.float32, copy=False)
+
+
+def compute_local_class_share_from_aligned_array(
+    aligned_array: np.ndarray,
+    target_values: Iterable[int | float],
+    radius_cells: int,
+) -> np.ndarray:
+    """Compute centered square-window class shares from an aligned categorical raster."""
+    targets = np.asarray(list(target_values))
+    if targets.size == 0:
+        raise ValueError("target_values must contain at least one class code")
+
+    working = np.asarray(aligned_array, dtype=np.float64)
+    if working.ndim != 2:
+        raise ValueError("aligned_array must be 2D")
+
+    valid_mask = ~np.isnan(working)
+    class_mask = np.isin(working, targets)
+    class_indicator = np.where(valid_mask, np.where(class_mask, 1.0, 0.0), np.nan)
+    return compute_local_mean_from_aligned_array(class_indicator, radius_cells=radius_cells)
+
+
 def raster_exists(path: Path | None) -> bool:
     return path is not None and path.exists() and path.is_file()
 

@@ -1,0 +1,7 @@
+{
+  "model_name": "logistic_saga_climate_interactions",
+  "outer_fold": 4,
+  "inner_cv_splits": 3,
+  "best_inner_cv_average_precision": 0.15845687880645262,
+  "best_params_json": "{\"model__C\": 1.0, \"model__l1_ratio\": 0.5}"
+}

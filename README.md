@@ -40,6 +40,11 @@ Final dataset columns:
 - `lst_median_may_aug`
 - `n_valid_ecostress_passes`
 - `hotspot_10pct`
+- `tree_cover_proxy_pct_270m`
+- `vegetated_cover_proxy_pct_270m`
+- `impervious_pct_mean_270m`
+
+The retained first-pass benchmark still uses the original six-feature predictive contract. The three Phase 3A columns above are now part of the canonical dataset schema so richer-feature checkpoints can be run reproducibly as separate expansion variants rather than as silent replacements.
 
 ## Current Status
 
@@ -53,6 +58,9 @@ Implemented now:
 - Per-city data-processing summaries and figures using the Phoenix reporting pattern generalized to all configured cities
 - Final-dataset audit and deterministic city-level outer-fold creation
 - First-pass held-out-city ML layer with explicit feature contract, simple baselines, logistic SAGA, and random forest runners
+- A bounded Phase 1 better-learner checkpoint via `src.run_hist_gradient_boosting`, integrated into the shared reporting flow without replacing the retained logistic/RF benchmark story
+- A bounded Phase 2 climate-conditioned checkpoint via `src.run_logistic_saga_climate_interactions`, integrated as a separate reporting variant without replacing the retained logistic/RF benchmark story
+- A bounded Phase 3A richer-predictor checkpoint via `src.run_phase3a_nlcd_bundle` plus a matched logistic SAGA comparison run, integrated as a separate reporting variant without replacing the retained logistic/RF benchmark story
 - Retained benchmark reporting with `outputs/modeling/reporting/cross_city_benchmark_report.md` as the headline modeling reference, plus representative held-out-city map exports under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` as support artifacts rather than replacement results
 - Bounded final-train transfer packaging under `outputs/modeling/final_train/`, reusing the retained six-feature benchmark contract rather than creating a new benchmark path
 - A separate new-city transfer inference path under `outputs/modeling/transfer_inference/` and `figures/modeling/transfer_inference/` that scores one city feature parquet with the retained RF transfer package and writes deterministic prediction/report artifacts without reopening benchmark evaluation
@@ -63,6 +71,9 @@ Verified status:
 - Full-stack orchestration has been manually verified for Phoenix, Tucson, Las Vegas, and Albuquerque
 - The canonical modeling-prep stage has been manually verified on the real `final_dataset.parquet`
 - Parquet-backed logistic SAGA and random-forest smoke runs have been manually verified in the rebuilt repo-local `.venv` using the canonical parquet artifacts
+- The sampled all-fold Phase 1 histogram-gradient-boosting smoke checkpoint has now been manually verified on the canonical parquet and recorded as a negative-result benchmark-strengthening checkpoint relative to the retained RF frontier run
+- The sampled all-fold Phase 2 climate-interaction logistic smoke checkpoint has now been manually verified on the canonical parquet and recorded as a mixed-result climate-conditioning checkpoint relative to the retained logistic `5000` benchmark slice
+- The sampled all-fold Phase 3A richer-predictor logistic checkpoint has now been manually verified on the refreshed canonical parquet and recorded as a modest-gain richer-feature checkpoint relative to the retained logistic `5000` benchmark slice
 - The new sklearn-based modeling layer is test-verified on synthetic grouped-city fixtures
 - A full all-fold canonical modeling run on the real `71,394,894`-row dataset has not been recorded and is not the practical benchmark path on this workstation; the current benchmark-grade path is sampled all-fold evaluation, typically capped at `5,000-20,000` rows per city
 
@@ -90,6 +101,7 @@ Planned next, not yet implemented as full production code:
 
 - Align source rasters to the master city grid
 - Assemble imperviousness, land cover, elevation, distance to water, NDVI, and ECOSTRESS-derived LST
+- Assemble bounded Phase 3A NLCD neighborhood-context proxies for local tree cover, local vegetated cover, and local impervious context
 - Write one per-city feature table per city
 - Merge per-city tables into the final dataset
 
@@ -102,6 +114,9 @@ Planned next, not yet implemented as full production code:
 ### 5. Modeling And Evaluation
 
 - Implemented now: first-pass baselines plus grouped logistic SAGA and random forest runners
+- Implemented now: a bounded histogram-gradient-boosting Phase 1 candidate runner on the same six-feature contract, with reporting integration kept separate from the retained benchmark conclusions
+- Implemented now: a bounded logistic SAGA Phase 2 climate-interaction runner on the same six-feature contract, with training-only climate-by-numeric interactions and separate reporting integration
+- Implemented now: a bounded Phase 3A richer-feature backfill/materialization path plus a matched logistic SAGA comparison run on the retained `5000` rows-per-city slice, with separate reporting integration
 - Implemented now: retained benchmark reporting, representative held-out-city map exports, bounded final-train packaging, and a separate transfer-inference application path, while the supplemental within-city, spatial-sensitivity, and feature-importance layer remains appendix-style support for the canonical cross-city benchmark
 
 ## Benchmark Reference
@@ -175,6 +190,7 @@ These are the most important current entrypoints. The workflow doc lists how the
 .\.venv\Scripts\python.exe -m src.run_modeling_baselines
 .\.venv\Scripts\python.exe -m src.run_logistic_saga
 .\.venv\Scripts\python.exe -m src.run_random_forest
+.\.venv\Scripts\python.exe -m src.run_hist_gradient_boosting
 .\.venv\Scripts\python.exe -m src.run_modeling_reporting
 .\.venv\Scripts\python.exe -m src.run_modeling_spatial_reporting
 .\.venv\Scripts\python.exe -m src.run_modeling_supplemental
@@ -392,6 +408,7 @@ The current preset sizes in code are:
 
 - logistic SAGA: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `full=20` candidates with `4` inner grouped-CV splits
 - random forest: `smoke=4` parameter candidates with `3` inner grouped-CV splits; `frontier=8` candidates with `3` inner grouped-CV splits; `full=81` candidates with `4` inner grouped-CV splits
+- histogram gradient boosting: `smoke=4` parameter candidates with `3` inner grouped-CV splits; no broader preset is enabled unless the smoke result clearly reopens the benchmark decision
 
 ## Run Registry
 
@@ -478,6 +495,62 @@ Stopping guidance:
 - stop at RF `frontier` if the broader search does not produce a meaningful gain or the winning region looks stable already
 - stop increasing RF sample size if runtime grows much faster than PR AUC or top-10% recall improves
 - when RF does justify more work, prefer changing one dimension at a time: preset first, then sample size
+
+Bounded Phase 1 better-learner checkpoint:
+
+- if you explicitly reopen the benchmark-strengthening roadmap, start with histogram gradient boosting on the exact same six-feature, city-held-out sampled `5000` rows-per-city slice
+- do not broaden HGB tuning unless the smoke result clearly beats the retained RF frontier checkpoint on pooled PR AUC and improves the city-level story
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_hist_gradient_boosting --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset smoke --grid-search-n-jobs 1 --run-label phase1-check
+.\.venv\Scripts\python.exe -m src.run_modeling_reporting --report-slug cross_city_benchmark_report_phase1_smoke --hist-gradient-boosting-run-dir outputs\modeling\hist_gradient_boosting\<run_dir>
+```
+
+Current Phase 1 decision:
+
+- the retained all-fold sampled HGB smoke checkpoint is now recorded under `outputs/modeling/hist_gradient_boosting/`
+- it does not beat the retained RF frontier benchmark on pooled PR AUC, mean city PR AUC, or pooled recall at top 10%
+- treat it as a negative-result checkpoint and do not widen HGB search unless a later explicit decision reopens Phase 1
+
+Bounded Phase 2 climate-conditioned checkpoint:
+
+- keep the same six-feature contract and add training-only climate-by-numeric interactions as a separate logistic runner
+- keep this as a separate benchmark family so the retained logistic/RF benchmark story stays unchanged
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_logistic_saga_climate_interactions --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --sample-rows-per-city 5000 --tuning-preset smoke --grid-search-n-jobs 1 --run-label phase2-check
+.\.venv\Scripts\python.exe -m src.run_modeling_reporting --report-slug cross_city_benchmark_report_phase2_smoke --hist-gradient-boosting-run-dir outputs\modeling\hist_gradient_boosting\<phase1_run_dir> --logistic-climate-interactions-run-dir outputs\modeling\logistic_saga_climate_interactions\<phase2_run_dir>
+```
+
+Current Phase 2 decision:
+
+- the retained bounded checkpoint is now recorded under `outputs/modeling/logistic_saga_climate_interactions/phase2_smoke_allfolds/`
+- versus retained logistic `5000`, it improves pooled PR AUC from `0.1421` to `0.1480`, mean city PR AUC from `0.1803` to `0.1814`, and pooled recall at top `10%` from `0.1647` to `0.1801`
+- climate-group spread narrows, but the gains are concentrated mainly in `hot_arid`, `hot_humid` is nearly flat, and `mild_cool` gets worse on both PR AUC and recall
+- treat Phase 2 as a mixed checkpoint rather than a clean benchmark replacement, and move to richer predictors before broadening climate-modeling complexity further
+
+Bounded Phase 3A richer-predictor checkpoint:
+
+- keep the retained six-feature benchmark fixed and add one small NLCD neighborhood-context bundle as a separate expansion contract
+- the current Phase 3A bundle is:
+  - `tree_cover_proxy_pct_270m`
+  - `vegetated_cover_proxy_pct_270m`
+  - `impervious_pct_mean_270m`
+
+```powershell
+.\.venv\Scripts\python.exe -m src.run_phase3a_nlcd_bundle
+.\.venv\Scripts\python.exe -m src.run_final_dataset_assembly
+.\.venv\Scripts\python.exe -m src.audit_final_dataset
+.\.venv\Scripts\python.exe -m src.run_logistic_saga --dataset-path data_processed\final\final_dataset.parquet --folds-path data_processed\modeling\city_outer_folds.parquet --feature-columns impervious_pct,elevation_m,dist_to_water_m,ndvi_median_may_aug,land_cover_class,climate_group,tree_cover_proxy_pct_270m,vegetated_cover_proxy_pct_270m,impervious_pct_mean_270m --sample-rows-per-city 5000 --tuning-preset full --grid-search-n-jobs 1 --run-label phase3a-nlcd-context
+.\.venv\Scripts\python.exe -m src.run_modeling_reporting --report-slug cross_city_benchmark_report_phase3a_nlcd_context --hist-gradient-boosting-run-dir outputs\modeling\hist_gradient_boosting\phase1_smoke_allfolds --logistic-climate-interactions-run-dir outputs\modeling\logistic_saga_climate_interactions\phase2_smoke_allfolds --phase3-richer-logistic-run-dir outputs\modeling\logistic_saga\<phase3a_run_dir>
+```
+
+Current Phase 3A decision:
+
+- the retained bounded checkpoint is now recorded under `outputs/modeling/logistic_saga/full_allfolds_s5000_phase3a-nlcd-context_2026-04-13_142451/`
+- versus retained logistic `5000`, it improves pooled PR AUC from `0.1421` to `0.1450`, mean city PR AUC from `0.1803` to `0.1807`, and pooled recall at top `10%` from `0.1647` to `0.1699`
+- the richer bundle helps more in `hot_arid` and `mild_cool` than in `hot_humid`, and the overall gain is modest rather than transformative
+- keep the frozen six-feature benchmark as the headline story and keep Phase 3A as a separate richer-feature checkpoint until a later bundle shows clearly larger value
 
 Run-history conventions for `tuning_history_annotations.csv`:
 

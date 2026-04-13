@@ -1,0 +1,11 @@
+model_name,scope_name,scope_value,bin_index,predicted_probability_mean,observed_positive_rate
+hist_gradient_boosting,outer_fold,3,0,0.008080641902560845,0.031
+hist_gradient_boosting,outer_fold,3,1,0.021341121345841686,0.07264245251582806
+hist_gradient_boosting,outer_fold,3,2,0.039855632100570776,0.08866666666666667
+hist_gradient_boosting,outer_fold,3,3,0.055228335159363415,0.09436478826275425
+hist_gradient_boosting,outer_fold,3,4,0.07245155213309573,0.09287616511318242
+hist_gradient_boosting,outer_fold,3,5,0.09203169481851003,0.08891108891108891
+hist_gradient_boosting,outer_fold,3,6,0.12140429811193389,0.09115191986644407
+hist_gradient_boosting,outer_fold,3,7,0.15953056498442186,0.12241494329553035
+hist_gradient_boosting,outer_fold,3,8,0.20230265703771735,0.1299566811062979
+hist_gradient_boosting,outer_fold,3,9,0.297267526242464,0.18806268756252084

@@ -1,0 +1,21 @@
+{
+  "model_name": "logistic_saga_climate_interactions",
+  "outer_fold": 4,
+  "train_city_count": 24,
+  "test_city_count": 6,
+  "train_row_count": 120000,
+  "test_row_count": 30000,
+  "test_positive_count": 3000,
+  "test_prevalence": 0.1,
+  "pr_auc": 0.1520564520293456,
+  "recall_at_top_10pct": 0.17466666666666666,
+  "inner_cv_splits": 3,
+  "best_inner_cv_average_precision": 0.15845687880645262,
+  "param_candidate_count": 4,
+  "estimated_inner_fit_count": 12,
+  "data_load_seconds": 0.04980580002302304,
+  "preprocess_build_seconds": 4.499999340623617e-05,
+  "preprocess_probe_fit_transform_seconds": 0.5876982000190765,
+  "grid_search_seconds": 409.76536850002594,
+  "fold_wall_clock_seconds": 410.57114779995754
+}

@@ -1,0 +1,11 @@
+model_name,scope_name,scope_value,bin_index,predicted_probability_mean,observed_positive_rate
+logistic_saga,outer_fold,4,0,0.043082364993304895,0.007
+logistic_saga,outer_fold,4,1,0.06382320153933432,0.030666666666666665
+logistic_saga,outer_fold,4,2,0.07768709647432057,0.07633333333333334
+logistic_saga,outer_fold,4,3,0.09147837431908885,0.10733333333333334
+logistic_saga,outer_fold,4,4,0.10458094326024245,0.086
+logistic_saga,outer_fold,4,5,0.11835960634141715,0.094
+logistic_saga,outer_fold,4,6,0.13247206170844678,0.12166666666666667
+logistic_saga,outer_fold,4,7,0.14411582714231902,0.15733333333333333
+logistic_saga,outer_fold,4,8,0.1648905755304737,0.14366666666666666
+logistic_saga,outer_fold,4,9,0.2297033296359031,0.176

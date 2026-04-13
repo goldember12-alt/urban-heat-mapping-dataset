@@ -1,0 +1,11 @@
+model_name,scope_name,scope_value,bin_index,predicted_probability_mean,observed_positive_rate
+logistic_saga_climate_interactions,outer_fold,2,0,0.0057685134373477425,0.10433333333333333
+logistic_saga_climate_interactions,outer_fold,2,1,0.02188116872067523,0.06333333333333334
+logistic_saga_climate_interactions,outer_fold,2,2,0.03498334301585869,0.064
+logistic_saga_climate_interactions,outer_fold,2,3,0.04780498522602314,0.08166666666666667
+logistic_saga_climate_interactions,outer_fold,2,4,0.06111534460647844,0.09333333333333334
+logistic_saga_climate_interactions,outer_fold,2,5,0.0756568398736222,0.077
+logistic_saga_climate_interactions,outer_fold,2,6,0.09027239852158331,0.08933333333333333
+logistic_saga_climate_interactions,outer_fold,2,7,0.10508990728078628,0.11166666666666666
+logistic_saga_climate_interactions,outer_fold,2,8,0.12949674021476362,0.12833333333333333
+logistic_saga_climate_interactions,outer_fold,2,9,0.2126742905043326,0.187

@@ -13,8 +13,9 @@ from typing import Callable, Sequence
 import numpy as np
 import pandas as pd
 from joblib import Memory
-from sklearn.base import clone
+from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin, clone
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -22,11 +23,15 @@ from sklearn.metrics import get_scorer
 from sklearn.model_selection import GridSearchCV, GroupKFold, ParameterGrid
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, OrdinalEncoder, StandardScaler
+from sklearn.utils.validation import check_is_fitted
+from threadpoolctl import threadpool_limits
 
 from src.modeling_config import (
     CITY_NAME_COLUMN,
     DEFAULT_CALIBRATION_BINS,
     DEFAULT_FINAL_DATASET_PATH,
+    DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER,
+    DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT,
     DEFAULT_LOGISTIC_MAX_ITER,
     DEFAULT_LOGISTIC_TOL,
     DEFAULT_PR_SCORING,
@@ -34,9 +39,12 @@ from src.modeling_config import (
     DEFAULT_TUNING_PRESET,
     DEFAULT_TOP_FRACTION,
     GROUP_COLUMN,
+    HIST_GRADIENT_BOOSTING_OUTPUT_DIR,
+    LOGISTIC_CLIMATE_INTERACTIONS_OUTPUT_DIR,
     LOGISTIC_OUTPUT_DIR,
     RANDOM_FOREST_OUTPUT_DIR,
     TARGET_COLUMN,
+    get_default_output_dir,
     get_first_pass_feature_columns,
     get_model_tuning_spec,
     get_prediction_output_columns,
@@ -80,6 +88,225 @@ class GridSearchRunResult:
     predictions_path: Path
     calibration_curve_path: Path
     metadata_path: Path
+
+
+class ThreadLimitedHistGradientBoostingClassifier(ClassifierMixin, BaseEstimator):
+    """Wrap HistGradientBoostingClassifier with a deterministic thread limit for sandbox-safe execution."""
+
+    _estimator_type = "classifier"
+
+    def __init__(
+        self,
+        loss: str = "log_loss",
+        *,
+        learning_rate: float = 0.1,
+        max_iter: int = 100,
+        max_leaf_nodes: int | None = 31,
+        max_depth: int | None = None,
+        min_samples_leaf: int = 20,
+        l2_regularization: float = 0.0,
+        max_features: float = 1.0,
+        max_bins: int = 255,
+        categorical_features: str | Sequence[bool] = "from_dtype",
+        monotonic_cst: Sequence[int] | None = None,
+        interaction_cst: Sequence[Sequence[int]] | str | None = None,
+        warm_start: bool = False,
+        early_stopping: str | bool = "auto",
+        scoring: str = "loss",
+        validation_fraction: float = 0.1,
+        n_iter_no_change: int = 10,
+        tol: float = 1e-7,
+        verbose: int = 0,
+        random_state: int | None = None,
+        class_weight: dict[int, float] | str | None = None,
+        thread_limit: int = DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT,
+    ) -> None:
+        self.loss = loss
+        self.learning_rate = learning_rate
+        self.max_iter = max_iter
+        self.max_leaf_nodes = max_leaf_nodes
+        self.max_depth = max_depth
+        self.min_samples_leaf = min_samples_leaf
+        self.l2_regularization = l2_regularization
+        self.max_features = max_features
+        self.max_bins = max_bins
+        self.categorical_features = categorical_features
+        self.monotonic_cst = monotonic_cst
+        self.interaction_cst = interaction_cst
+        self.warm_start = warm_start
+        self.early_stopping = early_stopping
+        self.scoring = scoring
+        self.validation_fraction = validation_fraction
+        self.n_iter_no_change = n_iter_no_change
+        self.tol = tol
+        self.verbose = verbose
+        self.random_state = random_state
+        self.class_weight = class_weight
+        self.thread_limit = thread_limit
+
+    def _build_estimator(self) -> HistGradientBoostingClassifier:
+        return HistGradientBoostingClassifier(
+            loss=self.loss,
+            learning_rate=self.learning_rate,
+            max_iter=self.max_iter,
+            max_leaf_nodes=self.max_leaf_nodes,
+            max_depth=self.max_depth,
+            min_samples_leaf=self.min_samples_leaf,
+            l2_regularization=self.l2_regularization,
+            max_features=self.max_features,
+            max_bins=self.max_bins,
+            categorical_features=self.categorical_features,
+            monotonic_cst=self.monotonic_cst,
+            interaction_cst=self.interaction_cst,
+            warm_start=self.warm_start,
+            early_stopping=self.early_stopping,
+            scoring=self.scoring,
+            validation_fraction=self.validation_fraction,
+            n_iter_no_change=self.n_iter_no_change,
+            tol=self.tol,
+            verbose=self.verbose,
+            random_state=self.random_state,
+            class_weight=self.class_weight,
+        )
+
+    def fit(self, X: object, y: object, **fit_params: object) -> "ThreadLimitedHistGradientBoostingClassifier":
+        estimator = self._build_estimator()
+        with threadpool_limits(limits=int(self.thread_limit)):
+            estimator.fit(X, y, **fit_params)
+        self.estimator_ = estimator
+        self.classes_ = estimator.classes_
+        self.n_features_in_ = estimator.n_features_in_
+        if hasattr(estimator, "feature_names_in_"):
+            self.feature_names_in_ = estimator.feature_names_in_
+        return self
+
+    def predict(self, X: object) -> np.ndarray:
+        check_is_fitted(self, "estimator_")
+        with threadpool_limits(limits=int(self.thread_limit)):
+            return self.estimator_.predict(X)
+
+    def predict_proba(self, X: object) -> np.ndarray:
+        check_is_fitted(self, "estimator_")
+        with threadpool_limits(limits=int(self.thread_limit)):
+            return self.estimator_.predict_proba(X)
+
+
+class ClimateInteractionPreprocessor(BaseEstimator, TransformerMixin):
+    """Build training-only climate-conditioned numeric interactions on top of the six-feature contract."""
+
+    def __init__(
+        self,
+        feature_columns: Sequence[str],
+        climate_column: str = "climate_group",
+    ) -> None:
+        self.feature_columns = tuple(feature_columns)
+        self.climate_column = climate_column
+
+    def fit(self, X: object, y: object | None = None) -> "ClimateInteractionPreprocessor":
+        feature_frame = pd.DataFrame(X).copy()
+        numeric_columns, categorical_columns = _split_feature_types(self.feature_columns)
+        if self.climate_column not in categorical_columns:
+            raise ValueError(
+                f"Climate interaction preprocessing requires {self.climate_column!r} in the categorical feature contract"
+            )
+
+        self.numeric_columns_ = list(numeric_columns)
+        self.other_categorical_columns_ = [
+            column_name for column_name in categorical_columns if column_name != self.climate_column
+        ]
+        self.climate_columns_ = [self.climate_column]
+
+        self.numeric_pipeline_ = Pipeline(
+            steps=[
+                ("cast", FunctionTransformer(_coerce_numeric_frame, validate=False)),
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+            ]
+        )
+        self.other_categorical_pipeline_ = Pipeline(
+            steps=[
+                ("cast", FunctionTransformer(_coerce_categorical_frame, validate=False)),
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            ]
+        )
+        self.climate_pipeline_ = Pipeline(
+            steps=[
+                ("cast", FunctionTransformer(_coerce_categorical_frame, validate=False)),
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            ]
+        )
+
+        self.numeric_pipeline_.fit(feature_frame[self.numeric_columns_], y)
+        if self.other_categorical_columns_:
+            self.other_categorical_pipeline_.fit(feature_frame[self.other_categorical_columns_], y)
+        else:
+            self.other_categorical_pipeline_ = None
+        self.climate_pipeline_.fit(feature_frame[self.climate_columns_], y)
+
+        climate_feature_names = self._encoder_feature_names(self.climate_pipeline_, self.climate_columns_)
+        other_categorical_feature_names = (
+            self._encoder_feature_names(self.other_categorical_pipeline_, self.other_categorical_columns_)
+            if self.other_categorical_pipeline_ is not None
+            else []
+        )
+        interaction_feature_names = [
+            f"{numeric_column}__x__{climate_feature_name}"
+            for numeric_column in self.numeric_columns_
+            for climate_feature_name in climate_feature_names
+        ]
+        self.feature_names_out_ = [
+            *self.numeric_columns_,
+            *other_categorical_feature_names,
+            *climate_feature_names,
+            *interaction_feature_names,
+        ]
+        return self
+
+    def transform(self, X: object) -> np.ndarray:
+        check_is_fitted(self, "feature_names_out_")
+        feature_frame = pd.DataFrame(X).copy()
+        numeric_matrix = np.asarray(
+            self.numeric_pipeline_.transform(feature_frame[self.numeric_columns_]),
+            dtype="float64",
+        )
+        climate_matrix = np.asarray(
+            self.climate_pipeline_.transform(feature_frame[self.climate_columns_]),
+            dtype="float64",
+        )
+
+        parts = [numeric_matrix]
+        if self.other_categorical_pipeline_ is not None:
+            other_categorical_matrix = np.asarray(
+                self.other_categorical_pipeline_.transform(feature_frame[self.other_categorical_columns_]),
+                dtype="float64",
+            )
+            parts.append(other_categorical_matrix)
+        parts.append(climate_matrix)
+
+        if climate_matrix.shape[1] == 0:
+            interaction_matrix = np.empty((numeric_matrix.shape[0], 0), dtype="float64")
+        else:
+            interaction_matrix = (numeric_matrix[:, :, np.newaxis] * climate_matrix[:, np.newaxis, :]).reshape(
+                numeric_matrix.shape[0],
+                -1,
+            )
+        parts.append(interaction_matrix)
+
+        return np.hstack(parts)
+
+    def get_feature_names_out(self, input_features: Sequence[str] | None = None) -> np.ndarray:
+        del input_features
+        check_is_fitted(self, "feature_names_out_")
+        return np.asarray(self.feature_names_out_, dtype=object)
+
+    @staticmethod
+    def _encoder_feature_names(pipeline: Pipeline, columns: Sequence[str]) -> list[str]:
+        encoder = pipeline.named_steps["encoder"]
+        if hasattr(encoder, "get_feature_names_out"):
+            return encoder.get_feature_names_out(columns).tolist()
+        return list(columns)
 
 
 @contextmanager
@@ -234,6 +461,33 @@ def build_logistic_saga_pipeline(
     )
 
 
+def build_logistic_saga_climate_interactions_pipeline(
+    feature_columns: Sequence[str],
+    random_state: int = DEFAULT_RANDOM_STATE,
+    n_jobs: int | None = None,
+    max_iter: int = DEFAULT_LOGISTIC_MAX_ITER,
+    tol: float = DEFAULT_LOGISTIC_TOL,
+    memory: Memory | str | Path | None = None,
+) -> Pipeline:
+    """Build the Phase 2 logistic SAGA pipeline with training-only climate-by-numeric interactions."""
+    del n_jobs
+    return Pipeline(
+        steps=[
+            ("preprocess", ClimateInteractionPreprocessor(feature_columns=feature_columns)),
+            (
+                "model",
+                LogisticRegression(
+                    solver="saga",
+                    max_iter=max_iter,
+                    tol=tol,
+                    random_state=random_state,
+                ),
+            ),
+        ],
+        memory=memory,
+    )
+
+
 def build_random_forest_pipeline(
     feature_columns: Sequence[str],
     random_state: int = DEFAULT_RANDOM_STATE,
@@ -282,6 +536,67 @@ def build_random_forest_pipeline(
                 RandomForestClassifier(
                     random_state=random_state,
                     n_jobs=n_jobs,
+                ),
+            ),
+        ],
+        memory=memory,
+    )
+
+
+def build_hist_gradient_boosting_pipeline(
+    feature_columns: Sequence[str],
+    random_state: int = DEFAULT_RANDOM_STATE,
+    n_jobs: int | None = None,
+    max_iter: int = DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER,
+    thread_limit: int = DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT,
+    memory: Memory | str | Path | None = None,
+) -> Pipeline:
+    """Build the bounded Phase 1 histogram-gradient-boosting pipeline with train-only preprocessing."""
+    del n_jobs
+    numeric_columns, categorical_columns = _split_feature_types(feature_columns)
+    categorical_mask = [False] * len(numeric_columns) + [True] * len(categorical_columns)
+    preprocessor = ColumnTransformer(
+        transformers=[
+            (
+                "numeric",
+                Pipeline(
+                    steps=[
+                        ("cast", FunctionTransformer(_coerce_numeric_frame, validate=False)),
+                    ]
+                ),
+                numeric_columns,
+            ),
+            (
+                "categorical",
+                Pipeline(
+                    steps=[
+                        ("cast", FunctionTransformer(_coerce_categorical_frame, validate=False)),
+                        (
+                            "encoder",
+                            OrdinalEncoder(
+                                handle_unknown="use_encoded_value",
+                                unknown_value=np.nan,
+                                encoded_missing_value=np.nan,
+                            ),
+                        ),
+                    ]
+                ),
+                categorical_columns,
+            ),
+        ],
+        remainder="drop",
+    )
+    return Pipeline(
+        steps=[
+            ("preprocess", preprocessor),
+            (
+                "model",
+                ThreadLimitedHistGradientBoostingClassifier(
+                    categorical_features=categorical_mask,
+                    early_stopping=False,
+                    max_iter=max_iter,
+                    random_state=random_state,
+                    thread_limit=thread_limit,
                 ),
             ),
         ],
@@ -403,9 +718,7 @@ def run_grouped_grid_search_model(
     param_candidate_count = _count_parameter_combinations(resolved_param_grid)
     param_names = sorted({param_name for candidate in resolved_param_grid for param_name in candidate})
 
-    resolved_output_dir = output_dir or (
-        LOGISTIC_OUTPUT_DIR if model_name == "logistic_saga" else RANDOM_FOREST_OUTPUT_DIR
-    )
+    resolved_output_dir = output_dir or get_default_output_dir(model_name)
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
     write_feature_contract(resolved_output_dir / "feature_contract.json", feature_columns=selected_features)
 
@@ -924,6 +1237,48 @@ def run_logistic_saga_model(
     )
 
 
+def run_logistic_saga_climate_interactions_model(
+    dataset_path: Path = DEFAULT_FINAL_DATASET_PATH,
+    folds_path: Path | None = None,
+    output_dir: Path = LOGISTIC_CLIMATE_INTERACTIONS_OUTPUT_DIR,
+    feature_columns: Sequence[str] | None = None,
+    selected_outer_folds: Sequence[int] | None = None,
+    sample_rows_per_city: int | None = None,
+    random_state: int = DEFAULT_RANDOM_STATE,
+    inner_cv_splits: int | None = None,
+    top_fraction: float = DEFAULT_TOP_FRACTION,
+    calibration_bins: int = DEFAULT_CALIBRATION_BINS,
+    param_grid: Sequence[dict[str, object]] | None = None,
+    grid_search_n_jobs: int | None = -1,
+    max_iter: int = DEFAULT_LOGISTIC_MAX_ITER,
+    tol: float = DEFAULT_LOGISTIC_TOL,
+    tuning_preset: str = DEFAULT_TUNING_PRESET,
+    pipeline_cache_enabled: bool = True,
+    command: str | None = None,
+) -> GridSearchRunResult:
+    """Run the grouped Phase 2 logistic SAGA benchmark with climate-conditioned numeric interactions."""
+    return run_grouped_grid_search_model(
+        model_name="logistic_saga_climate_interactions",
+        pipeline_builder=build_logistic_saga_climate_interactions_pipeline,
+        param_grid=param_grid,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=feature_columns,
+        selected_outer_folds=selected_outer_folds,
+        sample_rows_per_city=sample_rows_per_city,
+        random_state=random_state,
+        inner_cv_splits=inner_cv_splits,
+        top_fraction=top_fraction,
+        calibration_bins=calibration_bins,
+        grid_search_n_jobs=grid_search_n_jobs,
+        pipeline_builder_kwargs={"max_iter": int(max_iter), "tol": float(tol)},
+        tuning_preset=tuning_preset,
+        pipeline_cache_enabled=pipeline_cache_enabled,
+        command=command,
+    )
+
+
 def run_random_forest_model(
     dataset_path: Path = DEFAULT_FINAL_DATASET_PATH,
     folds_path: Path | None = None,
@@ -959,6 +1314,50 @@ def run_random_forest_model(
         calibration_bins=calibration_bins,
         grid_search_n_jobs=grid_search_n_jobs,
         model_n_jobs=model_n_jobs,
+        tuning_preset=tuning_preset,
+        pipeline_cache_enabled=pipeline_cache_enabled,
+        command=command,
+    )
+
+
+def run_hist_gradient_boosting_model(
+    dataset_path: Path = DEFAULT_FINAL_DATASET_PATH,
+    folds_path: Path | None = None,
+    output_dir: Path = HIST_GRADIENT_BOOSTING_OUTPUT_DIR,
+    feature_columns: Sequence[str] | None = None,
+    selected_outer_folds: Sequence[int] | None = None,
+    sample_rows_per_city: int | None = None,
+    random_state: int = DEFAULT_RANDOM_STATE,
+    inner_cv_splits: int | None = None,
+    top_fraction: float = DEFAULT_TOP_FRACTION,
+    calibration_bins: int = DEFAULT_CALIBRATION_BINS,
+    param_grid: Sequence[dict[str, object]] | None = None,
+    grid_search_n_jobs: int | None = -1,
+    max_iter: int = DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER,
+    tuning_preset: str = DEFAULT_TUNING_PRESET,
+    pipeline_cache_enabled: bool = True,
+    command: str | None = None,
+) -> GridSearchRunResult:
+    """Run the grouped histogram-gradient-boosting Phase 1 checkpoint."""
+    return run_grouped_grid_search_model(
+        model_name="hist_gradient_boosting",
+        pipeline_builder=build_hist_gradient_boosting_pipeline,
+        param_grid=param_grid,
+        dataset_path=dataset_path,
+        folds_path=folds_path,
+        output_dir=output_dir,
+        feature_columns=feature_columns,
+        selected_outer_folds=selected_outer_folds,
+        sample_rows_per_city=sample_rows_per_city,
+        random_state=random_state,
+        inner_cv_splits=inner_cv_splits,
+        top_fraction=top_fraction,
+        calibration_bins=calibration_bins,
+        grid_search_n_jobs=grid_search_n_jobs,
+        pipeline_builder_kwargs={
+            "max_iter": int(max_iter),
+            "thread_limit": DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT,
+        },
         tuning_preset=tuning_preset,
         pipeline_cache_enabled=pipeline_cache_enabled,
         command=command,

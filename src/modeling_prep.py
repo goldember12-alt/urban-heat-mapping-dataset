@@ -10,11 +10,11 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from src.config import FINAL, MODELING
-from src.final_dataset_contract import FINAL_COLUMNS
+from src.final_dataset_contract import CORE_FINAL_COLUMNS, FINAL_COLUMNS
 from src.modeling_config import (
-    DEFAULT_FEATURE_COLUMNS,
     EXCLUDED_FEATURE_COLUMNS,
     GROUP_COLUMN,
+    PHASE3A_FEATURE_COLUMNS,
     TARGET_COLUMN,
 )
 
@@ -80,7 +80,7 @@ def load_final_dataset(
 
 def validate_required_final_columns(
     df_or_columns: pd.DataFrame | Iterable[str],
-    required_columns: Iterable[str] = FINAL_COLUMNS,
+    required_columns: Iterable[str] = CORE_FINAL_COLUMNS,
 ) -> None:
     """Raise when the final dataset is missing required contract columns."""
     available_columns = df_or_columns.columns if isinstance(df_or_columns, pd.DataFrame) else df_or_columns
@@ -131,7 +131,7 @@ def validate_binary_target(df: pd.DataFrame, target_column: str = DEFAULT_TARGET
 
 def summarize_feature_missingness(
     df: pd.DataFrame,
-    feature_columns: Iterable[str] = DEFAULT_FEATURE_COLUMNS,
+    feature_columns: Iterable[str] = PHASE3A_FEATURE_COLUMNS,
 ) -> pd.DataFrame:
     """Summarize missingness for candidate modeling features across the full dataset."""
     records: list[dict[str, object]] = []
@@ -168,7 +168,7 @@ def summarize_feature_missingness(
 
 def summarize_feature_missingness_by_city(
     df: pd.DataFrame,
-    feature_columns: Iterable[str] = DEFAULT_FEATURE_COLUMNS,
+    feature_columns: Iterable[str] = PHASE3A_FEATURE_COLUMNS,
     group_column: str = DEFAULT_GROUP_COLUMN,
 ) -> pd.DataFrame:
     """Summarize candidate-feature missingness within each city."""
@@ -271,7 +271,7 @@ def summarize_by_city(
 def audit_final_dataset(
     dataset_path: Path = FINAL / "final_dataset.parquet",
     output_dir: Path = MODELING,
-    feature_columns: Iterable[str] = DEFAULT_FEATURE_COLUMNS,
+    feature_columns: Iterable[str] = PHASE3A_FEATURE_COLUMNS,
     target_column: str = DEFAULT_TARGET_COLUMN,
     group_column: str = DEFAULT_GROUP_COLUMN,
 ) -> FinalDatasetAuditResult:

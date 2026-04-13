@@ -14,6 +14,23 @@ FOLD_COLUMN = "outer_fold"
 FEATURE_TYPE_NUMERIC = "numeric"
 FEATURE_TYPE_CATEGORICAL = "categorical"
 
+DEFAULT_FEATURE_COLUMNS = [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group",
+]
+
+PHASE3A_ADDITIONAL_FEATURE_COLUMNS = [
+    "tree_cover_proxy_pct_270m",
+    "vegetated_cover_proxy_pct_270m",
+    "impervious_pct_mean_270m",
+]
+
+PHASE3A_FEATURE_COLUMNS = [*DEFAULT_FEATURE_COLUMNS, *PHASE3A_ADDITIONAL_FEATURE_COLUMNS]
+
 MODEL_FEATURE_TYPES = {
     "impervious_pct": FEATURE_TYPE_NUMERIC,
     "elevation_m": FEATURE_TYPE_NUMERIC,
@@ -21,6 +38,9 @@ MODEL_FEATURE_TYPES = {
     "ndvi_median_may_aug": FEATURE_TYPE_NUMERIC,
     "land_cover_class": FEATURE_TYPE_CATEGORICAL,
     "climate_group": FEATURE_TYPE_CATEGORICAL,
+    "tree_cover_proxy_pct_270m": FEATURE_TYPE_NUMERIC,
+    "vegetated_cover_proxy_pct_270m": FEATURE_TYPE_NUMERIC,
+    "impervious_pct_mean_270m": FEATURE_TYPE_NUMERIC,
 }
 
 NUMERIC_FEATURE_COLUMNS = [
@@ -29,7 +49,6 @@ NUMERIC_FEATURE_COLUMNS = [
 CATEGORICAL_FEATURE_COLUMNS = [
     column_name for column_name, feature_type in MODEL_FEATURE_TYPES.items() if feature_type == FEATURE_TYPE_CATEGORICAL
 ]
-DEFAULT_FEATURE_COLUMNS = list(MODEL_FEATURE_TYPES)
 
 EXCLUDED_FEATURE_COLUMNS = [
     TARGET_COLUMN,
@@ -57,7 +76,9 @@ DEFAULT_FOLDS_CSV_PATH = MODELING / "city_outer_folds.csv"
 
 BASELINE_OUTPUT_DIR = MODELING_OUTPUTS / "baselines"
 LOGISTIC_OUTPUT_DIR = MODELING_OUTPUTS / "logistic_saga"
+LOGISTIC_CLIMATE_INTERACTIONS_OUTPUT_DIR = MODELING_OUTPUTS / "logistic_saga_climate_interactions"
 RANDOM_FOREST_OUTPUT_DIR = MODELING_OUTPUTS / "random_forest"
+HIST_GRADIENT_BOOSTING_OUTPUT_DIR = MODELING_OUTPUTS / "hist_gradient_boosting"
 MODELING_FIGURE_ROOT = MODELING_FIGURES
 
 DEFAULT_PR_SCORING = "average_precision"
@@ -65,6 +86,8 @@ DEFAULT_TOP_FRACTION = 0.10
 DEFAULT_RANDOM_STATE = 42
 DEFAULT_LOGISTIC_MAX_ITER = 4000
 DEFAULT_LOGISTIC_TOL = 5e-4
+DEFAULT_HIST_GRADIENT_BOOSTING_MAX_ITER = 200
+DEFAULT_HIST_GRADIENT_BOOSTING_THREAD_LIMIT = 1
 DEFAULT_INNER_CV_SPLITS = 4
 SMOKE_INNER_CV_SPLITS = 3
 DEFAULT_CALIBRATION_BINS = 10
@@ -139,6 +162,16 @@ RANDOM_FOREST_FULL_PARAM_GRID = [
 ]
 RANDOM_FOREST_PARAM_GRID = RANDOM_FOREST_SMOKE_PARAM_GRID
 
+HIST_GRADIENT_BOOSTING_SMOKE_PARAM_GRID = [
+    {
+        "model__learning_rate": [0.05, 0.1],
+        "model__max_leaf_nodes": [15, 31],
+        "model__min_samples_leaf": [20],
+        "model__l2_regularization": [0.0],
+    }
+]
+HIST_GRADIENT_BOOSTING_PARAM_GRID = HIST_GRADIENT_BOOSTING_SMOKE_PARAM_GRID
+
 
 @dataclass(frozen=True)
 class ModelTuningSpec:
@@ -152,8 +185,12 @@ def get_valid_tuning_presets(model_name: str) -> tuple[str, ...]:
     normalized_model_name = model_name.strip().lower()
     if normalized_model_name == "logistic_saga":
         return (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
+    if normalized_model_name == "logistic_saga_climate_interactions":
+        return (TUNING_PRESET_SMOKE, TUNING_PRESET_FULL)
     if normalized_model_name == "random_forest":
         return (TUNING_PRESET_SMOKE, TUNING_PRESET_FRONTIER, TUNING_PRESET_FULL)
+    if normalized_model_name == "hist_gradient_boosting":
+        return (TUNING_PRESET_SMOKE,)
     raise ValueError(f"Unsupported tuning-preset request for model family: {model_name}")
 
 
@@ -162,11 +199,21 @@ def get_tuning_preset_help_text(model_name: str) -> str:
     normalized_model_name = model_name.strip().lower()
     if normalized_model_name == "logistic_saga":
         return "Use 'smoke' for the bounded default verification search or 'full' for the broader tuning search."
+    if normalized_model_name == "logistic_saga_climate_interactions":
+        return (
+            "Use 'smoke' for the bounded Phase 2 climate-interaction checkpoint or 'full' for the "
+            "retained-comparable broader tuning search on the same six-feature contract."
+        )
     if normalized_model_name == "random_forest":
         return (
             "Use 'smoke' for the bounded default verification path and cheap nonlinear comparison against logistic, "
             "'frontier' for a targeted follow-up search around the promising RF region, or 'full' for expensive "
             "confirmation only after earlier RF stages justify it."
+        )
+    if normalized_model_name == "hist_gradient_boosting":
+        return (
+            "Use 'smoke' for the bounded Phase 1 histogram-gradient-boosting checkpoint. "
+            "Broader presets are intentionally disabled unless the smoke result clearly justifies reopening search."
         )
     raise ValueError(f"Unsupported tuning-preset help request for model family: {model_name}")
 
@@ -174,6 +221,11 @@ def get_tuning_preset_help_text(model_name: str) -> str:
 def get_first_pass_feature_columns() -> list[str]:
     """Return the initial leakage-safe modeling feature set."""
     return list(DEFAULT_FEATURE_COLUMNS)
+
+
+def get_phase3a_feature_columns() -> list[str]:
+    """Return the bounded richer-predictor Phase 3A feature bundle."""
+    return list(PHASE3A_FEATURE_COLUMNS)
 
 
 def get_feature_type_map(feature_columns: Sequence[str] | None = None) -> dict[str, str]:
@@ -220,6 +272,19 @@ def get_model_tuning_spec(model_name: str, preset_name: str = DEFAULT_TUNING_PRE
             param_grid=list(LOGISTIC_FULL_PARAM_GRID),
         )
 
+    if normalized_model_name == "logistic_saga_climate_interactions":
+        if normalized_preset == TUNING_PRESET_SMOKE:
+            return ModelTuningSpec(
+                preset_name=normalized_preset,
+                inner_cv_splits=SMOKE_INNER_CV_SPLITS,
+                param_grid=list(LOGISTIC_SMOKE_PARAM_GRID),
+            )
+        return ModelTuningSpec(
+            preset_name=normalized_preset,
+            inner_cv_splits=DEFAULT_INNER_CV_SPLITS,
+            param_grid=list(LOGISTIC_FULL_PARAM_GRID),
+        )
+
     if normalized_model_name == "random_forest":
         if normalized_preset == TUNING_PRESET_SMOKE:
             return ModelTuningSpec(
@@ -239,6 +304,13 @@ def get_model_tuning_spec(model_name: str, preset_name: str = DEFAULT_TUNING_PRE
             param_grid=list(RANDOM_FOREST_FULL_PARAM_GRID),
         )
 
+    if normalized_model_name == "hist_gradient_boosting":
+        return ModelTuningSpec(
+            preset_name=normalized_preset,
+            inner_cv_splits=SMOKE_INNER_CV_SPLITS,
+            param_grid=list(HIST_GRADIENT_BOOSTING_SMOKE_PARAM_GRID),
+        )
+
     raise ValueError(f"Unsupported model tuning spec request: {model_name}")
 
 
@@ -253,6 +325,10 @@ def get_default_output_dir(model_name: str) -> Path:
         return BASELINE_OUTPUT_DIR
     if model_name == "logistic_saga":
         return LOGISTIC_OUTPUT_DIR
+    if model_name == "logistic_saga_climate_interactions":
+        return LOGISTIC_CLIMATE_INTERACTIONS_OUTPUT_DIR
     if model_name == "random_forest":
         return RANDOM_FOREST_OUTPUT_DIR
+    if model_name == "hist_gradient_boosting":
+        return HIST_GRADIENT_BOOSTING_OUTPUT_DIR
     return MODELING_OUTPUTS / model_name

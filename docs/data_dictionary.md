@@ -27,6 +27,9 @@ One row represents one 30 m grid cell in one city.
 | `lst_median_may_aug` | Median May-Aug daytime land surface temperature derived from ECOSTRESS/AppEEARS inputs. |
 | `n_valid_ecostress_passes` | Number of valid ECOSTRESS observations contributing to the cell-level LST summary. |
 | `hotspot_10pct` | Binary indicator for whether the cell falls in the within-city top 10% of valid LST values. |
+| `tree_cover_proxy_pct_270m` | Phase 3A local tree-cover proxy: share of nearby 30 m cells within an approximately 270 m neighborhood that fall in NLCD forest classes 41/42/43. |
+| `vegetated_cover_proxy_pct_270m` | Phase 3A local vegetated-cover proxy: share of nearby 30 m cells within an approximately 270 m neighborhood that fall in the selected NLCD vegetated classes. |
+| `impervious_pct_mean_270m` | Phase 3A local impervious-context feature: neighborhood mean NLCD impervious percentage within an approximately 270 m window. |
 
 Row rules applied during final assembly:
 
@@ -45,6 +48,8 @@ These files contain the same core feature columns as the final dataset, but the 
 
 - `is_core_city_cell`: `True` when the cell is inside the saved core urban footprint
 - `is_buffer_ring_cell`: `True` when the cell lies in the buffered area outside the core urban footprint
+
+The parquet feature artifacts are the canonical Phase 3A backfill targets. `src.run_phase3a_nlcd_bundle` updates the per-city parquet artifacts and the intermediate filtered/unfiltered parquet tables by default, and only rewrites the GeoPackage copies when `--update-gpkg` is requested explicitly.
 
 ## Study Area And Grid Artifacts
 
@@ -174,6 +179,9 @@ Typical files:
 - `nlcd_land_cover_aligned.tif`
 - `nlcd_impervious_aligned.tif`
 - `dist_to_water_m_aligned.tif`
+- `tree_cover_proxy_pct_270m_aligned.tif`
+- `vegetated_cover_proxy_pct_270m_aligned.tif`
+- `impervious_pct_mean_270m_aligned.tif`
 
 ### Per-city intermediate tables
 
@@ -234,7 +242,9 @@ Location:
 
 - `outputs/modeling/baselines/`
 - `outputs/modeling/logistic_saga/`
+- `outputs/modeling/logistic_saga_climate_interactions/`
 - `outputs/modeling/random_forest/`
+- `outputs/modeling/hist_gradient_boosting/`
 
 Shared artifact pattern:
 
@@ -246,6 +256,11 @@ Shared artifact pattern:
 - `run_metadata.json`
 - `feature_contract.json`
 
+Bounded richer-feature checkpoint example:
+
+- `outputs/modeling/logistic_saga/full_allfolds_s5000_phase3a-nlcd-context_2026-04-13_142451/`
+- this Phase 3A run keeps the same grouped-city evaluation contract and sample cap as retained logistic `5000`, but adds the three NLCD neighborhood-context predictors above as a separate richer-feature variant
+
 Cross-run history artifacts:
 
 - `outputs/modeling/run_registry.jsonl`
@@ -254,7 +269,7 @@ Cross-run history artifacts:
 
 Tuned-model CLI output-path behavior:
 
-- `src.run_logistic_saga` and `src.run_random_forest` accept an optional `--output-dir`
+- `src.run_logistic_saga`, `src.run_logistic_saga_climate_interactions`, `src.run_random_forest`, and `src.run_hist_gradient_boosting` accept an optional `--output-dir`
 - when `--output-dir` is omitted, those CLIs now create a unique, readable run directory under the model-family root
 - generated names encode the preset, fold scope, sample scope, and timestamp so later filesystem review is easier
 - `--run-label` can append a short manual tag to the generated name without replacing the shared naming contract
@@ -262,7 +277,9 @@ Tuned-model CLI output-path behavior:
 Model-specific extras:
 
 - `outputs/modeling/logistic_saga/best_params_by_fold.csv`
+- `outputs/modeling/logistic_saga_climate_interactions/best_params_by_fold.csv`
 - `outputs/modeling/random_forest/best_params_by_fold.csv`
+- `outputs/modeling/hist_gradient_boosting/best_params_by_fold.csv`
 
 Current baseline runner:
 
@@ -278,7 +295,9 @@ Current baseline models:
 Current main-model runners:
 
 - `src.run_logistic_saga`
+- `src.run_logistic_saga_climate_interactions` for the bounded Phase 2 climate-conditioned checkpoint on the fixed six-feature contract
 - `src.run_random_forest`
+- `src.run_hist_gradient_boosting` for the bounded Phase 1 better-learner checkpoint on the fixed six-feature contract
 - `src.run_modeling_reporting`
 - `src.run_modeling_supplemental`
 
@@ -363,7 +382,10 @@ Honest status note:
 - `outputs/modeling/` stores the current first-pass modeling metrics tables, held-out predictions, calibration tables, and run metadata
 - `outputs/modeling/reporting/` stores broader markdown comparison summaries and decision-ready reporting notes derived from retained modeling runs
 - `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline modeling benchmark reference for the project narrative
-- `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons and city-level RF-vs-logistic error summaries
+- `outputs/modeling/reporting/tables/` stores derived reporting tables such as cross-run benchmark comparisons, city-level RF-vs-logistic error summaries, optional Phase 1 HGB-vs-RF comparison tables when an HGB run is passed to `src.run_modeling_reporting`, and optional Phase 2 logistic-climate-interaction comparison plus climate-disparity tables when a climate-interaction run is passed
+- `outputs/modeling/reporting/cross_city_benchmark_report_phase3a_nlcd_context.md` records the bounded richer-feature checkpoint without replacing the retained headline benchmark report
+- `outputs/modeling/reporting/tables/cross_city_benchmark_report_phase3a_nlcd_context_phase3_richer_vs_logistic.csv` compares the Phase 3A richer-feature logistic run against retained logistic `5000` by city-fold row
+- `outputs/modeling/reporting/tables/cross_city_benchmark_report_phase3a_nlcd_context_phase3_richer_vs_logistic_by_climate.csv` summarizes that same Phase 3A comparison by climate group
 - `figures/modeling/reporting/` stores benchmark comparison figures and city-level metric-delta plots derived from retained modeling runs
 - `outputs/modeling/reporting/heldout_city_maps/` stores retained-run held-out map reporting artifacts such as:
   - `heldout_city_maps.md`

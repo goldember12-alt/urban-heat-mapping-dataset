@@ -4,6 +4,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
+import pyarrow.parquet as pq
 import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import Polygon
@@ -15,6 +16,7 @@ from src.feature_assembly import (
     CityFeatureResult,
     FeatureSourceConfig,
     assemble_final_dataset,
+    backfill_phase3a_bundle_for_city,
     extract_features_for_all_cities,
 )
 from src.grid import create_grid_from_polygon
@@ -107,14 +109,15 @@ def test_assemble_final_dataset_applies_drop_rules_and_hotspot(tmp_path: Path, m
 
     result = assemble_final_dataset(city_features_dir=city_features_dir, final_dir=final_dir)
 
-    assert len(result.final_df) == 2
-    assert (result.final_df["land_cover_class"] == 11).sum() == 0
-    assert ((result.final_df["city_id"] == 1) & (result.final_df["cell_id"] == 2)).sum() == 0
+    final_df = pq.read_table(result.parquet_path).to_pandas()
+    assert len(final_df) == 2
+    assert (final_df["land_cover_class"] == 11).sum() == 0
+    assert ((final_df["city_id"] == 1) & (final_df["cell_id"] == 2)).sum() == 0
 
-    city1_row = result.final_df[result.final_df["city_id"] == 1].iloc[0]
+    city1_row = final_df[final_df["city_id"] == 1].iloc[0]
     assert bool(city1_row["hotspot_10pct"]) is True
 
-    city2_row = result.final_df[result.final_df["city_id"] == 2].iloc[0]
+    city2_row = final_df[final_df["city_id"] == 2].iloc[0]
     assert pd.isna(city2_row["hotspot_10pct"])
 
     assert result.parquet_path.exists()
@@ -123,7 +126,7 @@ def test_assemble_final_dataset_applies_drop_rules_and_hotspot(tmp_path: Path, m
 
     artifact_summary = json.loads(result.artifact_summary_path.read_text(encoding="utf-8"))
     assert artifact_summary["row_count"] == 2
-    assert artifact_summary["column_count"] == 14
+    assert artifact_summary["column_count"] == 17
     assert artifact_summary["input_city_feature_row_count"] == 4
     assert artifact_summary["dropped_row_count"] == 2
     assert artifact_summary["per_city_row_counts"] == {"1": 1, "2": 1}
@@ -170,10 +173,14 @@ def test_assemble_final_dataset_keeps_existing_csv_when_rewrite_fails(tmp_path: 
         raising=False,
     )
 
-    def failing_to_csv(self, path, index=False):
-        raise RuntimeError("csv write failed")
+    class FailingCsvWriter:
+        def writerow(self, row):
+            raise RuntimeError("csv write failed")
 
-    monkeypatch.setattr(pd.DataFrame, "to_csv", failing_to_csv, raising=False)
+        def writerows(self, rows):
+            raise RuntimeError("csv write failed")
+
+    monkeypatch.setattr(feature_assembly.csv, "writer", lambda handle: FailingCsvWriter())
 
     with pytest.raises(RuntimeError, match="csv write failed"):
         assemble_final_dataset(city_features_dir=city_features_dir, final_dir=final_dir)
@@ -542,3 +549,314 @@ def test_discover_default_feature_sources_uses_city_recursive_dem_nlcd_hydro(tmp
     assert sources.nlcd_land_cover_raster == land_city
     assert sources.nlcd_impervious_raster == imp_city
     assert sources.hydro_vector == hydro_city
+
+
+def test_backfill_phase3a_bundle_for_city_updates_existing_outputs(tmp_path: Path, monkeypatch):
+    city = pd.Series(
+        {
+            "city_id": 1,
+            "city_name": "Phoenix",
+            "state": "AZ",
+            "climate_group": "hot_arid",
+            "lat": 0.0,
+            "lon": 0.0,
+        }
+    )
+    grid = _build_test_grid()
+    study_area = gpd.GeoDataFrame({"name": ["study"]}, geometry=[Polygon([(0, 0), (60, 0), (60, 60), (0, 60)])], crs="EPSG:32612")
+    study_areas_dir = tmp_path / "study_areas"
+    city_grids_dir = tmp_path / "city_grids"
+    city_features_dir = tmp_path / "city_features"
+    support_layers_dir = tmp_path / "support_layers"
+    intermediate_dir = tmp_path / "intermediate"
+    study_path, grid_path = city_output_paths(
+        city=city,
+        resolution=30,
+        study_areas_dir=study_areas_dir,
+        city_grids_dir=city_grids_dir,
+    )
+    study_path.parent.mkdir(parents=True, exist_ok=True)
+    grid_path.parent.mkdir(parents=True, exist_ok=True)
+    study_area.to_file(study_path, driver="GPKG")
+    grid.to_file(grid_path, driver="GPKG")
+
+    prepared_dir = support_layers_dir / "01_phoenix_az"
+    prepared_dir.mkdir(parents=True, exist_ok=True)
+    land_cover_raster = _write_raster(
+        prepared_dir / "nlcd_land_cover_prepared.tif",
+        np.array([[41, 24], [24, 42]], dtype=np.uint8),
+        nodata=0,
+    )
+    impervious_raster = _write_raster(
+        prepared_dir / "nlcd_impervious_prepared.tif",
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        nodata=0,
+    )
+
+    base_df = pd.DataFrame(
+        {
+            "city_id": [1, 1, 1, 1],
+            "city_name": ["Phoenix"] * 4,
+            "climate_group": ["hot_arid"] * 4,
+            "cell_id": [1, 2, 3, 4],
+            "centroid_lon": [0.0, 1.0, 0.0, 1.0],
+            "centroid_lat": [1.0, 1.0, 0.0, 0.0],
+            "impervious_pct": [10.0, 20.0, 30.0, 40.0],
+            "land_cover_class": [41, 24, 24, 42],
+            "elevation_m": [1.0, 1.0, 1.0, 1.0],
+            "dist_to_water_m": [100.0, 100.0, 100.0, 100.0],
+            "ndvi_median_may_aug": [0.2, 0.2, 0.2, 0.2],
+            "lst_median_may_aug": [30.0, 31.0, 32.0, 33.0],
+            "n_valid_ecostress_passes": [5, 5, 5, 5],
+            "hotspot_10pct": [False, False, True, True],
+        }
+    )
+    output_paths = feature_assembly.expected_city_feature_output_paths(
+        city=city,
+        city_features_dir=city_features_dir,
+        intermediate_dir=intermediate_dir,
+    )
+    output_paths.city_features_parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.intermediate_unfiltered_path.parent.mkdir(parents=True, exist_ok=True)
+    base_df.to_parquet(output_paths.city_features_parquet_path, index=False)
+    base_df.to_parquet(output_paths.intermediate_unfiltered_path, index=False)
+    base_df.to_parquet(output_paths.intermediate_filtered_path, index=False)
+    gpd.GeoDataFrame(base_df.copy(), geometry=grid.geometry, crs=grid.crs).to_file(
+        output_paths.city_features_gpkg_path,
+        driver="GPKG",
+    )
+
+    monkeypatch.setattr(feature_assembly, "load_city_record", lambda **kwargs: city)
+
+    result = backfill_phase3a_bundle_for_city(
+        city_id=1,
+        resolution=30,
+        update_gpkg=True,
+        city_grids_dir=city_grids_dir,
+        city_features_dir=city_features_dir,
+        support_layers_dir=support_layers_dir,
+        intermediate_dir=intermediate_dir,
+    )
+
+    updated_df = pd.read_parquet(result.city_features_parquet_path)
+    assert {
+        "tree_cover_proxy_pct_270m",
+        "vegetated_cover_proxy_pct_270m",
+        "impervious_pct_mean_270m",
+    }.issubset(updated_df.columns)
+    assert np.allclose(updated_df["impervious_pct_mean_270m"].to_numpy(), np.full(4, 25.0))
+    assert np.allclose(updated_df["tree_cover_proxy_pct_270m"].to_numpy(), np.full(4, 0.5))
+    assert np.allclose(updated_df["vegetated_cover_proxy_pct_270m"].to_numpy(), np.full(4, 0.5))
+    assert land_cover_raster.exists()
+    assert impervious_raster.exists()
+
+
+def test_merge_columns_by_cell_id_reindexes_without_row_order_match():
+    base_df = pd.DataFrame(
+        {
+            "city_id": [1, 1, 1],
+            "cell_id": [10, 20, 30],
+            "value": [100, 200, 300],
+        }
+    )
+    update_df = pd.DataFrame(
+        {
+            "city_id": [1, 1, 1],
+            "cell_id": [30, 10, 20],
+            "tree_cover_proxy_pct_270m": [0.3, 0.1, 0.2],
+        }
+    )
+
+    merged = feature_assembly._merge_columns_by_cell_id(
+        base_df,
+        update_df,
+        join_columns=["city_id", "cell_id"],
+    )
+
+    assert merged["cell_id"].tolist() == [10, 20, 30]
+    assert np.allclose(merged["tree_cover_proxy_pct_270m"].to_numpy(), [0.1, 0.2, 0.3])
+
+
+def test_backfill_phase3a_bundle_reuses_cached_aligned_outputs(tmp_path: Path, monkeypatch):
+    city = pd.Series(
+        {
+            "city_id": 1,
+            "city_name": "Phoenix",
+            "state": "AZ",
+            "climate_group": "hot_arid",
+            "lat": 0.0,
+            "lon": 0.0,
+        }
+    )
+    grid = _build_test_grid()
+    study_area = gpd.GeoDataFrame({"name": ["study"]}, geometry=[Polygon([(0, 0), (60, 0), (60, 60), (0, 60)])], crs="EPSG:32612")
+    study_areas_dir = tmp_path / "study_areas"
+    city_grids_dir = tmp_path / "city_grids"
+    city_features_dir = tmp_path / "city_features"
+    support_layers_dir = tmp_path / "support_layers"
+    intermediate_dir = tmp_path / "intermediate"
+    study_path, grid_path = city_output_paths(
+        city=city,
+        resolution=30,
+        study_areas_dir=study_areas_dir,
+        city_grids_dir=city_grids_dir,
+    )
+    study_path.parent.mkdir(parents=True, exist_ok=True)
+    grid_path.parent.mkdir(parents=True, exist_ok=True)
+    study_area.to_file(study_path, driver="GPKG")
+    grid.to_file(grid_path, driver="GPKG")
+
+    prepared_dir = support_layers_dir / "01_phoenix_az"
+    prepared_dir.mkdir(parents=True, exist_ok=True)
+    _write_raster(
+        prepared_dir / "nlcd_land_cover_prepared.tif",
+        np.array([[41, 24], [24, 42]], dtype=np.uint8),
+        nodata=0,
+    )
+    _write_raster(
+        prepared_dir / "nlcd_impervious_prepared.tif",
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        nodata=0,
+    )
+
+    aligned_dir = intermediate_dir / "aligned_rasters" / "01_phoenix_az"
+    aligned_dir.mkdir(parents=True, exist_ok=True)
+    _write_raster(aligned_dir / "tree_cover_proxy_pct_270m_aligned.tif", np.full((2, 2), 0.25, dtype=np.float32), nodata=np.nan)
+    _write_raster(aligned_dir / "vegetated_cover_proxy_pct_270m_aligned.tif", np.full((2, 2), 0.75, dtype=np.float32), nodata=np.nan)
+    _write_raster(aligned_dir / "impervious_pct_mean_270m_aligned.tif", np.full((2, 2), 15.0, dtype=np.float32), nodata=np.nan)
+
+    base_df = pd.DataFrame(
+        {
+            "city_id": [1, 1, 1, 1],
+            "city_name": ["Phoenix"] * 4,
+            "climate_group": ["hot_arid"] * 4,
+            "cell_id": [1, 2, 3, 4],
+            "centroid_lon": [0.0, 1.0, 0.0, 1.0],
+            "centroid_lat": [1.0, 1.0, 0.0, 0.0],
+            "impervious_pct": [10.0, 20.0, 30.0, 40.0],
+            "land_cover_class": [41, 24, 24, 42],
+            "elevation_m": [1.0, 1.0, 1.0, 1.0],
+            "dist_to_water_m": [100.0, 100.0, 100.0, 100.0],
+            "ndvi_median_may_aug": [0.2, 0.2, 0.2, 0.2],
+            "lst_median_may_aug": [30.0, 31.0, 32.0, 33.0],
+            "n_valid_ecostress_passes": [5, 5, 5, 5],
+            "hotspot_10pct": [False, False, True, True],
+        }
+    )
+    output_paths = feature_assembly.expected_city_feature_output_paths(
+        city=city,
+        city_features_dir=city_features_dir,
+        intermediate_dir=intermediate_dir,
+    )
+    output_paths.city_features_parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.intermediate_unfiltered_path.parent.mkdir(parents=True, exist_ok=True)
+    base_df.to_parquet(output_paths.city_features_parquet_path, index=False)
+    base_df.to_parquet(output_paths.intermediate_unfiltered_path, index=False)
+    base_df.to_parquet(output_paths.intermediate_filtered_path, index=False)
+
+    monkeypatch.setattr(feature_assembly, "load_city_record", lambda **kwargs: city)
+    monkeypatch.setattr(
+        feature_assembly,
+        "compute_phase3a_nlcd_bundle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should reuse cached aligned outputs")),
+    )
+
+    result = backfill_phase3a_bundle_for_city(
+        city_id=1,
+        resolution=30,
+        update_gpkg=False,
+        city_grids_dir=city_grids_dir,
+        city_features_dir=city_features_dir,
+        support_layers_dir=support_layers_dir,
+        intermediate_dir=intermediate_dir,
+    )
+
+    updated_df = pd.read_parquet(result.city_features_parquet_path)
+    assert np.allclose(updated_df["tree_cover_proxy_pct_270m"].to_numpy(), np.full(4, 0.25))
+    assert np.allclose(updated_df["vegetated_cover_proxy_pct_270m"].to_numpy(), np.full(4, 0.75))
+    assert np.allclose(updated_df["impervious_pct_mean_270m"].to_numpy(), np.full(4, 15.0))
+
+
+def test_backfill_phase3a_bundle_falls_back_to_city_feature_geometry_when_grid_unreadable(tmp_path: Path, monkeypatch):
+    city = pd.Series(
+        {
+            "city_id": 1,
+            "city_name": "Phoenix",
+            "state": "AZ",
+            "climate_group": "hot_arid",
+            "lat": 0.0,
+            "lon": 0.0,
+        }
+    )
+    grid = _build_test_grid()
+    city_grids_dir = tmp_path / "city_grids"
+    city_features_dir = tmp_path / "city_features"
+    support_layers_dir = tmp_path / "support_layers"
+    intermediate_dir = tmp_path / "intermediate"
+
+    prepared_dir = support_layers_dir / "01_phoenix_az"
+    prepared_dir.mkdir(parents=True, exist_ok=True)
+    _write_raster(
+        prepared_dir / "nlcd_land_cover_prepared.tif",
+        np.array([[41, 24], [24, 42]], dtype=np.uint8),
+        nodata=0,
+    )
+    _write_raster(
+        prepared_dir / "nlcd_impervious_prepared.tif",
+        np.array([[10, 20], [30, 40]], dtype=np.float32),
+        nodata=0,
+    )
+
+    base_df = pd.DataFrame(
+        {
+            "city_id": [1, 1, 1, 1],
+            "city_name": ["Phoenix"] * 4,
+            "climate_group": ["hot_arid"] * 4,
+            "cell_id": [1, 2, 3, 4],
+            "centroid_lon": [0.0, 1.0, 0.0, 1.0],
+            "centroid_lat": [1.0, 1.0, 0.0, 0.0],
+            "impervious_pct": [10.0, 20.0, 30.0, 40.0],
+            "land_cover_class": [41, 24, 24, 42],
+            "elevation_m": [1.0, 1.0, 1.0, 1.0],
+            "dist_to_water_m": [100.0, 100.0, 100.0, 100.0],
+            "ndvi_median_may_aug": [0.2, 0.2, 0.2, 0.2],
+            "lst_median_may_aug": [30.0, 31.0, 32.0, 33.0],
+            "n_valid_ecostress_passes": [5, 5, 5, 5],
+            "hotspot_10pct": [False, False, True, True],
+        }
+    )
+    output_paths = feature_assembly.expected_city_feature_output_paths(
+        city=city,
+        city_features_dir=city_features_dir,
+        intermediate_dir=intermediate_dir,
+    )
+    output_paths.city_features_parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.intermediate_unfiltered_path.parent.mkdir(parents=True, exist_ok=True)
+    base_df.to_parquet(output_paths.city_features_parquet_path, index=False)
+    base_df.to_parquet(output_paths.intermediate_unfiltered_path, index=False)
+    base_df.to_parquet(output_paths.intermediate_filtered_path, index=False)
+    gpd.GeoDataFrame(base_df.copy(), geometry=grid.geometry, crs=grid.crs).to_file(
+        output_paths.city_features_gpkg_path,
+        driver="GPKG",
+    )
+
+    monkeypatch.setattr(feature_assembly, "load_city_record", lambda **kwargs: city)
+    monkeypatch.setattr(feature_assembly, "_resolve_city_grid_path", lambda **kwargs: city_grids_dir / "missing.gpkg")
+    monkeypatch.setattr(
+        feature_assembly,
+        "_read_city_grid",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("grid unreadable")),
+    )
+
+    result = backfill_phase3a_bundle_for_city(
+        city_id=1,
+        resolution=30,
+        update_gpkg=False,
+        city_grids_dir=city_grids_dir,
+        city_features_dir=city_features_dir,
+        support_layers_dir=support_layers_dir,
+        intermediate_dir=intermediate_dir,
+    )
+
+    updated_df = pd.read_parquet(result.city_features_parquet_path)
+    assert "tree_cover_proxy_pct_270m" in updated_df.columns

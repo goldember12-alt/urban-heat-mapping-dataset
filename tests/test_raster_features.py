@@ -14,6 +14,8 @@ from src.raster_features import (
     RasterNormalizationSpec,
     align_and_extract_raster_values,
     build_grid_alignment_spec,
+    compute_local_class_share_from_aligned_array,
+    compute_local_mean_from_aligned_array,
     sample_median_from_raster_stack,
 )
 
@@ -135,3 +137,36 @@ def test_sample_median_from_raster_stack_skips_invalid_tiffs_when_valid_rasters_
     assert np.array_equal(n_valid, np.array([2, 2, 2, 2]))
     assert "Skipping invalid NDVI city_id=2 city_name=Tucson raster" in caplog.text
 
+
+def test_compute_local_mean_from_aligned_array_uses_centered_square_window():
+    aligned = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, np.nan, 6.0],
+            [7.0, 8.0, 9.0],
+        ],
+        dtype=np.float32,
+    )
+
+    local_mean = compute_local_mean_from_aligned_array(aligned, radius_cells=1)
+
+    assert local_mean.shape == aligned.shape
+    assert np.isclose(local_mean[1, 1], 5.0)
+    assert np.isclose(local_mean[0, 0], 7.0 / 3.0)
+
+
+def test_compute_local_class_share_from_aligned_array_respects_missing_cells():
+    aligned = np.array(
+        [
+            [41.0, 42.0, np.nan],
+            [24.0, 41.0, 24.0],
+            [24.0, 24.0, 24.0],
+        ],
+        dtype=np.float32,
+    )
+
+    class_share = compute_local_class_share_from_aligned_array(aligned, target_values=[41, 42], radius_cells=1)
+
+    assert class_share.shape == aligned.shape
+    assert np.isclose(class_share[1, 1], 3.0 / 8.0)
+    assert np.isclose(class_share[0, 0], 3.0 / 4.0)

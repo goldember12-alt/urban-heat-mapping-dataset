@@ -5,7 +5,8 @@ import logging
 from pathlib import Path
 
 from src.config import FINAL, MODELING
-from src.modeling_prep import DEFAULT_FEATURE_COLUMNS, audit_final_dataset
+from src.modeling_config import PHASE3A_FEATURE_COLUMNS
+from src.modeling_prep import audit_final_dataset
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -25,7 +26,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--feature-columns",
         type=str,
-        default=",".join(DEFAULT_FEATURE_COLUMNS),
+        default=",".join(PHASE3A_FEATURE_COLUMNS),
         help="Comma-separated candidate feature columns to audit for missingness",
     )
     return parser

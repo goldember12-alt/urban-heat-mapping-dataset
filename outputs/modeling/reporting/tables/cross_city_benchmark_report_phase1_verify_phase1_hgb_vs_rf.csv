@@ -1,0 +1,7 @@
+outer_fold,city_id,city_name,climate_group,row_count,positive_count,prevalence,pr_auc_rf,pr_auc_hgb,pr_auc_delta_hgb_minus_rf,pr_auc_winner,recall_at_top_10pct_rf,recall_at_top_10pct_hgb,recall_delta_hgb_minus_rf,recall_winner
+0,13,Richmond,hot_humid,5000,500,0.1,0.2599509529657198,0.2701341102772192,0.01018315731149938,hist_gradient_boosting,0.328,0.328,0.0,tie
+0,15,Tampa,hot_humid,5000,500,0.1,0.2109227972936732,0.2146217317975827,0.0036989345039095123,hist_gradient_boosting,0.228,0.246,0.017999999999999988,hist_gradient_boosting
+0,2,Tucson,hot_arid,5000,500,0.1,0.1940954301815877,0.1967558468273567,0.0026604166457689926,hist_gradient_boosting,0.25,0.28,0.030000000000000027,hist_gradient_boosting
+0,24,San Jose,mild_cool,5000,500,0.1,0.0972358319441493,0.087585428160368,-0.009650403783781292,random_forest,0.08,0.058,-0.022,random_forest
+0,18,Atlanta,hot_humid,5000,500,0.1,0.1817360129064311,0.1537406365509128,-0.027995376355518298,random_forest,0.238,0.218,-0.01999999999999999,random_forest
+0,9,Bakersfield,hot_arid,5000,500,0.1,0.269296376195184,0.2279528759154319,-0.04134350027975209,random_forest,0.348,0.314,-0.033999999999999975,random_forest

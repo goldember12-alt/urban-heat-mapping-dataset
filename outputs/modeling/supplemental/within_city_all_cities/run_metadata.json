@@ -1,0 +1,41 @@
+{
+  "dataset_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\data_processed\\final\\final_dataset.parquet",
+  "city_error_table_path": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\reporting\\tables\\cross_city_benchmark_report_city_error_comparison.csv",
+  "selected_feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "sample_rows_per_city": 20000,
+  "split_seeds": [
+    42,
+    43,
+    44
+  ],
+  "test_size": 0.2,
+  "logistic_tuning_preset": "smoke",
+  "random_forest_tuning_preset": "smoke",
+  "grid_search_n_jobs": 1,
+  "model_n_jobs": 1,
+  "city_count": 30,
+  "supplemental_within_city_baseline_model": "city_prevalence_baseline",
+  "cross_city_reference_source": "cross_city_benchmark_report_city_error_comparison",
+  "timing_seconds": {
+    "total_wall_clock": 6051.854033400014
+  },
+  "output_files": {
+    "summary_markdown": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\within_city_all_cities_summary.md",
+    "repeat_metrics": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\tables\\within_city_all_cities_repeat_metrics.csv",
+    "city_summary": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\tables\\within_city_all_cities_city_summary.csv",
+    "climate_summary": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\tables\\within_city_all_cities_climate_summary.csv",
+    "gap_by_city": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\tables\\within_city_all_cities_cross_city_gap_by_city.csv",
+    "gap_by_climate": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\tables\\within_city_all_cities_cross_city_gap_by_climate.csv",
+    "predictions": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\supplemental\\within_city_all_cities\\within_city_all_cities_predictions.parquet",
+    "pr_auc_by_climate_figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city_all_cities\\within_city_all_cities_pr_auc_by_climate.png",
+    "recall_by_climate_figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city_all_cities\\within_city_all_cities_recall_by_climate.png",
+    "gap_figure": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\figures\\modeling\\supplemental\\within_city_all_cities\\within_city_all_cities_within_vs_cross_gap.png"
+  }
+}

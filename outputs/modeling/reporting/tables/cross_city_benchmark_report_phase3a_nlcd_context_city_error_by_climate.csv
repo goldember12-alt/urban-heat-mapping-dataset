@@ -1,0 +1,4 @@
+climate_group,city_count,rf_pr_auc_wins,logistic_pr_auc_wins,rf_recall_wins,logistic_recall_wins,mean_pr_auc_delta,median_pr_auc_delta,mean_recall_delta,median_recall_delta
+hot_arid,10,5,5,6,4,0.0336329805424723,-0.003082730958582247,0.0762,0.016
+hot_humid,10,2,8,2,8,-0.012289794246153578,-0.008080362319338397,-0.01639999999999999,-0.015999999999999973
+mild_cool,10,2,8,1,9,-0.028120284676048667,-0.017984245976881752,-0.027999999999999997,-0.02499999999999998

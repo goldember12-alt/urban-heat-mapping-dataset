@@ -1,0 +1,151 @@
+{
+  "run_id": "a9b6b74ad9a2490692a83fbc78fc25fb",
+  "output_dir": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds",
+  "model_family": "hist_gradient_boosting",
+  "tuning_preset": "smoke",
+  "selected_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "dataset_path": "data_processed\\final\\final_dataset.parquet",
+  "folds_path": "data_processed\\modeling\\city_outer_folds.parquet",
+  "feature_columns": [
+    "impervious_pct",
+    "elevation_m",
+    "dist_to_water_m",
+    "ndvi_median_may_aug",
+    "land_cover_class",
+    "climate_group"
+  ],
+  "sample_rows_per_city": 5000,
+  "random_state": 42,
+  "candidate_count": 4,
+  "inner_cv_splits_requested": 3,
+  "estimated_total_inner_fits": 60,
+  "run_started_at_utc": "2026-04-13T02:23:10.007221+00:00",
+  "last_updated_utc": "2026-04-13T02:30:18.319983+00:00",
+  "completed_outer_folds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "remaining_outer_folds": [],
+  "folds": {
+    "0": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T02:24:00.750579+00:00",
+      "last_updated_utc": "2026-04-13T02:25:25.757676+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T02:25:25.757676+00:00",
+      "best_inner_cv_average_precision": 0.14922866266220958,
+      "fold_wall_clock_seconds": 83.49388670001645,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_00\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_00\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_00\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_00\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_00\\runtime.json"
+      }
+    },
+    "1": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T02:25:25.877566+00:00",
+      "last_updated_utc": "2026-04-13T02:26:42.036107+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T02:26:42.036107+00:00",
+      "best_inner_cv_average_precision": 0.15076139910732828,
+      "fold_wall_clock_seconds": 75.0922988000093,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_01\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_01\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_01\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_01\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_01\\runtime.json"
+      }
+    },
+    "2": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T02:26:42.132075+00:00",
+      "last_updated_utc": "2026-04-13T02:27:52.092302+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T02:27:52.092302+00:00",
+      "best_inner_cv_average_precision": 0.150477768693325,
+      "fold_wall_clock_seconds": 68.73572810000041,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_02\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_02\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_02\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_02\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_02\\runtime.json"
+      }
+    },
+    "3": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T02:27:52.210623+00:00",
+      "last_updated_utc": "2026-04-13T02:29:02.425955+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T02:29:02.425955+00:00",
+      "best_inner_cv_average_precision": 0.14362903515051206,
+      "fold_wall_clock_seconds": 68.57219119998626,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_03\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_03\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_03\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_03\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_03\\runtime.json"
+      }
+    },
+    "4": {
+      "status": "completed",
+      "started_at_utc": "2026-04-13T02:29:02.558398+00:00",
+      "last_updated_utc": "2026-04-13T02:30:17.403014+00:00",
+      "effective_inner_cv_splits": 3,
+      "estimated_inner_fit_count": 12,
+      "completed_inner_fits": 12,
+      "train_row_count": 120000,
+      "test_row_count": 30000,
+      "train_city_count": 24,
+      "test_city_count": 6,
+      "completed_at_utc": "2026-04-13T02:30:17.403014+00:00",
+      "best_inner_cv_average_precision": 0.14162981467639515,
+      "fold_wall_clock_seconds": 73.6708551000338,
+      "artifact_paths": {
+        "predictions": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_04\\heldout_predictions.parquet",
+        "fold_metrics": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_04\\fold_metrics.json",
+        "best_params": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_04\\best_params.json",
+        "calibration_curve": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_04\\calibration_curve.csv",
+        "runtime": "outputs\\modeling\\hist_gradient_boosting\\phase1_smoke_allfolds\\fold_artifacts\\outer_fold_04\\runtime.json"
+      }
+    }
+  },
+  "last_error": null
+}

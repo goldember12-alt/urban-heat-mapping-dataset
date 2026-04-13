@@ -105,6 +105,7 @@ Implemented now:
 - Clip deterministic raw support inputs into prepared support artifacts
 - Align source rasters to the city grid
 - Compute cell-level elevation, land cover, imperviousness, distance to water, NDVI, and ECOSTRESS-derived LST
+- Backfill the bounded Phase 3A NLCD neighborhood-context bundle into existing per-city feature artifacts with `src.run_phase3a_nlcd_bundle`
 - Support `study_area` and `core_city` cell filtering modes
 - Generate report-style per-city data-processing summaries, tables, and figures using the same pattern previously used only for Phoenix
 
@@ -125,6 +126,7 @@ Main entrypoints:
 - `src.run_support_layers`
 - `src.run_city_features`
 - `src.run_city_features_batch`
+- `src.run_phase3a_nlcd_bundle`
 - `src.run_data_processing_reports`
 - `src.summarize_phoenix_dataset` as a Phoenix compatibility wrapper over the shared reporting path
 
@@ -142,6 +144,7 @@ Implemented now:
 - Drop open-water cells
 - Drop rows with fewer than 3 valid ECOSTRESS passes
 - Recompute `hotspot_10pct` within each city
+- Preserve the retained row-level contract while carrying the bounded Phase 3A columns into the canonical final dataset schema
 
 Canonical outputs:
 
@@ -187,6 +190,9 @@ Implemented now:
 - Train city-held-out baseline models from the canonical final dataset plus `city_outer_folds`
 - Train grouped logistic regression with `solver="saga"` using training-city-only preprocessing and tuning
 - Train grouped random forest with the same held-out-city discipline
+- Run a bounded histogram-gradient-boosting Phase 1 candidate benchmark on the same six-feature city-held-out contract without rewriting the retained logistic/RF benchmark story
+- Run a bounded logistic SAGA Phase 2 climate-interaction benchmark on the same six-feature city-held-out contract, with training-only climate-by-numeric interactions and without rewriting the retained logistic/RF benchmark story
+- Run a bounded Phase 3A richer-predictor logistic benchmark on the retained `5000` rows-per-city slice, with the NLCD neighborhood-context bundle kept separate from the frozen six-feature benchmark story
 - Save held-out prediction tables, fold metrics, per-city metrics, best-parameter summaries, calibration tables, and run metadata under `outputs/modeling/`
 - Refresh a lightweight cross-run tuning-history table plus manual-annotation template under `outputs/modeling/`
 - Auto-generate unique tuned-model output directories when `--output-dir` is omitted so important runs are easier to preserve and compare without accidental overwrites
@@ -203,6 +209,12 @@ Current implemented main models:
 - Logistic regression with `solver="saga"` in an sklearn `Pipeline`
 - Random forest in an sklearn `Pipeline`
 
+Current benchmark-strengthening candidate:
+
+- Histogram gradient boosting in an sklearn `Pipeline`, limited to a smoke-sized Phase 1 checkpoint on the fixed six-feature contract
+- Logistic SAGA with explicit training-only climate-by-numeric interactions, currently landed as a bounded Phase 2 checkpoint on the fixed six-feature contract
+- Logistic SAGA with the bounded Phase 3A richer-feature NLCD neighborhood-context bundle, currently landed as a separate all-fold sampled comparison against retained logistic `5000`
+
 Key outputs:
 
 - `outputs/modeling/baselines/metrics_by_fold.csv`
@@ -214,11 +226,21 @@ Key outputs:
 - `outputs/modeling/logistic_saga/metrics_summary.csv`
 - `outputs/modeling/logistic_saga/best_params_by_fold.csv`
 - `outputs/modeling/logistic_saga/heldout_predictions.parquet`
+- `outputs/modeling/logistic_saga_climate_interactions/metrics_by_fold.csv`
+- `outputs/modeling/logistic_saga_climate_interactions/metrics_by_city.csv`
+- `outputs/modeling/logistic_saga_climate_interactions/metrics_summary.csv`
+- `outputs/modeling/logistic_saga_climate_interactions/best_params_by_fold.csv`
+- `outputs/modeling/logistic_saga_climate_interactions/heldout_predictions.parquet`
 - `outputs/modeling/random_forest/metrics_by_fold.csv`
 - `outputs/modeling/random_forest/metrics_by_city.csv`
 - `outputs/modeling/random_forest/metrics_summary.csv`
 - `outputs/modeling/random_forest/best_params_by_fold.csv`
 - `outputs/modeling/random_forest/heldout_predictions.parquet`
+- `outputs/modeling/hist_gradient_boosting/metrics_by_fold.csv`
+- `outputs/modeling/hist_gradient_boosting/metrics_by_city.csv`
+- `outputs/modeling/hist_gradient_boosting/metrics_summary.csv`
+- `outputs/modeling/hist_gradient_boosting/best_params_by_fold.csv`
+- `outputs/modeling/hist_gradient_boosting/heldout_predictions.parquet`
 - `outputs/modeling/run_registry.jsonl`
 - `outputs/modeling/tuning_history.csv`
 - `outputs/modeling/tuning_history_annotations.csv`
@@ -231,6 +253,8 @@ Main entrypoints:
 - `src.run_modeling_baselines`
 - `src.run_logistic_saga`
 - `src.run_random_forest`
+- `src.run_logistic_saga_climate_interactions`
+- `src.run_hist_gradient_boosting`
 - `src.run_modeling_reporting`
 - `src.run_modeling_supplemental`
 
@@ -244,6 +268,8 @@ Implemented now:
 
 - Primary metric: PR AUC
 - Supporting evaluation: recall at top 10% predicted risk, per-city PR AUC tables, calibration-curve tables, city-level RF-vs-logistic error summaries, and benchmark comparison figures
+- The reporting layer can now also materialize optional Phase 1 HGB-vs-RF comparison tables when a bounded HGB checkpoint is supplied to `src.run_modeling_reporting`
+- The reporting layer can now also materialize optional Phase 2 logistic-climate-interaction comparison and climate-disparity tables when a bounded climate-interaction checkpoint is supplied to `src.run_modeling_reporting`
 - `outputs/modeling/reporting/cross_city_benchmark_report.md` is the headline benchmark reference for the modeling story
 - Held-out prediction tables include `city_id`, `city_name`, `climate_group`, `cell_id`, `centroid_lon`, and `centroid_lat` so later map export code can build on the saved outputs directly
 - A retained-run held-out map reporting layer under `outputs/modeling/reporting/heldout_city_maps/` and `figures/modeling/heldout_city_maps/` that exports representative predicted-hotspot, true-hotspot, and categorical error triptychs without rerunning the benchmark ladder; these remain support artifacts under the retained benchmark rather than replacement evaluation results

@@ -1,0 +1,22 @@
+timestamp_utc,phase,outer_fold_index,completed_inner_fits,completed_candidates,estimated_total_inner_fits,current_inner_cv_split_count,elapsed_wall_time_seconds,average_seconds_per_completed_fit,eta_seconds,current_params_json,note
+2026-04-13T02:19:44.299270+00:00,startup,,0,0,12,,0.0020096302032470703,,,,startup
+2026-04-13T02:19:44.335333+00:00,data_load,,0,0,12,,0.038073062896728516,,,,sampled_city_preload_started
+2026-04-13T02:20:36.320577+00:00,data_load,0,0,0,12,3,52.023317098617554,,,,outer_fold_started
+2026-04-13T02:20:36.739394+00:00,preprocess,0,0,0,12,3,52.44213318824768,,,,preprocess_complete
+2026-04-13T02:20:36.784708+00:00,tuning,0,0,0,12,3,52.48744821548462,,,,grid_search_started
+2026-04-13T02:20:45.794912+00:00,tuning,0,1,0,12,3,61.49765205383301,61.49765205383301,676.4741725921631,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:20:52.042516+00:00,tuning,0,2,0,12,3,67.74525547027588,33.87262773513794,338.7262773513794,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:20:58.282266+00:00,tuning,0,3,1,12,3,73.98500561714172,24.66166853904724,221.95501685142517,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:04.725014+00:00,tuning,0,4,1,12,3,80.42775321006775,20.106938302516937,160.8555064201355,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 31, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:11.517993+00:00,tuning,0,5,1,12,3,87.22073292732239,17.444146585464477,122.10902609825133,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 31, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:18.300842+00:00,tuning,0,6,2,12,3,94.00358200073242,15.667263666788736,94.00358200073242,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 31, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:23.622429+00:00,tuning,0,7,2,12,3,99.32516860961914,14.189309801374163,70.94654900687081,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.1, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:28.850585+00:00,tuning,0,8,2,12,3,104.55332469940186,13.069165587425232,52.27666234970093,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.1, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:34.075905+00:00,tuning,0,9,3,12,3,109.778644323349,12.197627147038778,36.59288144111633,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.1, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:39.331616+00:00,tuning,0,10,3,12,3,115.03435564041138,11.503435564041137,23.006871128082274,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.1, ""model__max_leaf_nodes"": 31, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:45.874702+00:00,tuning,0,11,3,12,3,121.5774416923523,11.052494699304754,11.052494699304754,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.1, ""model__max_leaf_nodes"": 31, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:51.581424+00:00,tuning,0,12,4,12,3,127.28416347503662,10.607013622919718,0.0,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.1, ""model__max_leaf_nodes"": 31, ""model__min_samples_leaf"": 20}",inner_fit_completed
+2026-04-13T02:21:56.984923+00:00,refit,0,12,4,12,3,132.6876630783081,11.057305256525675,0.0,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",grid_search_fit_complete
+2026-04-13T02:21:57.031044+00:00,prediction,0,12,4,12,3,132.733784198761,11.061148683230082,0.0,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}",heldout_prediction_started
+2026-04-13T02:21:58.543043+00:00,metrics,0,12,4,12,3,134.24578285217285,11.187148571014404,0.0,,outer_fold_completed
+2026-04-13T02:21:58.823756+00:00,complete,,12,4,12,,134.52649569511414,11.210541307926178,0.0,,complete

@@ -1,0 +1,2 @@
+model_name,outer_fold,inner_cv_splits,best_inner_cv_average_precision,best_params_json
+hist_gradient_boosting,0,3,0.14922866266220958,"{""model__l2_regularization"": 0.0, ""model__learning_rate"": 0.05, ""model__max_leaf_nodes"": 15, ""model__min_samples_leaf"": 20}"
