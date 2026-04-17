@@ -1,5 +1,24 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-17 - Checkpoint: Ignore Local Diagnostics And Oversized Transfer-Inference CSV
+
+- Date / checkpoint:
+  - 2026-04-17 follow-up after a push failure caused by an accidentally committed oversized transfer-inference CSV.
+- Change made:
+  - Added a narrow `.gitignore` rule for `outputs/modeling/transfer_inference/*/predictions.csv` so the large per-city transfer-inference CSV export does not get recommitted accidentally while keeping the rest of the transfer-inference artifact set trackable.
+  - Added `gcm-diagnose.log` to `.gitignore` because it is a local troubleshooting artifact and not a canonical repo output.
+- Files touched:
+  - `.gitignore`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `git status --short`
+- Test status:
+  - No automated tests were needed for this ignore-only change.
+- Manual verification status:
+  - Verified that `.gitignore` now covers the previously untracked `gcm-diagnose.log` and `outputs/modeling/transfer_inference/05_el_paso_tx/predictions.csv` files.
+- Immediate Next Step:
+  - Re-run `git status` and commit only the intended documentation or code changes, without the ignored local artifacts.
+
 ## Project Goal
 
 Maintain a reproducible cross-city urban heat project that covers study design, geospatial data assembly, modeling-ready handoff, and city-held-out machine-learning evaluation for 30 U.S. cities.
