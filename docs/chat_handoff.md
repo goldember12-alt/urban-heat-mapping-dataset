@@ -1,5 +1,111 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-17 - Checkpoint: Presentation Deck Tightened For Visual And Statistical Framing
+
+- Date / checkpoint:
+  - 2026-04-17 follow-up revision of the presentation draft for class-talk polish.
+- Change made:
+  - Reworked `docs/presentation_2026/slides_quarto.qmd` to reduce slide text, convert slide 3 into a dataset/pipeline table, enlarge the benchmark figure, and make the Denver spatial slide almost entirely visual.
+  - Added concise statistical definitions for logistic regression and random forest on the evaluation/models slide without increasing the deck beyond 7 slides.
+  - Added `docs/presentation_2026/presentation-theme.css` for light revealjs styling and updated the supporting notes, manifest, README, and rendering notes to match the revised deck.
+  - Updated the rendering notes after an in-sandbox Quarto render attempt failed with Windows `Access is denied` against the local Quarto install, while keeping the helper script and output instructions intact for normal Windows use.
+- Files touched:
+  - `docs/presentation_2026/slides_quarto.qmd`
+  - `docs/presentation_2026/presentation-theme.css`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/render_presentation.ps1`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - No automated tests were needed; this was a presentation-source and documentation revision only.
+- Manual verification status:
+  - Verified from the source that the deck still contains exactly 7 slides total including the title slide and Q&A slide.
+  - Verified that slide 3 is now table-based and that concise logistic / random-forest method definitions are present on slide 4.
+  - Verified that the benchmark and Denver triptych figure paths still resolve correctly from the slide source.
+  - An attempted in-sandbox Quarto render located a Quarto install but failed with Windows `Access is denied`, so regenerated HTML/PPTX outputs could not be verified inside this sandbox.
+- Immediate Next Step:
+  - Re-run the helper script in a normal Windows PowerShell session with Quarto available, then review the refreshed HTML and PPTX outputs for any last-mile spacing tweaks.
+
+### 2026-04-17 - Checkpoint: Ignore Presentation Draft Folder
+
+- Date / checkpoint:
+  - 2026-04-17 follow-up ignore-rule update for local presentation materials.
+- Change made:
+  - Added `docs/presentation_2026/` to `.gitignore` so the presentation draft folder and its locally rendered artifacts do not get tracked in git.
+- Files touched:
+  - `.gitignore`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `git status --short`
+- Test status:
+  - No automated tests were needed for this ignore-only change.
+- Manual verification status:
+  - Verified that `.gitignore` now includes the presentation draft folder path.
+- Immediate Next Step:
+  - Re-run `git status` and confirm the presentation folder is no longer shown as an untracked path.
+
+### 2026-04-17 - Checkpoint: Presentation Draft Revision For Rendering And Readability
+
+- Date / checkpoint:
+  - 2026-04-17 follow-up revision to the STAT 5630 presentation package.
+- Change made:
+  - Revised `docs/presentation_2026/slides_quarto.qmd` so one Quarto source now targets both `revealjs` and `pptx`, while keeping the deck at exactly 7 slides total.
+  - Simplified the spatial example slide by dropping the smaller Phoenix support figure and letting the Denver held-out triptych be the dominant visual.
+  - Tightened slide titles and wording so the deck reads more like a class research talk and less like a repo summary.
+  - Added `docs/presentation_2026/render_presentation.ps1` plus `presentation_rendering_notes.md` and expanded `README.md` with concrete Windows rendering commands from both the repo root and the presentation folder.
+- Files touched:
+  - `docs/presentation_2026/slides_quarto.qmd`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/render_presentation.ps1`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+  - or, from the presentation folder: `powershell -ExecutionPolicy Bypass -File .\render_presentation.ps1`
+- Test status:
+  - No automated tests were needed; this was a presentation-source and documentation revision only.
+- Manual verification status:
+  - Verified the slide source still resolves to exactly 7 slides total including the title slide and the final Q&A slide.
+  - Verified that the revised figure paths and retained artifact paths referenced by the deck and manifest exist on disk.
+  - Verified that the helper script points to the correct source and expected output paths.
+  - Quarto is still not installed in this workspace, so the revised HTML and PPTX outputs were not rendered locally.
+- Immediate Next Step:
+  - Run the helper script on a Windows machine with Quarto installed, then do any last-mile visual tweaks in either the HTML deck or the rendered PowerPoint.
+
+### 2026-04-17 - Checkpoint: Presentation Draft Folder And 7-Slide Source
+
+- Date / checkpoint:
+  - 2026-04-17 presentation-materials update.
+- Change made:
+  - Added `docs/presentation_2026/` with a 7-slide Quarto deck source plus outline, speaker notes, asset manifest, and rendering README for the STAT 5630 final project presentation.
+  - Anchored the deck to retained benchmark and audit artifacts rather than secondary expansion checkpoints or stale batch-summary outputs.
+  - Explicitly excluded the stale or broken `outputs/data_processing/batch_reports/data_processing_report_summary.csv` from headline presentation evidence.
+- Files touched:
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/slides_quarto.qmd`
+  - `docs/chat_handoff.md`
+- How to run:
+  - If Quarto is installed: `quarto render docs/presentation_2026/slides_quarto.qmd --to revealjs`
+- Test status:
+  - No automated tests were needed; this was a documentation and presentation-source addition only.
+- Manual verification status:
+  - Verified slide claims against retained repo artifacts for dataset size, audit status, fold design, benchmark metrics, representative held-out maps, and the transfer-package / inference workflow.
+  - Verified that the deck source contains exactly 7 slides total including the title slide and final Q&A slide.
+  - Verified that the selected figures are present on disk and legible enough for slide use.
+- Immediate Next Step:
+  - Render the Quarto source on a machine with Quarto installed, then make any last-mile wording or layout tweaks before submission.
+
 ### 2026-04-17 - Checkpoint: Ignore Local Diagnostics And Oversized Transfer-Inference CSV
 
 - Date / checkpoint:

@@ -29,6 +29,9 @@ figures/
 gcm-diagnose.log
 outputs/modeling/transfer_inference/*/predictions.csv
 
+# Local presentation draft artifacts
+docs/presentation_2026/
+
 # Optional local config
 .env
 .env.local
