@@ -1,0 +1,30 @@
+---
+format-links: false
+format:
+  pptx:
+    slide-level: 2
+---
+
+## Cross-City Urban Heat Hotspot Prediction
+
+![](build/slide_01_title_card.png){width=100%}
+
+## Why Transfer Matters
+
+![](build/slide_02_problem_framing.png){width=100%}
+
+## Data + Evaluation Design
+
+![](build/slide_03_design.png){width=100%}
+
+## Models + Main Result
+
+![](build/slide_04_models_results.png){width=100%}
+
+## Held-Out Denver
+
+![](build/slide_05_denver_example.png){width=100%}
+
+## Takeaway
+
+![](build/slide_06_takeaway.png){width=100%}

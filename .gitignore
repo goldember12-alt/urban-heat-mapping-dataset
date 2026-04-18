@@ -29,8 +29,12 @@ figures/
 gcm-diagnose.log
 outputs/modeling/transfer_inference/*/predictions.csv
 
-# Local presentation draft artifacts
-docs/presentation_2026/
+# Generated presentation artifacts
+docs/presentation_2026/build/
+docs/presentation_2026/slides_powerpoint_files/
+docs/presentation_2026/slides_quarto.html
+docs/presentation_2026/slides_quarto.pptx
+docs/presentation_2026/slides_quarto_files/
 
 # Optional local config
 .env

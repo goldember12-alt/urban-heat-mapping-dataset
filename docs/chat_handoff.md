@@ -1,5 +1,106 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-18 - Checkpoint: Removed Legacy Presentation Workflow Artifacts
+
+- Date / checkpoint:
+  - 2026-04-18 cleanup pass after the PowerPoint-first presentation reset.
+- Change made:
+  - Removed every remaining legacy Quarto / Reveal artifact from `docs/presentation_2026/` so the folder now reflects only the active PowerPoint-first workflow.
+  - Deleted the legacy source/theme files `docs/presentation_2026/slides_quarto.qmd` and `docs/presentation_2026/presentation-theme.css`.
+  - Deleted the legacy rendered outputs `docs/presentation_2026/slides_quarto.html`, `docs/presentation_2026/slides_quarto.pptx`, and the Reveal support directory `docs/presentation_2026/slides_quarto_files/`.
+  - Updated `docs/presentation_2026/README.md` to remove the section that described those legacy files as retained reference material.
+- Files touched:
+  - `docs/presentation_2026/README.md`
+  - `docs/chat_handoff.md`
+- Files removed:
+  - `docs/presentation_2026/presentation-theme.css`
+  - `docs/presentation_2026/slides_quarto.qmd`
+  - `docs/presentation_2026/slides_quarto.html`
+  - `docs/presentation_2026/slides_quarto.pptx`
+  - `docs/presentation_2026/slides_quarto_files/`
+- How to run:
+  - Active deck only: `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - No automated tests were needed for this cleanup-only change.
+- Manual verification status:
+  - Verified that `docs/presentation_2026/` now contains only the active PowerPoint-first source, notes, render script, build directory, and rendered `urban_heat_transfer_presentation.pptx`.
+  - Verified that no remaining file in `docs/presentation_2026/` references `slides_quarto` or `presentation-theme.css`.
+- Immediate Next Step:
+  - None required for the cleanup itself; continue using the PowerPoint-first workflow only.
+
+### 2026-04-17 - Checkpoint: Presentation Workflow Reset To PowerPoint-First Deck
+
+- Date / checkpoint:
+  - 2026-04-17 presentation refactor that replaced the prior dual-format slide workflow with a PowerPoint-first build.
+- Change made:
+  - Added `src.presentation_deck_builder` plus the CLI entrypoint `src.run_presentation_deck` to generate six slide-ready PNG assets directly from retained repo artifacts, including the canonical dataset counts, city-held-out fold contract, retained logistic `5k` benchmark values, retained RF frontier values, and the Denver held-out triptych.
+  - Added focused tests in `tests/test_presentation_deck_builder.py` to lock the new six-slide cap and verify the core city-held-out presentation data contract (`30` cities, `5` folds, `6` held-out cities per fold, `71,394,894` rows, `hotspot_10pct` target, and RF pooled PR AUC exceeding the retained logistic `5k` pooled PR AUC).
+  - Replaced the active presentation render path in `docs/presentation_2026/render_presentation.ps1` so it now builds slide art and renders a single PowerPoint deck, `urban_heat_transfer_presentation.pptx`, via Pandoc rather than the previous HTML-plus-PowerPoint Quarto workflow.
+  - Added `docs/presentation_2026/slides_powerpoint.qmd` as the minimal slide wrapper and rewrote the active presentation docs in `README.md`, `presentation_outline.md`, `presentation_speaker_notes.md`, `presentation_asset_manifest.md`, `presentation_rendering_notes.md`, and `presentation_changelog.md` so they describe the new six-slide presentation-first architecture.
+  - Narrowed `.gitignore` so the active presentation sources and rendered deck are trackable again while generated build scratch and obsolete legacy Quarto outputs remain ignored.
+- Files touched:
+  - `.gitignore`
+  - `src/presentation_deck_builder.py`
+  - `src/run_presentation_deck.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `requirements.txt`
+  - `docs/presentation_2026/slides_powerpoint.qmd`
+  - `docs/presentation_2026/render_presentation.ps1`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/build/*`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `2 passed`.
+- Manual verification status:
+  - Verified that `render_presentation.ps1` now completes end to end in the sandbox and writes `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Verified by inspecting the rendered `.pptx` zip structure that the deck contains exactly `6` slides total.
+  - Verified visually that the generated slide assets now center the deck on one title slide plus five content slides with larger visuals, minimal slide text, and a separate notes file carrying the narrative.
+  - Verified that the active render path no longer depends on HTML output and that Pandoc scratch output under `slides_powerpoint_files/` is cleaned up after render.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in PowerPoint for a final projector-scale skim of font sizing and image placement, then decide whether the obsolete `slides_quarto.html`, `slides_quarto.pptx`, and `slides_quarto_files/` should be deleted outside the sandbox policy constraints.
+
+### 2026-04-17 - Checkpoint: Presentation Deck Reworked Into A Visual Stats / ML Talk
+
+- Date / checkpoint:
+  - 2026-04-17 focused presentation-improvement pass for the Cross-City Urban Heat Hotspot Prediction deck.
+- Change made:
+  - Rebuilt `docs/presentation_2026/slides_quarto.qmd` from a compact 7-slide outline into a more presentation-oriented 9-slide deck with a stronger title slide, a redesigned motivation slide, a card-based dataset slide, split evaluation-versus-model slides, a figure-led results slide, a combined Denver spatial-example slide, an audience-facing limitations slide, and a stronger closing takeaway.
+  - Reworked `docs/presentation_2026/presentation-theme.css` to add a consistent visual system for the reveal deck, including a styled title slide, dataset / metric / method cards, takeaway boxes, larger figure treatment, and clearer typographic hierarchy.
+  - Updated the supporting presentation docs in `docs/presentation_2026/README.md`, `presentation_outline.md`, `presentation_speaker_notes.md`, and `presentation_asset_manifest.md` so the deck structure and narrative notes match the revised slide order.
+  - Regenerated `docs/presentation_2026/slides_quarto.html` and `slides_quarto.pptx` inside the sandbox using direct `pandoc.exe` fallback after Quarto itself failed here with a Windows `cmd.exe` invalid-handle error during render.
+- Files touched:
+  - `docs/presentation_2026/slides_quarto.qmd`
+  - `docs/presentation_2026/presentation-theme.css`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/slides_quarto.html`
+  - `docs/presentation_2026/slides_quarto.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - Preferred local path: `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+  - Sandbox fallback used here:
+    - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe .\slides_quarto.qmd -f markdown -t revealjs -s -o .\slides_quarto.html -V theme=simple -V revealjs-url=./slides_quarto_files/libs/revealjs -V transition=fade -V controls=true -V progress=true -V slideNumber=true -V center=false --mathjax -c presentation-theme.css`
+    - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe .\slides_quarto.qmd -f markdown -t pptx --slide-level=2 -o .\slides_quarto.pptx`
+- Test status:
+  - No automated tests were needed; this was a presentation-source and presentation-output revision only.
+- Manual verification status:
+  - Verified from the rendered HTML that the deck now has `8` content slides plus the title slide (`9` total) and that the revised slide titles appear in the output.
+  - Verified that the benchmark figure and Denver triptych still resolve from the rendered deck and that the title slide no longer shows the earlier invalid placeholder date.
+  - Verified that the sandbox fallback regenerated both `slides_quarto.html` and `slides_quarto.pptx` with fresh timestamps.
+  - Quarto's normal render path remains blocked in this sandbox by `Failed to spawn 'C:\WINDOWS\system32\cmd.exe': Invalid handle`; the direct-pandoc PPTX fallback writes an updated file but does not preserve reveal-style slide grouping as faithfully as Quarto's native PPTX renderer.
+- Immediate Next Step:
+  - Re-run the helper script in a normal Windows PowerShell session to regenerate the HTML/PPTX outputs through Quarto itself, then do a last-mile visual skim for spacing and PowerPoint-specific layout differences.
+
 ### 2026-04-17 - Checkpoint: Presentation Deck Tightened For Visual And Statistical Framing
 
 - Date / checkpoint:
