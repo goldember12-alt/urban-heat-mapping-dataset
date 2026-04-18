@@ -1,5 +1,100 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-18 - Checkpoint: Added Audience-Facing Cross-City Technical Report
+
+- Date / checkpoint:
+  - 2026-04-18 report-writing pass for the Cross-City Urban Heat Hotspot Prediction project.
+- Change made:
+  - Added a new forward-facing technical report at `docs/report/cross_city_urban_heat_report.md` that explains the project motivation, data construction, hotspot target definition, city-held-out evaluation design, core modeling methods, main quantitative results, representative held-out spatial example, limitations, practical next steps, and artifact provenance.
+  - Anchored the report to retained repo artifacts rather than slide-only narrative text, including the audited final dataset summaries, canonical cross-city benchmark outputs, held-out-city map summary, and clearly labeled supplemental diagnostics.
+  - Created a stable report-facing figure folder at `docs/report/figures/` and copied the selected benchmark, spatial-example, city-coverage, within-vs-cross diagnostic, and feature-importance figures into that location for clean relative linking from the report.
+  - Added two new schematic SVG figures, `workflow_overview.svg` and `evaluation_design.svg`, to explain the end-to-end workflow and the leakage-safe held-out-city benchmark structure in a report-appropriate format.
+- Files touched:
+  - `docs/report/cross_city_urban_heat_report.md`
+  - `docs/report/figures/study_city_points.png`
+  - `docs/report/figures/benchmark_metrics.png`
+  - `docs/report/figures/city_metric_deltas.png`
+  - `docs/report/figures/denver_heldout_map_triptych.png`
+  - `docs/report/figures/within_vs_cross_gap.png`
+  - `docs/report/figures/feature_importance_ranked_summary.png`
+  - `docs/report/figures/workflow_overview.svg`
+  - `docs/report/figures/evaluation_design.svg`
+  - `docs/chat_handoff.md`
+- How to review:
+  - Open `docs/report/cross_city_urban_heat_report.md` in a Markdown renderer from the repo root.
+- Test status:
+  - No automated tests were needed because this change adds report documentation and report-facing figure assets only.
+- Manual verification status:
+  - Verified that the report file exists, that all linked figure files under `docs/report/figures/` exist, and that the copied/created figure paths referenced in the Markdown resolve locally.
+  - Verified that the report uses retained benchmark values from the existing modeling/reporting artifacts rather than introducing new untracked results.
+  - Verified that supplemental figures and checkpoints are labeled as supplemental in the report rather than being presented as replacement benchmark evidence.
+- Immediate Next Step:
+  - If needed, do one final read in the user's preferred Markdown renderer and decide whether a PDF export or minor copyediting pass is needed for external sharing.
+
+### 2026-04-18 - Checkpoint: Native Editable PowerPoint Rebuild
+
+- Date / checkpoint:
+  - 2026-04-18 rebuild of the presentation deck from flattened slide images into a native editable PowerPoint.
+- Change made:
+  - Inspected `docs/presentation_2026/urban_heat_transfer_presentation.pptx` and confirmed that the prior layout-cleanup deck had flattened all `6` slides into single full-slide picture objects.
+  - Added `src/pptx_vendor.py` plus vendored `python-pptx` dependencies under `src/_vendor_pptx/` so the repo can generate editable PowerPoint files without requiring a separate package install in the active environment.
+  - Added `src.presentation_editable_pptx_builder` and `src.run_editable_presentation` to rebuild the deck as native PowerPoint slides composed of editable text boxes, rounded-rectangle cards, callout panels, decorative shapes, and separately placed figure images.
+  - Updated `docs/presentation_2026/render_presentation.ps1` so the active render path now writes the deck directly from the native PowerPoint builder rather than flattening slide art into full-slide images.
+  - Refreshed the presentation docs to describe the editable workflow and the verified native-object output.
+- Files touched:
+  - `src/pptx_vendor.py`
+  - `src/_vendor_pptx/*`
+  - `src/presentation_editable_pptx_builder.py`
+  - `src/run_editable_presentation.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/render_presentation.ps1`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Verified from the rebuilt `.pptx` structure that the deck still contains exactly `6` slides.
+  - Verified that every slide now contains editable text shapes and `0` placeholders, so text can be clicked and edited directly in PowerPoint instead of being baked into a background image.
+  - Verified that slides `1`, `2`, `3`, and `6` contain `0` picture shapes, while slides `4` and `5` contain exactly `1` picture each for the benchmark chart and Denver map.
+  - Verified that the rebuilt slides are not single background-image slides and that the two retained figure images remain separately placed and aligned within their cards/frames.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in Microsoft PowerPoint for any last-mile manual nudges that are easier to do interactively now that the deck is fully editable.
+
+### 2026-04-18 - Checkpoint: PowerPoint Layout Cleanup Without Changing Slide Architecture
+
+- Date / checkpoint:
+  - 2026-04-18 narrow PowerPoint layout-fit pass on the existing six-slide presentation.
+- Change made:
+  - Kept the slide count, slide order, and slide purposes unchanged while tightening the rendered PowerPoint layout for projection readability.
+  - Reworked `src.presentation_deck_builder` so the slide-art canvases now use full `16:9` height and the existing slide content is placed closer to the slide edges with larger figures, maps, metric cards, and support text, especially on the title slide, the models/results slide, the Denver slide, and the takeaway slide.
+  - Added `src.presentation_pptx_postprocess` plus `src.run_presentation_pptx_postprocess` so the rendered `.pptx` no longer inherits the default PowerPoint title-plus-picture placeholder margins. The postprocess step removes the title placeholder shapes and expands the slide picture to the full slide canvas.
+  - Updated `docs/presentation_2026/render_presentation.ps1` so every render now includes that PowerPoint layout-tightening postprocess automatically, and refreshed the presentation README/changelog to document it.
+- Files touched:
+  - `src/presentation_deck_builder.py`
+  - `src/presentation_pptx_postprocess.py`
+  - `src/run_presentation_pptx_postprocess.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/render_presentation.ps1`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Verified from the rendered `.pptx` XML that all `6` slides now contain `0` title shapes and `1` picture shape each, with the picture positioned at `x=0`, `y=0`, and expanded to the full slide size `9144000 x 5143500`.
+  - Verified visually that the title slide, models/results slide, Denver slide, data/evaluation slide, and takeaway slide all use more of the slide area than before and have larger projection-scale text and graphics.
+  - Verified that the layout cleanup did not change the slide count or slide order.
+- Immediate Next Step:
+  - Open the refreshed PowerPoint in PowerPoint itself for one final projector-scale skim, but no further structural changes are required for the layout cleanup.
+
 ### 2026-04-18 - Checkpoint: Removed Legacy Presentation Workflow Artifacts
 
 - Date / checkpoint:
