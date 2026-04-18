@@ -11,9 +11,10 @@ This folder now uses a PowerPoint-first workflow for the cross-city urban heat t
 
 ## Current Deck Structure
 
-- `6` slides total
+- `7` slides total
 - `1` title slide
-- `5` non-title slides
+- `5` content slides
+- `1` Q&A slide
 - no appendix slides
 - no HTML output in the active workflow
 
@@ -33,3 +34,4 @@ The script will build a native editable PowerPoint and write:
 - Benchmark values are pulled from retained repo artifacts rather than retyped by hand.
 - The active render path produces only PowerPoint because the deck is optimized for live presentation, not dual-format parity.
 - The active deck is rebuilt from editable PowerPoint objects. Only the benchmark chart and Denver map remain raster figures.
+- Reusable schematic figures for the framing and evaluation slides are generated under `figures/presentation/`.

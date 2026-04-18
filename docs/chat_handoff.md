@@ -1,5 +1,37 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-18 - Checkpoint: Figure-Led Editable Deck Revision
+
+- Date / checkpoint:
+  - 2026-04-18 narrow revision pass on the native editable PowerPoint deck.
+- Change made:
+  - Refined `src.presentation_editable_pptx_builder` so text boxes, cards, and callouts use cleaner dimensions and padding, reducing awkward wrapping while keeping the deck fully editable in PowerPoint.
+  - Simplified the title slide, added Nicholas Machado as coauthor, and added a separate minimal Q&A slide at the end of the deck.
+  - Added `src.presentation_visual_assets` to generate two reusable schematic figures under `figures/presentation/`: `transfer_problem_schematic.(png|svg)` for Slide 2 and `heldout_city_cv_schematic.(png|svg)` for Slide 3.
+  - Shifted Slides 2, 3, and 6 toward more figure-led communication with fewer words while preserving the existing results slide, Denver map slide, and headline metric claims.
+  - Updated the presentation docs so the README, outline, notes, and changelog match the new 7-slide editable deck.
+- Files touched:
+  - `src/presentation_editable_pptx_builder.py`
+  - `src/presentation_visual_assets.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Verified that the rebuilt deck now contains exactly `7` slides: title, five content slides, and a final Q&A slide.
+  - Verified that every slide has editable text shapes and `0` placeholders.
+  - Verified that Slides `2`, `3`, `4`, and `5` contain separate figure images, while Slides `1`, `6`, and `7` remain fully native PowerPoint shapes/text with no figure image objects.
+  - Verified that the new reusable schematic assets were written to `figures/presentation/` as both `.png` and `.svg`.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in Microsoft PowerPoint for any final projector-scale nudges now that the revised deck is fully editable and figure-led.
+
 ### 2026-04-18 - Checkpoint: Added Audience-Facing Cross-City Technical Report
 
 - Date / checkpoint:
