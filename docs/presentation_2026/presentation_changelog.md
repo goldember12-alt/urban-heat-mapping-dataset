@@ -1,5 +1,134 @@
 # Presentation Changelog
 
+## 2026-04-19 Documentation Alignment Refresh
+
+- Documentation refresh:
+  - Updated the presentation README active-file list and current deck notes.
+  - Updated the outline so Slide 3 is described as a two-panel visual logistic-versus-random-forest model diagram rather than a rendered mathematical model section.
+  - Updated the speaker notes so Slide 3's talking points match the final feature-to-weighted-sum and feature-to-tree-vote visuals.
+  - Updated the Slide 6 speaker note to describe the current three equal map panels.
+  - Updated the asset manifest's Slide 3 figure description to match the final model-logic visual.
+  - Replaced the stale legacy Quarto file content with an explicit inactive-stub note and the current seven-slide structure.
+- Verification:
+  - Scanned the presentation documentation for stale old-deck phrases and confirmed the current README, outline, speaker notes, asset manifest, rendering notes, and Quarto stub now match the active seven-slide PowerPoint narrative.
+
+## 2026-04-19 RF Tree Gap Micro-Pass
+
+- Slide 3 random-forest revision:
+  - Moved the two random-forest trees slightly farther apart and reduced their branch spread.
+  - Confirmed the `elev.` and `cover` split boxes no longer overlap and the leaf circles have visible separation.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slide 3.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 NDVI Color And RF Tree Spacing Pass
+
+- Slide 3 / feature-color revision:
+  - Added a distinct NDVI green so NDVI no longer uses the same chip color as land cover.
+  - Applied the NDVI color consistently in the predictor chips on Slide 2 and the model-feature chips / contribution bar on Slide 3.
+- Slide 3 random-forest revision:
+  - Reduced the random-forest diagram from three small trees to two larger trees.
+  - Increased horizontal breathing room for the tree split labels while preserving the multiple-path / averaged-vote visual logic.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2 and 3.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 Slide 3 Spacing And Logistic Flow Clarification
+
+- Slide 3 revision:
+  - Increased vertical spacing inside both model panels and widened the gutter between the logistic-regression and random-forest cards.
+  - Recentered the logistic diagram inside its panel.
+  - Replaced the unclear curve-and-marker endpoint with a direct vertical flow from feature chips to weighted sum to a risk-score output pill.
+  - Preserved the random-forest panel structure while aligning its vertical rhythm with the revised logistic panel.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slide 3.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 Slide 3 Two-Panel Model Redesign
+
+- Slide 3 revision:
+  - Removed the internal "same inputs" title/subtitle and the separate shared-feature-contract band.
+  - Rebuilt the Slide 3 figure as two equal side-by-side panels: logistic regression on the left and random forest on the right.
+  - Repeated the same six feature chips inside both model diagrams so the common input contract is visible without a separate explanatory container.
+  - Added more interpretable model visuals: feature weights feeding a risk output for logistic regression, and labeled feature split trees feeding averaged votes for random forest.
+  - Fixed the prior curve-label collision by replacing the overlapping label with a separate risk output chip.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected the final Slide 3 preview from the canonical deck.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 Slide-Specific Polish Follow-Up
+
+- Slide 2 spacing fix:
+  - Slightly separated the two bottom validation panels while preserving their parallel sizing.
+  - Shifted the within-city legend away from the training/held-out dot pattern so the key no longer competes with the diagram.
+  - Kept the larger predictor-to-hotspot-risk flow as the top visual anchor.
+- Slide 3 redesign:
+  - Replaced the equation-heavy model panel with a more diagrammatic comparison: shared feature chips, a weighted-signal-to-risk-curve visual for logistic regression, and a tree-vote ensemble visual for random forest.
+  - Removed the cramped rendered math from the model body while preserving the same narrative: same inputs, different model forms.
+- Slide 4 polish:
+  - Moved the small method notes up near each chart title so they read as chart context rather than plotted content.
+- Slide 6 map layout:
+  - Reworked the Denver held-out map figure into three equally spaced side-by-side maps: predicted top-decile risk, observed hotspot cells, and error pattern.
+  - Enlarged the map footprints and retained the bottom legend.
+- Verification:
+  - Built `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2, 3, 4, and 6 after the final pass.
+  - The canonical deck path could not be overwritten because `docs/presentation_2026/urban_heat_transfer_presentation.pptx` was locked: `PermissionError: [Errno 13] Permission denied`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 Vertical Figure Expansion And Map Replacement
+
+- Layout revision:
+  - Removed the separate bottom takeaway text boxes from Slides 2 through 5.
+  - Expanded Slides 2 through 5 figures vertically to use the freed space and reduce the horizontally stretched report-page feel.
+  - Removed the separate target box from Slide 2 and folded the target idea into the predictor-to-hotspot-risk flow.
+  - Kept Slide 3 per duplicate-table feedback and made the math section less cramped with larger panels and split equations.
+  - Removed the extra top title/subtitle text inside the Slide 4 and Slide 5 figures.
+  - Moved the Slide 5 climate legend below the scatterplots to match the Slide 4 legend placement.
+- Slide replacement:
+  - Treated the Slide 6 metric table as duplicative of Slide 4's metric content.
+  - Replaced Slide 6 with a presentation-oriented Denver held-out map figure generated from `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_points.parquet`.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected the final pass.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 Polish And Readability Pass
+
+- Visual polish:
+  - Tightened Slide 1 title spacing and added a subtle accent rule so the opener feels more deliberate while staying minimal.
+  - Rebuilt Slide 2's setup schematic with larger validation panels, larger predictor chips, clearer train/held-out cell patterns, and fewer nested frames.
+  - Rebalanced Slide 3 around a split feature vector and parallel logistic/random-forest panels with less micro-text.
+  - Increased chart label, legend, axis, and annotation readability on Slides 4 and 5.
+  - Kept Slide 6 as a spreadsheet-style metric table per feedback, but removed the audience-facing readout column so the data table itself is the slide focus.
+  - Repositioned the Q&A slide text for a more intentional close.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews using the non-interactive deck render path and visually inspected the final pass.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
+## 2026-04-19 Content-Density Revision Pass
+
+- Narrative/content revision:
+  - Combined the former research-question and evaluation-design setup into one denser Slide 2.
+  - Added back the mathematical modeling section as Slide 3, with shared feature vector, logistic SAGA probability model, and random-forest ensemble score.
+  - Combined the within-city and city-held-out result views into one side-by-side Slide 4.
+  - Added a new data-rich Slide 5 showing city-level relationships between within-city RF metrics and city-held-out RF metrics.
+  - Replaced the prior broad synthesis graphic with a tabular Slide 6 comparing logistic and random forest within each evaluation block.
+- New reusable figures:
+  - `figures/presentation/setup_predictors_evaluation_questions.(png|svg)`.
+  - `figures/presentation/logistic_rf_model_math.(png|svg)`.
+  - `figures/presentation/within_city_vs_transfer_results.(png|svg)`.
+  - `figures/presentation/city_signal_transfer_relationship.(png|svg)`.
+  - `figures/presentation/evaluation_metric_comparison_table.(png|svg)`.
+- Verification:
+  - Focused presentation tests passed after the content restructure.
+  - The canonical PowerPoint file was open in PowerPoint and could not be overwritten; a review copy was generated at `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`.
+
 ## 2026-04-19 Evaluation-Methodology Narrative Rebuild
 
 - Narrative reset:

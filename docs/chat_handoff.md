@@ -1,5 +1,283 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-19 - Checkpoint: Presentation Documentation Alignment Refresh
+
+- Date / checkpoint:
+  - 2026-04-19 response to request to align the documentation in `docs/presentation_2026/` with the current presentation.
+- Change made:
+  - Updated `README.md` so the active-file list and slide notes match the current seven-slide PowerPoint.
+  - Updated `presentation_outline.md` so Slide 3 is described as a visual two-panel logistic-versus-random-forest diagram rather than a math-rendered section.
+  - Updated `presentation_speaker_notes.md` so Slide 3 speaking guidance matches the final feature-to-weighted-sum and feature-to-tree-vote visuals, and Slide 6 describes the three equal map panels.
+  - Updated `presentation_asset_manifest.md` so the Slide 3 figure role matches the final model-logic visual.
+  - Updated `presentation_rendering_notes.md` to point readers to the current outline and speaker notes.
+  - Replaced stale legacy content in `slides_powerpoint.qmd` with an inactive-stub note and the current seven-slide structure.
+  - Added a changelog entry documenting the documentation refresh.
+- Files touched:
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/presentation_2026/slides_powerpoint.qmd`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - Presentation deck build remains `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`.
+- Test status:
+  - Not run; documentation-only refresh.
+- Manual verification status:
+  - Scanned `docs/presentation_2026/` for stale old-deck and old-Slide-3 phrases after the edits.
+  - Confirmed the current README, outline, speaker notes, asset manifest, rendering notes, and Quarto stub align with the active seven-slide deck narrative.
+- Immediate Next Step:
+  - If the deck changes again, update `presentation_outline.md`, `presentation_speaker_notes.md`, and `presentation_asset_manifest.md` in the same pass.
+
+### 2026-04-19 - Checkpoint: RF Tree Gap Micro-Pass
+
+- Date / checkpoint:
+  - 2026-04-19 small Slide 3 follow-up to separate the random-forest trees.
+- Change made:
+  - Left all non-Slide-3 elements unchanged.
+  - Moved the two random-forest tree centers farther apart and slightly reduced their branch spread.
+  - Verified that the `elev.` and `cover` split boxes no longer overlap and the leaf circles have visible gaps.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slide 3.
+- Immediate Next Step:
+  - No known Slide 3 overlap issue remains.
+
+### 2026-04-19 - Checkpoint: NDVI Color And RF Tree Spacing Pass
+
+- Date / checkpoint:
+  - 2026-04-19 follow-up to Slide 3 model-diagram feedback about NDVI color and cramped random-forest trees.
+- Change made:
+  - Added a distinct NDVI green constant so NDVI no longer blends completely with land cover.
+  - Applied that NDVI color in the Slide 2 predictor set and Slide 3 model feature chips / logistic contribution bar.
+  - Reduced the Slide 3 random-forest diagram from three small trees to two larger trees to improve horizontal spacing and label readability.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2 and 3.
+- Immediate Next Step:
+  - Continue with any final taste-level Slide 3 refinement if requested; no known spacing or overlap issue remains from this pass.
+
+### 2026-04-19 - Checkpoint: Slide 3 Spacing And Logistic Flow Clarification
+
+- Date / checkpoint:
+  - 2026-04-19 follow-up to Slide 3 feedback after the two-panel redesign.
+- Change made:
+  - Left Slides 1, 2, 4, 5, 6, and 7 unchanged.
+  - Increased vertical spacing inside the Slide 3 model cards and widened the horizontal gap between logistic regression and random forest.
+  - Recentered the logistic visual so the feature chips, weighted-sum bars, arrow, and output align as one vertical flow.
+  - Removed the unclear curved-line-plus-marker endpoint and replaced it with a clear `risk score` output pill.
+  - Kept the random-forest side visually aligned with the revised logistic panel.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slide 3.
+- Immediate Next Step:
+  - Slide 3 is ready for another human taste pass; no known text overlap remains in the rendered preview.
+
+### 2026-04-19 - Checkpoint: Slide 3 Two-Panel Model Redesign
+
+- Date / checkpoint:
+  - 2026-04-19 response to feedback that only Slide 3 still needed work after Slides 1, 2, 4, 5, 6, and 7 were accepted.
+- Change made:
+  - Left all accepted slides unchanged.
+  - Removed the internal "same inputs" heading, subtitle, and separate shared-feature-contract band from the Slide 3 figure.
+  - Rebuilt Slide 3 as two equal model panels: logistic regression on the left and random forest on the right.
+  - Integrated the same six feature chips into both model diagrams.
+  - Added a more detailed logistic visual showing feature weights feeding a risk output.
+  - Added a more detailed random-forest visual showing labeled feature split trees feeding averaged votes.
+  - Fixed the previous overlap where the "smooth risk curve" label cut into the curve.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Built `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx` while iterating.
+  - Regenerated the canonical `docs/presentation_2026/urban_heat_transfer_presentation.pptx` successfully.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slide 3 from the canonical deck.
+- Immediate Next Step:
+  - If further taste-level Slide 3 changes are desired, iterate only inside `_build_model_math(...)`; the surrounding deck structure is stable.
+
+### 2026-04-19 - Checkpoint: Presentation Slide-Specific Polish Follow-Up
+
+- Date / checkpoint:
+  - 2026-04-19 response to slide-by-slide feedback on the revised deck, especially Slide 3 model visual redesign and Slide 6 three-map layout.
+- Change made:
+  - Slide 2: added clearer horizontal separation between the two validation-design panels, condensed the bottom-panel internals, moved the within-city train/held-out key away from the dot diagram, and kept the larger predictor-to-hotspot-risk flow at the top.
+  - Slide 3: replaced the equation-heavy logistic-versus-random-forest figure with a visual model comparison: shared feature chips, a weighted-signal-to-risk-curve path for logistic regression, and a many-trees-to-average-vote path for random forest.
+  - Slide 4: raised the small method notes so they sit closer to the chart titles instead of the plot bodies.
+  - Slide 6: converted the Denver held-out map figure to three equally spaced side-by-side maps for predicted top-decile risk, observed hotspot cells, and error pattern; kept the bottom legend and enlarged the map footprints.
+  - Explained the narrative role of Slide 6 before editing: it makes the held-out-city transfer contrast spatial and concrete after the metric and city-level result slides.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - If the canonical deck is closed: `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+  - If the canonical deck is open/locked: `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_editable_presentation --output-path docs\presentation_2026\urban_heat_transfer_presentation_content_revision.pptx`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Built `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2, 3, 4, and 6.
+  - Canonical overwrite was blocked because `docs/presentation_2026/urban_heat_transfer_presentation.pptx` was locked with `PermissionError: [Errno 13] Permission denied`.
+- Immediate Next Step:
+  - Close the canonical PowerPoint file and rerun the normal render script if the review-copy changes should be written directly to `urban_heat_transfer_presentation.pptx`.
+
+### 2026-04-19 - Checkpoint: Presentation Vertical Expansion And Map Replacement
+
+- Date / checkpoint:
+  - 2026-04-19 response to feedback to remove bottom captions, expand figures vertically, keep/fix Slide 3 if Slide 6 duplicated Slide 4, and replace the duplicate table with a map.
+- Change made:
+  - Removed the separate bottom takeaway text boxes from Slides 2 through 5.
+  - Expanded Slides 2 through 5 figure frames vertically so figures read less like horizontally stretched report pages.
+  - Removed the standalone `hotspot_10pct` target box from Slide 2 and kept the cleaner predictor-to-hotspot-risk flow plus the two validation panels.
+  - Kept Slide 3 because Slide 6 repeated the Slide 4 metrics; revised Slide 3 with more vertical space, larger panels, split formulas, and less micro-text.
+  - Removed the extra top title/subtitle text inside the Slide 4 and Slide 5 figures.
+  - Moved Slide 5's climate legend below the scatterplots to match Slide 4's legend placement.
+  - Replaced the duplicate Slide 6 metric table with a Denver held-out map example generated from retained benchmark map points.
+- Figures/assets added or replaced:
+  - Added `figures/presentation/heldout_denver_map_focus.(png|svg)`.
+  - Regenerated `figures/presentation/setup_predictors_evaluation_questions.(png|svg)`.
+  - Regenerated `figures/presentation/logistic_rf_model_math.(png|svg)`.
+  - Regenerated `figures/presentation/within_city_vs_transfer_results.(png|svg)`.
+  - Regenerated `figures/presentation/city_signal_transfer_relationship.(png|svg)`.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx` successfully.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2, 3, 4, 5, and 6 after the final adjustment pass.
+  - No known overlap or edge-crowding issue remains from the rendered preview pass.
+- Immediate Next Step:
+  - If desired, do one final human PowerPoint presenter-view skim before delivery; next polish pass should focus only on taste-level refinements rather than source correctness.
+
+### 2026-04-19 - Checkpoint: Presentation Polish And Readability Pass
+
+- Date / checkpoint:
+  - 2026-04-19 response to deck-wide polish/readability feedback for the active 7-slide PowerPoint.
+- Change made:
+  - Preserved the analytical story and metric values while revising spacing, scale, hierarchy, and composition.
+  - Tightened Slide 1 title placement and added a subtle accent rule.
+  - Rebuilt Slide 2's setup figure with larger validation panels, larger predictor chips, clearer train/held-out cell patterns, and less nested framing.
+  - Rebuilt Slide 3's model figure with a split feature vector, parallel model panels, larger math, and less explanatory micro-text.
+  - Increased chart typography and legend/annotation readability in Slides 4 and 5.
+  - Kept Slide 6 as a clean spreadsheet-style metric table per feedback, but removed the audience-facing readout column so the table itself carries the content.
+  - Repositioned Slide 7's question text for a more deliberate closing slide.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - Initial project-instruction path `.\.venv\Scripts\python.exe` was not present.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx` successfully.
+  - PowerPoint COM preview export remains unavailable in this sandbox with `80070520 A specified logon session does not exist`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected the final pass.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in PowerPoint for a presenter-view skim if desired; no known slide overlap or readability issue remains from the rendered preview pass.
+
+### 2026-04-19 - Checkpoint: Presentation Content-Density Revision
+
+- Date / checkpoint:
+  - 2026-04-19 response to feedback that Slides 2/3 were too overview/text-based, that the modeling math should return, that Slides 4/5 should be considered side by side, and that Slide 6 should be more tabular.
+- Change made:
+  - Combined the research-question, predictor, and evaluation-design content into one denser Slide 2.
+  - Added back the mathematical modeling section as Slide 3, covering the shared feature vector, logistic SAGA probability model, and random-forest ensemble score.
+  - Rebuilt Slide 4 as a side-by-side comparison of partner within-city-style hotspot metrics and repo city-held-out transfer metrics.
+  - Added a new Slide 5 city-level scatter comparison from `partner_vs_repo_city_comparison.csv`, showing that within-city RF F1/recall and city-held-out RF PR AUC/recall do not align strongly city by city.
+  - Rebuilt Slide 6 as a metric table comparing logistic and RF within each evaluation block.
+  - Updated presentation docs, notes, asset manifest, changelog, and rendering notes for the new structure.
+- Figures/assets added or replaced:
+  - Added `figures/presentation/setup_predictors_evaluation_questions.(png|svg)`.
+  - Added `figures/presentation/logistic_rf_model_math.(png|svg)`.
+  - Added `figures/presentation/within_city_vs_transfer_results.(png|svg)`.
+  - Added `figures/presentation/city_signal_transfer_relationship.(png|svg)`.
+  - Added `figures/presentation/evaluation_metric_comparison_table.(png|svg)`.
+  - Generated a review deck at `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx` because the canonical deck was locked open in PowerPoint.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - Close `docs/presentation_2026/urban_heat_transfer_presentation.pptx` if it is open in PowerPoint.
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+  - Review-copy fallback while the canonical file is locked:
+    - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_editable_presentation --output-path docs\presentation_2026\urban_heat_transfer_presentation_content_revision.pptx`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\presentation_deck_builder.py src\presentation_visual_assets.py src\presentation_editable_pptx_builder.py tests\test_presentation_deck_builder.py` passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py -q` passed with `3 passed`.
+- Manual verification status:
+  - `render_presentation.ps1` failed to overwrite `urban_heat_transfer_presentation.pptx` with `PermissionError: [Errno 13] Permission denied` because PowerPoint had the canonical file open.
+  - Confirmed a `POWERPNT` process with window title `urban_heat_transfer_presentation.pptx - Last saved by user - PowerPoint`.
+  - Generated `urban_heat_transfer_presentation_content_revision.pptx` successfully.
+  - Inspected the review deck object structure: `7` slides; Slides 2 through 6 each contain one figure image plus sparse editable text; Slide 7 remains picture-free.
+  - No projector-scale visual pass has been done yet; the next phase should focus on spacing, overlap, and stretched layout concerns.
+- Immediate Next Step:
+  - Close the canonical PPTX in PowerPoint, rerun `render_presentation.ps1`, then visually review the content-revision deck before moving into spacing and design polish.
+
 ### 2026-04-19 - Checkpoint: Presentation Rebuilt Around Two Evaluation Questions
 
 - Date / checkpoint:

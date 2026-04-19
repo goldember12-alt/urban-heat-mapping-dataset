@@ -1,64 +1,64 @@
 # Speaker Notes
 
-These notes are written as live speaking guidance. The slides stay sparse; the explanation belongs here.
+These notes are written as live speaking guidance. The slides are now more data-forward, but the explanation still belongs here.
 
 ## Slide 1 - Cross-City Urban Heat Hotspot Prediction
 
-Open by saying the talk is about one research question and two ways to evaluate it. The research question is whether basic environmental and built-environment factors can predict urban heat hotspot cells.
+Open by saying the talk is about one research question and two evaluation designs. The research question is whether basic environmental and built-environment factors can predict urban heat hotspot cells.
 
-Set an objective tone immediately: the two evaluation designs are not competing claims about who did the better analysis. They answer different applied questions. One asks about identifying hotspot structure in cities that are represented in training. The other asks about transferring to cities the model has not seen.
+Set an objective tone immediately: the two evaluation designs answer different applied questions. One asks about identifying hotspot structure in cities that are represented in training. The other asks about transferring to cities the model has not seen.
 
-Transition: "First, what are we trying to predict?"
+Transition: "The setup slide puts the target, predictors, and validation questions on the same page."
 
-## Slide 2 - Research Question + Predictors
+## Slide 2 - Research Question + Validation Design
 
-Read the question plainly: can models predict urban heat hotspot cells from basic environmental and built-environment factors?
+Use this slide as the setup for the rest of the talk. Walk through the six first-pass predictors: imperviousness, land cover, elevation, distance to water, NDVI, and climate group. Mention that the model score is for the `hotspot_10pct` target, where a cell is in the hottest 10% within its city after filtering.
 
-Define the target as `hotspot_10pct`: the hottest 10% of cells within each city after the project's filtering rules. Mention that it is city-relative because cities differ in climate and absolute temperature levels.
+Close the slide by contrasting the two evaluation questions. Within-city held-out cells ask whether the model can recover hotspot structure where the city is already represented during training. City-held-out transfer asks whether the model can generalize to places it has not seen.
 
-Walk through the predictors quickly: imperviousness, land cover, elevation, distance to water, NDVI, and climate group. Emphasize that these are relatively basic factors, not direct use of LST as a predictor.
+Transition: "Given that setup, the next question is what the models are actually doing."
 
-Transition: "With the target and predictors fixed, the next question is how to evaluate the model."
+## Slide 3 - Modeling Section: Logistic vs Random Forest
 
-## Slide 3 - Two Evaluation Questions
+This slide explains the two model families visually.
 
-This is the conceptual anchor of the talk.
+Begin by pointing out that the same six predictors appear in both panels: imperviousness, land cover, elevation, distance to water, NDVI, and climate group. Both models exclude the label, LST, city identifiers, and coordinates as predictors.
 
-For the within-city held-out design, explain that training and test cells come from cities that are represented in the modeling data. The question is: can the model identify hotspot structure when local city patterns are already represented?
+For logistic regression, use the left panel's flow: the features receive learned weights, those contributions combine into a weighted sum, and that score becomes the model's hotspot-risk score. In plain language, logistic regression asks whether one global additive relationship across the predictors is enough.
 
-For the city-held-out transfer design, explain that whole cities are withheld. The question is: can the model generalize to places it has not seen?
+For random forest, use the right panel's flow: the same features are reused in many split rules, each tree casts a vote, and the votes are averaged into a hotspot-risk score. In plain language, random forest asks whether nonlinear thresholds and interactions among imperviousness, vegetation, water proximity, land cover, elevation, and climate improve hotspot identification.
 
-Present the within-city design as informative for same-city screening, infill, or settings where the city is represented in training. The transfer design is necessary when the intended use case is applying to new cities.
+Transition: "Now we can compare the two evaluation questions with the same model families."
 
-Transition: "Under the within-city question, the signal is quite strong."
+## Slide 4 - Results Side By Side
 
-## Slide 4 - Within-City Held-Out Evaluation
+This is the main result contrast.
 
-State the data caveat carefully: the partner table contains 30 cities by 2 model families, with sklearn-style thresholded classification metrics. The support counts appear consistent with about 30% of canonical cells held out per city, so this deck treats the table as a within-city or row-level held-out evaluation unless the original partner code says otherwise.
+On the left, describe the partner results as a within-city or row-level held-out evaluation, based on support counts appearing consistent with about 30% of cells held out per city. The table reports thresholded hotspot-class metrics. Under that evaluation question, random forest is much stronger than logistic on mean hotspot precision, recall, and F1.
 
-Focus on hotspot-class metrics rather than accuracy. Accuracy is high partly because the non-hotspot class is about 90% of cells. Precision, recall, and F1 for the hotspot class are more informative.
+On the right, describe the repo benchmark as city-held-out transfer: 5 outer folds with 6 held-out cities per fold. Here the gains are smaller. Random forest improves pooled PR AUC and recall at the top 10% predicted risk, but logistic remains slightly higher on mean city PR AUC.
 
-Main message: under this evaluation question, the models show a clear learnable hotspot signal, especially random forest. Random forest has much higher mean hotspot precision, recall, and F1 than logistic regression across the partner summary.
+The point is not that one design should replace the other. The point is that the evaluation question changes what performance means.
 
-Transition: "Now compare that with the harder question: what happens when the city is not represented during training?"
+Transition: "The city-level view shows why the two summaries should not be collapsed into one leaderboard."
 
-## Slide 5 - City-Held-Out Transfer Evaluation
+## Slide 5 - City-Level Signal Shifts Across Evaluation Designs
 
-Explain that the repo benchmark holds out whole cities across 5 outer folds, with 6 held-out cities per fold. All preprocessing, tuning, and fitting occur inside the training cities for each outer split.
+Each point is one city. The left panel compares within-city RF hotspot F1 with city-held-out RF PR AUC. The right panel compares within-city RF hotspot recall with city-held-out RF recall at the top 10%.
 
-Read the result as a balanced contrast. Random forest improves pooled retrieval: pooled PR AUC is `0.1486` versus `0.1421`, and recall at the top 10% predicted risk is `0.1961` versus `0.1647`. Logistic remains competitive by mean city PR AUC: `0.1803` versus `0.1781`.
+The relationships are weak, which reinforces the central message. A city that looks easier when its local patterns are represented during training is not necessarily easy when the model has to transfer to it as a new city.
 
-Main message: transfer remains possible, but the gains are smaller and less uniform than in the within-city setting.
+Use the climate colors as visual context rather than a definitive climate conclusion. The key statement is methodological: within-city strength and new-city transfer are related but not interchangeable.
 
-Transition: "The takeaway is not that one evaluation is better in all contexts. It is that they answer different questions."
+Transition: "The final content slide makes that transfer task spatial rather than tabular."
 
-## Slide 6 - What The Contrast Shows
+## Slide 6 - Held-Out Denver Map Example
 
-Synthesize the two designs. Within-city evaluation shows that the predictors contain real hotspot signal. City-held-out evaluation shows that the same signal is not fully portable across cities.
+Use this as a visual example of what the held-out-city benchmark is evaluating. Denver was selected as a representative hot-arid held-out city from the retained random-forest frontier checkpoint.
 
-Phrase the limitation objectively: models learn within-city hotspot structure more readily than they transfer across cities. The limitation is not that the models fail. It is that spatial, climate, vegetation, water, and urban-form relationships shift from city to city.
+The three maps show predicted top-decile hotspot risk, observed hotspot cells, and the categorical error pattern for a city that was not part of training in that outer fold.
 
-Close the slide with the practical implication. If the use case is filling in or screening within cities represented in training, within-city splits are informative. If the use case is applying to new cities, city-held-out validation is necessary.
+Close with the implication: the model does recover some spatial hotspot structure, but the false positives and false negatives show why transfer should be evaluated city by city rather than assumed from within-city screening.
 
 ## Slide 7 - Q&A
 
@@ -70,9 +70,9 @@ Use this as a clean stop. A good final sentence is: "Basic factors contain real 
 
 Not directly verified from partner code. The support counts are almost exactly 30% of canonical city row counts, and all 30 cities appear in the evaluation table, so the results appear consistent with a within-city or row-level 70/30 held-out evaluation. The deck phrases this as an inference.
 
-### Why not compare the partner and repo scores directly as one leaderboard?
+### Why put the results side by side if the metrics differ?
 
-The metrics and evaluation questions differ. The partner table reports thresholded classification metrics, while the repo benchmark reports ranking and screening metrics under whole-city holdout. The point is the methodological contrast, not a single interchangeable score.
+Because the slide is comparing evaluation questions, not constructing a single combined leaderboard. The labels and notes make clear that thresholded hotspot metrics and transfer ranking metrics should be read within their own blocks.
 
 ### Which model is better?
 

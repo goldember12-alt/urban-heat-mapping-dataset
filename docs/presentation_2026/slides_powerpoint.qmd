@@ -5,26 +5,26 @@ format:
     slide-level: 2
 ---
 
-## Cross-City Urban Heat Hotspot Prediction
+# Legacy Quarto Stub
 
-![](build/slide_01_title_card.png){width=100%}
+This file is retained only as a historical pointer. It is not the active presentation source.
 
-## Why Transfer Matters
+The active workflow is the native PowerPoint builder:
 
-![](build/slide_02_problem_framing.png){width=100%}
+```powershell
+powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1
+```
 
-## Data + Evaluation Design
+The current editable deck is:
 
-![](build/slide_03_design.png){width=100%}
+`docs/presentation_2026/urban_heat_transfer_presentation.pptx`
 
-## Models + Main Result
+## Current Slide Structure
 
-![](build/slide_04_models_results.png){width=100%}
-
-## Held-Out Denver
-
-![](build/slide_05_denver_example.png){width=100%}
-
-## Takeaway
-
-![](build/slide_06_takeaway.png){width=100%}
+1. Cross-City Urban Heat Hotspot Prediction
+2. Research Question + Validation Design
+3. Modeling Section: Logistic vs Random Forest
+4. Results Side By Side
+5. City-Level Signal Shifts Across Evaluation Designs
+6. Held-Out Denver Map Example
+7. Questions

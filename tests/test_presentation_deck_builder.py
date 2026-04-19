@@ -31,16 +31,18 @@ def test_reusable_presentation_figures_are_written() -> None:
     data = load_presentation_data(repo_root)
     assets = build_presentation_visual_assets(repo_root, data)
 
-    assert assets.predictors_schematic_png.exists()
-    assert assets.predictors_schematic_svg.exists()
-    assert assets.evaluation_questions_png.exists()
-    assert assets.evaluation_questions_svg.exists()
-    assert assets.within_city_results_png.exists()
-    assert assets.within_city_results_svg.exists()
-    assert assets.transfer_results_png.exists()
-    assert assets.transfer_results_svg.exists()
-    assert assets.contrast_takeaway_png.exists()
-    assert assets.contrast_takeaway_svg.exists()
+    assert assets.setup_schematic_png.exists()
+    assert assets.setup_schematic_svg.exists()
+    assert assets.model_math_png.exists()
+    assert assets.model_math_svg.exists()
+    assert assets.side_by_side_results_png.exists()
+    assert assets.side_by_side_results_svg.exists()
+    assert assets.city_signal_transfer_png.exists()
+    assert assets.city_signal_transfer_svg.exists()
+    assert assets.comparison_table_png.exists()
+    assert assets.comparison_table_svg.exists()
+    assert assets.heldout_map_png.exists()
+    assert assets.heldout_map_svg.exists()
 
 
 def test_editable_pptx_has_multiple_objects_and_editable_text(tmp_path: Path) -> None:
@@ -61,7 +63,7 @@ def test_editable_pptx_has_multiple_objects_and_editable_text(tmp_path: Path) ->
     problem_slide = prs.slides[1]
     assert sum(1 for shape in problem_slide.shapes if shape.shape_type == 13) == 1
     assert any(
-        "Research question + predictors" in shape.text
+        "Research Question + Validation Design" in shape.text
         for shape in problem_slide.shapes
         if hasattr(shape, "text")
     )
@@ -69,7 +71,7 @@ def test_editable_pptx_has_multiple_objects_and_editable_text(tmp_path: Path) ->
     design_slide = prs.slides[2]
     assert sum(1 for shape in design_slide.shapes if shape.shape_type == 13) == 1
     assert any(
-        "Two evaluation questions" in shape.text
+        "Modeling Section: Logistic vs Random Forest" in shape.text
         for shape in design_slide.shapes
         if hasattr(shape, "text")
     )
@@ -77,7 +79,7 @@ def test_editable_pptx_has_multiple_objects_and_editable_text(tmp_path: Path) ->
     results_slide = prs.slides[3]
     assert sum(1 for shape in results_slide.shapes if shape.shape_type == 13) == 1
     assert any(
-        "Within-city held-out evaluation" in shape.text
+        "Results Side by Side" in shape.text
         for shape in results_slide.shapes
         if hasattr(shape, "text")
     )
@@ -90,7 +92,7 @@ def test_editable_pptx_has_multiple_objects_and_editable_text(tmp_path: Path) ->
     transfer_slide = prs.slides[4]
     assert sum(1 for shape in transfer_slide.shapes if shape.shape_type == 13) == 1
     assert any(
-        "City-held-out transfer evaluation" in shape.text
+        "City-Level Signal Shifts" in shape.text
         for shape in transfer_slide.shapes
         if hasattr(shape, "text")
     )
@@ -98,12 +100,7 @@ def test_editable_pptx_has_multiple_objects_and_editable_text(tmp_path: Path) ->
     takeaway_slide = prs.slides[5]
     assert sum(1 for shape in takeaway_slide.shapes if shape.shape_type == 13) == 1
     assert any(
-        "What the contrast shows" in shape.text
-        for shape in takeaway_slide.shapes
-        if hasattr(shape, "text")
-    )
-    assert any(
-        "Basic factors contain real hotspot signal" in shape.text
+        "Held-Out Denver Map Example" in shape.text
         for shape in takeaway_slide.shapes
         if hasattr(shape, "text")
     )

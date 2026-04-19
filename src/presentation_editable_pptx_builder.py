@@ -44,11 +44,11 @@ def build_editable_presentation(repo_root: Path, output_path: Path) -> Path:
     blank = prs.slide_layouts[6]
 
     _slide_title(prs.slides.add_slide(blank))
-    _slide_research_question(prs.slides.add_slide(blank), visual_assets)
-    _slide_evaluation_questions(prs.slides.add_slide(blank), visual_assets)
-    _slide_within_city_results(prs.slides.add_slide(blank), data, visual_assets)
-    _slide_transfer_results(prs.slides.add_slide(blank), visual_assets)
-    _slide_contrast_takeaway(prs.slides.add_slide(blank), visual_assets)
+    _slide_setup(prs.slides.add_slide(blank), visual_assets)
+    _slide_model_math(prs.slides.add_slide(blank), visual_assets)
+    _slide_side_by_side_results(prs.slides.add_slide(blank), visual_assets)
+    _slide_city_signal_transfer(prs.slides.add_slide(blank), visual_assets)
+    _slide_heldout_map(prs.slides.add_slide(blank), visual_assets)
     _slide_qa(prs.slides.add_slide(blank))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,17 +156,18 @@ def _add_picture(slide, path: Path, x: float, y: float, w: float, h: float) -> N
 
 def _slide_title(slide) -> None:
     _set_background(slide)
-    _add_oval(slide, 1180, -60, 360, 360, ACCENT, 0.90)
-    _add_oval(slide, 1280, 560, 220, 220, TEAL, 0.93)
+    _add_oval(slide, 1188, -70, 340, 340, ACCENT, 0.90)
+    _add_oval(slide, 1288, 560, 210, 210, TEAL, 0.93)
+    _add_round_rect(slide, 88, 140, 470, 10, ACCENT)
 
     _add_textbox(
         slide,
-        84,
-        180,
+        82,
+        172,
         980,
         250,
         "Cross-City Urban Heat\nHotspot Prediction",
-        39,
+        41,
         INK,
         True,
         auto_fit=True,
@@ -174,11 +175,11 @@ def _slide_title(slide) -> None:
     _add_textbox(
         slide,
         88,
-        446,
+        430,
         920,
         48,
         "Two ways to evaluate hotspot prediction",
-        23,
+        22,
         ACCENT_DARK,
         True,
         auto_fit=True,
@@ -186,17 +187,17 @@ def _slide_title(slide) -> None:
     _add_textbox(
         slide,
         88,
-        506,
+        492,
         700,
         44,
         "Max Clements | Nicholas Machado",
-        23,
+        21,
         TEAL_DARK,
         True,
         auto_fit=True,
     )
 
-    _add_round_rect(slide, 72, 790, 1360, 60, LIGHT)
+    _add_round_rect(slide, 72, 790, 1360, 58, LIGHT)
     _add_textbox(
         slide,
         96,
@@ -211,95 +212,51 @@ def _slide_title(slide) -> None:
     )
 
 
-def _slide_research_question(slide, visual_assets: PresentationVisualAssets) -> None:
-    _set_background(slide)
-    _add_textbox(
-        slide,
-        58,
-        42,
-        1080,
-        44,
-        "Research question + predictors",
-        25,
-        INK,
-        True,
-        auto_fit=True,
-    )
-    _add_round_rect(slide, 42, 112, 1516, 548, WHITE, OUTLINE, 1.2)
-    _add_picture(slide, visual_assets.predictors_schematic_png, 64, 132, 1472, 504)
-    _add_round_rect(slide, 118, 692, 1360, 64, LIGHT, OUTLINE, 0.8)
-    _add_textbox(
-        slide,
-        150,
-        706,
-        1290,
-        34,
-        "The target is city-relative: the hottest 10% of 30 m cells within each city.",
-        18,
-        TEAL_DARK,
-        True,
-        PP_ALIGN.CENTER,
-        auto_fit=True,
-    )
-
-
-def _slide_evaluation_questions(slide, visual_assets: PresentationVisualAssets) -> None:
-    _set_background(slide)
-    _add_textbox(slide, 58, 42, 980, 44, "Two evaluation questions", 25, INK, True, auto_fit=True)
-    _add_round_rect(slide, 42, 112, 1516, 578, WHITE, OUTLINE, 1.2)
-    _add_picture(slide, visual_assets.evaluation_questions_png, 64, 130, 1472, 534)
-    _add_textbox(
-        slide,
-        130,
-        724,
-        1340,
-        36,
-        "The split design changes the use case being measured.",
-        18,
-        TEAL_DARK,
-        True,
-        PP_ALIGN.CENTER,
-        auto_fit=True,
-    )
-
-
-def _slide_within_city_results(
-    slide, data: PresentationData, visual_assets: PresentationVisualAssets
-) -> None:
+def _slide_setup(slide, visual_assets: PresentationVisualAssets) -> None:
     _set_background(slide)
     _add_textbox(
         slide,
         52,
         36,
-        1100,
+        1280,
+        44,
+        "Research Question + Validation Design",
+        25,
+        INK,
+        True,
+        auto_fit=True,
+    )
+    _add_round_rect(slide, 42, 102, 1516, 746, WHITE, OUTLINE, 1.2)
+    _add_picture(slide, visual_assets.setup_schematic_png, 64, 116, 1472, 704)
+
+
+def _slide_model_math(slide, visual_assets: PresentationVisualAssets) -> None:
+    _set_background(slide)
+    _add_textbox(slide, 52, 36, 980, 44, "Modeling Section: Logistic vs Random Forest", 25, INK, True, auto_fit=True)
+    _add_round_rect(slide, 42, 102, 1516, 746, WHITE, OUTLINE, 1.2)
+    _add_picture(slide, visual_assets.model_math_png, 64, 116, 1472, 704)
+
+
+def _slide_side_by_side_results(slide, visual_assets: PresentationVisualAssets) -> None:
+    _set_background(slide)
+    _add_textbox(
+        slide,
+        52,
+        36,
+        1320,
         60,
-        "Within-city held-out evaluation",
+        "Results Side by Side",
         25,
         INK,
         True,
         auto_fit=True,
     )
 
-    _add_round_rect(slide, 44, 112, 1512, 540, WHITE, OUTLINE, 1.2)
-    _add_picture(slide, visual_assets.within_city_results_png, 84, 132, 1432, 496)
-
-    _add_round_rect(slide, 86, 684, 1428, 74, LIGHT, OUTLINE, 0.8)
-    _add_textbox(
-        slide,
-        126,
-        698,
-        1348,
-        38,
-        f"We treat these results as within-city / row-level evidence because support counts are about {data.partner_support_fraction_mean:.0%} of each city's rows.",
-        18,
-        MUTED,
-        False,
-        PP_ALIGN.CENTER,
-        auto_fit=True,
-    )
+    _add_round_rect(slide, 44, 102, 1512, 746, WHITE, OUTLINE, 1.2)
+    _add_picture(slide, visual_assets.side_by_side_results_png, 70, 116, 1460, 704)
 
 
-def _slide_transfer_results(slide, visual_assets: PresentationVisualAssets) -> None:
+def _slide_city_signal_transfer(slide, visual_assets: PresentationVisualAssets) -> None:
     _set_background(slide)
     _add_textbox(
         slide,
@@ -307,64 +264,37 @@ def _slide_transfer_results(slide, visual_assets: PresentationVisualAssets) -> N
         36,
         1320,
         46,
-        "City-held-out transfer evaluation",
+        "City-Level Signal Shifts Across Evaluation Designs",
         25,
         INK,
         True,
         auto_fit=True,
     )
-    _add_round_rect(slide, 44, 112, 1512, 540, WHITE, OUTLINE, 1.2)
-    _add_picture(slide, visual_assets.transfer_results_png, 84, 132, 1432, 496)
-    _add_round_rect(slide, 86, 684, 1428, 74, LIGHT, OUTLINE, 0.8)
-    _add_textbox(
-        slide,
-        126,
-        698,
-        1348,
-        38,
-        "To measure transfer to new cities, whole cities are withheld during model fitting and tuning.",
-        18,
-        MUTED,
-        False,
-        PP_ALIGN.CENTER,
-        auto_fit=True,
-    )
+    _add_round_rect(slide, 44, 102, 1512, 746, WHITE, OUTLINE, 1.2)
+    _add_picture(slide, visual_assets.city_signal_transfer_png, 70, 116, 1460, 704)
 
 
-def _slide_contrast_takeaway(slide, visual_assets: PresentationVisualAssets) -> None:
+def _slide_heldout_map(slide, visual_assets: PresentationVisualAssets) -> None:
     _set_background(slide)
     _add_textbox(
         slide,
         52,
-        42,
+        36,
         1460,
-        72,
-        "What the contrast shows",
+        60,
+        "Held-Out Denver Map Example",
         25,
         INK,
         True,
         auto_fit=True,
     )
-    _add_round_rect(slide, 44, 124, 1512, 564, WHITE, OUTLINE, 1.2)
-    _add_picture(slide, visual_assets.contrast_takeaway_png, 68, 144, 1464, 518)
-    _add_textbox(
-        slide,
-        150,
-        724,
-        1300,
-        36,
-        "Basic factors contain real hotspot signal, but transfer to unseen cities is the hard part.",
-        19,
-        TEAL_DARK,
-        True,
-        PP_ALIGN.CENTER,
-        auto_fit=True,
-    )
+    _add_round_rect(slide, 44, 102, 1512, 746, WHITE, OUTLINE, 1.2)
+    _add_picture(slide, visual_assets.heldout_map_png, 70, 116, 1460, 704)
 
 
 def _slide_qa(slide) -> None:
     _set_background(slide)
     _add_oval(slide, 1220, 40, 320, 320, ACCENT, 0.9)
-    _add_oval(slide, 1280, 560, 220, 220, TEAL, 0.93)
+    _add_oval(slide, 1288, 560, 210, 210, TEAL, 0.93)
 
-    _add_textbox(slide, 78, 246, 560, 88, "Questions?", 42, INK, True, auto_fit=True)
+    _add_textbox(slide, 84, 284, 600, 94, "Questions?", 42, INK, True, auto_fit=True)

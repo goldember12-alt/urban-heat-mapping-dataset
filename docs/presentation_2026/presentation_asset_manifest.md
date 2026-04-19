@@ -4,26 +4,24 @@
 
 | Path | Role | Slide(s) | Why used |
 | --- | --- | --- | --- |
-| `data_processed/final/final_dataset_artifact_summary.json` | canonical dataset size and schema summary | 2 | supplies the row and column context for the modeling handoff |
+| `data_processed/final/final_dataset_artifact_summary.json` | canonical dataset size and schema summary | 2 | supplies the row context for the modeling handoff |
 | `data_processed/modeling/final_dataset_audit_summary.json` | modeling-input audit summary | 2 | confirms `30` cities and the `hotspot_10pct` target |
-| `data_processed/modeling/city_outer_folds.csv` | held-out-city split contract | 3, 5 | confirms `5` outer folds and `6` held-out cities per fold |
+| `data_processed/modeling/city_outer_folds.csv` | held-out-city split contract | 2, 4 | confirms `5` outer folds and `6` held-out cities per fold |
 | `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_metadata.json` | partner result metadata | 4 | records the inferred support fraction used for careful 70/30 split language |
-| `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_model_summary.csv` | partner model summary | 4, 6 | supplies mean hotspot precision, recall, and F1 for logistic and random forest |
-| `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv` | retained city-held-out benchmark metrics | 5, 6 | supplies logistic 5k and RF frontier transfer metrics |
+| `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_model_summary.csv` | partner model summary | 4 | supplies mean hotspot precision, recall, and F1 for logistic and random forest |
+| `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_vs_repo_city_comparison.csv` | city-level partner/repo comparison | 5 | supplies the 30-city scatter comparison between within-city RF metrics and city-held-out RF metrics |
+| `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv` | retained city-held-out benchmark metrics | 4 | supplies logistic 5k and RF frontier transfer metrics |
+| `outputs/modeling/reporting/heldout_city_maps/heldout_city_map_points.parquet` | retained held-out map points | 6 | supplies the Denver predicted, observed, and error-map panels |
 
 ## Active Figures
 
 | Path | Slide | Why used |
 | --- | --- | --- |
-| `figures/presentation/research_question_predictors.(png|svg)` | 2 | presentation-native schematic linking basic predictors to `hotspot_10pct` |
-| `figures/presentation/two_evaluation_questions.(png|svg)` | 3 | side-by-side conceptual anchor for within-city held-out versus city-held-out transfer |
-| `figures/presentation/within_city_hotspot_results.(png|svg)` | 4 | clean hotspot precision/recall/F1 summary from partner results |
-| `figures/presentation/city_heldout_transfer_results.(png|svg)` | 5 | retained repo benchmark comparison for pooled PR AUC, mean city PR AUC, and recall at top 10% |
-| `figures/presentation/evaluation_contrast_takeaway.(png|svg)` | 6 | synthesis graphic showing that the two methodologies answer different use cases |
-
-## Retired From The Active Story
-
-The previous 7-slide version emphasized an end-to-end workflow, model math, a Denver map, and climate heterogeneity. Those artifacts remain useful for the broader project, but the active presentation no longer uses them because the narrative has shifted to comparing two evaluation methodologies.
+| `figures/presentation/setup_predictors_evaluation_questions.(png|svg)` | 2 | combines target, predictors, and two evaluation questions into one setup graphic |
+| `figures/presentation/logistic_rf_model_math.(png|svg)` | 3 | shows the logistic-versus-random-forest model logic as two visual panels using the same six input features |
+| `figures/presentation/within_city_vs_transfer_results.(png|svg)` | 4 | places partner within-city metrics and repo city-held-out metrics side by side |
+| `figures/presentation/city_signal_transfer_relationship.(png|svg)` | 5 | data-rich city-level scatter view showing that within-city strength and transfer strength differ |
+| `figures/presentation/heldout_denver_map_focus.(png|svg)` | 6 | presentation-oriented Denver held-out benchmark map showing predicted top-decile risk, observed hotspots, and categorical errors |
 
 ## Metric Checks Used In Deck
 
