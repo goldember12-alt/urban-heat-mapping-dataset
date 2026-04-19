@@ -27,5 +27,5 @@ powershell -ExecutionPolicy Bypass -File .\render_presentation.ps1
 
 - The deck is intentionally optimized for projected presentation, so the notes file carries the detailed narrative.
 - The active deck is editable in PowerPoint: text boxes, cards, and callout panels are native objects.
-- Only the benchmark chart and Denver map remain raster figures.
+- Slides 2 through 6 place reusable presentation figures generated under `figures/presentation/`.
 - Legacy Reveal / HTML outputs are not part of the active workflow anymore.

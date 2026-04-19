@@ -1,38 +1,50 @@
 # Presentation Outline
 
-This deck is now `7` slides total: `1` title slide, `5` content slides, and `1` Q&A slide.
+This deck is `7` slides total: `1` title slide, `5` content slides, and `1` Q&A slide.
+
+The central story is the contrast between two useful evaluation questions:
+
+- within-city held-out evaluation, using the isolated partner logistic/RF results
+- city-held-out transfer evaluation, using the repo's retained canonical logistic/RF benchmark
 
 ## Slide 1 - Cross-City Urban Heat Hotspot Prediction
 
-- sparse coauthored opener with the transfer framing and dataset scale
-- goal: set the room quickly without a busy roadmap card
+- sparse title opener
+- frames the talk as a comparison of two evaluation approaches
 
-## Slide 2 - Why Transfer Matters
+## Slide 2 - Research Question + Predictors
 
-- reusable framing schematic plus one dominant research question
-- goal: establish visually that unseen-city transfer is harder than same-city interpolation
+- states the research question plainly: can basic environmental and built-environment factors predict hotspot cells?
+- shows the target and first-pass predictors: imperviousness, land cover, elevation, distance to water, NDVI, and climate group
+- goal: make the modeling problem legible before discussing validation design
 
-## Slide 3 - Data + Evaluation Design
+## Slide 3 - Two Evaluation Questions
 
-- stat chips plus a reusable held-out-city evaluation schematic
-- goal: show the analytic unit, target, fold logic, and training-only tuning rule at a glance
+- side-by-side schematic contrasting within-city held-out cells and city-held-out transfer
+- left side asks whether models can identify hotspot structure when cities are represented in training
+- right side asks whether models can generalize to cities not seen during training
+- goal: make the evaluation design the conceptual anchor of the talk
 
-## Slide 4 - Models + Main Result
+## Slide 4 - Within-City Held-Out Evaluation
 
-- combines the two compact model equations with the benchmark figure and three metric callouts
-- goal: keep the formal machine-learning framing while letting the figure carry the evidence
+- uses partner results from `outputs/modeling/partner_data/per_city_logistic_rf_results/`
+- emphasizes hotspot precision, recall, and F1 rather than accuracy
+- states carefully that support counts appear consistent with about a 30% held-out sample per city
+- goal: show strong learnable hotspot signal, especially for random forest, under a within-city question
 
-## Slide 5 - Held-Out Denver
+## Slide 5 - City-Held-Out Transfer Evaluation
 
-- gives the Denver triptych almost the full slide
-- goal: show that misses remain spatially structured rather than random noise
+- uses retained repo benchmark values for logistic 5k versus RF frontier
+- shows pooled PR AUC, mean city PR AUC, and recall at top 10% predicted risk
+- goal: show that transfer is harder, with RF improving pooled retrieval while logistic remains competitive on mean city performance
 
-## Slide 6 - Takeaway
+## Slide 6 - What The Contrast Shows
 
-- one answer sentence plus a visual signal / caveat / next-step close
-- goal: end with the conclusion the audience should remember
+- synthesizes the two evaluation methodologies without ranking one as inherently better
+- message: models learn within-city hotspot structure more readily than they transfer across cities
+- implication: evaluation must match the intended use case
 
 ## Slide 7 - Q&A
 
-- bare-bones closing card in the same visual language as the title slide
-- goal: give the room a clean stopping point without turning the last content slide into a questions slide
+- simple closing slide
+- one-line verbal takeaway: basic factors contain real hotspot signal, but transfer to unseen cities is the hard part

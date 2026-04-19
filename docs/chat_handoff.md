@@ -1,5 +1,235 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-19 - Checkpoint: Presentation Rebuilt Around Two Evaluation Questions
+
+- Date / checkpoint:
+  - 2026-04-19 restructuring pass for `docs/presentation_2026`.
+- Change made:
+  - Rebuilt the active 7-slide presentation around an objective contrast between within-city held-out evaluation and city-held-out transfer evaluation.
+  - Kept Slide 1 as the title opener and Slide 7 as Q&A.
+  - Replaced the prior workflow / model-math / Denver / climate-heterogeneity content arc with:
+    - Slide 2: research question and predictor schematic.
+    - Slide 3: side-by-side two-evaluation-questions schematic.
+    - Slide 4: partner within-city-style hotspot precision, recall, and F1 summary.
+    - Slide 5: repo city-held-out transfer benchmark summary.
+    - Slide 6: synthesis of what the methodological contrast shows.
+  - Added partner summary fields to `src.presentation_deck_builder.load_presentation_data`, sourced from `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_model_summary.csv` and `partner_results_metadata.json`.
+  - Updated presentation docs to keep the new narrative, notes, asset manifest, rendering notes, and changelog aligned.
+- Figures/assets added or replaced:
+  - Added `figures/presentation/research_question_predictors.(png|svg)`.
+  - Added `figures/presentation/two_evaluation_questions.(png|svg)`.
+  - Added `figures/presentation/within_city_hotspot_results.(png|svg)`.
+  - Added `figures/presentation/city_heldout_transfer_results.(png|svg)`.
+  - Added `figures/presentation/evaluation_contrast_takeaway.(png|svg)`.
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+- Files touched:
+  - `src/presentation_deck_builder.py`
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/presentation_rendering_notes.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\presentation_deck_builder.py src\presentation_visual_assets.py src\presentation_editable_pptx_builder.py tests\test_presentation_deck_builder.py` passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py -q` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated the PowerPoint successfully with `render_presentation.ps1`.
+  - Inspected the regenerated `.pptx` object structure: `7` slides; Slides 2 through 6 each contain one figure image plus sparse editable text; Slide 7 remains picture-free.
+  - No full-slide PowerPoint visual export was completed in-session, so a projector-scale PowerPoint skim is still recommended.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in PowerPoint and visually skim Slides 2 through 6 for projector-scale spacing and readability.
+
+### 2026-04-18 - Checkpoint: Partner Logistic/RF Results Isolated And Summarized
+
+- Date / checkpoint:
+  - 2026-04-18 analysis of partner-provided `per_city_logistic_rf_results.csv`.
+- Change made:
+  - Created a clearly separate partner-results area at `outputs/modeling/partner_data/per_city_logistic_rf_results/`.
+  - Copied the partner source CSV into that folder as `partner_per_city_logistic_rf_results.csv`.
+  - Added a written analysis at `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_summary.md`.
+  - Added metadata, derived tables, and figures under the same folder rather than mixing the file into canonical model-run directories.
+  - Inferred from support counts that the partner file most likely reflects a row-level or within-city `70/30` holdout split: every city appears, each city contributes almost exactly `30%` of canonical rows, and class `1` prevalence is about `10%`.
+  - Compared the partner thresholded classification-report metrics against the repo's retained city-held-out logistic/RF comparison and recorded weak correlations, reinforcing that the partner file is useful supporting diagnostic evidence but not a replacement transfer benchmark.
+- Files touched:
+  - `.codex_tmp/analyze_partner_results.py`
+  - `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_per_city_logistic_rf_results.csv`
+  - `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_summary.md`
+  - `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_metadata.json`
+  - `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/*.csv`
+  - `outputs/modeling/partner_data/per_city_logistic_rf_results/figures/*.png`
+  - `docs/chat_handoff.md`
+- Test status:
+  - No production code or test logic changed.
+- Manual verification status:
+  - Ran `python .codex_tmp\analyze_partner_results.py` successfully.
+  - Verified five generated PNG figures with PIL dimensions and nonzero pixel variation.
+  - Read `docs/presentation_2026/` text sources and `docs/report/cross_city_urban_heat_report.md` for narrative comparison without editing those files.
+- Immediate Next Step:
+  - If the partner results are incorporated into the presentation or report, include them as an explicitly supplemental/easier-split diagnostic near the existing within-city/random-row-split caveat, not as part of the headline city-held-out benchmark.
+
+### 2026-04-18 - Checkpoint: Slide 4 Rescue + Slide 6 Caption Pass
+
+- Date / checkpoint:
+  - 2026-04-18 targeted response to slide-by-slide presentation feedback.
+- Change made:
+  - Left Slides 1, 2, 3, 5, and 7 visually unchanged.
+  - Replaced the overlapping Slide 4 left-side editable text stack with a new rendered `figures/presentation/project_model_math.(png|svg)` panel.
+  - Removed Slide 4's crowded subtitle so it no longer sits behind the project-math panel or the right-side result figure.
+  - Kept the Slide 4 logistic-versus-random-forest result diagram on the right and moved the sampled-checkpoint caveat into a separate right-aligned caption box.
+  - Adjusted the random-forest summation in the Slide 4 project-math panel so the sigma notation has enough vertical space and does not collide with the row title or note.
+  - Split Slide 6 into a figure box plus a separate right-aligned caption box below the figure.
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+  - Verified the active `.pptx` object structure after replacement: Slide 4 now has `2` picture objects and only two editable text boxes; Slide 6 has a separate caption text box; editable text remains at least `18 pt`.
+- Manual verification status:
+  - Manually inspected the extracted Slide 4 project-math image after regeneration; revised it until the math panel no longer overlapped internally, including the random-forest summation.
+  - Native PowerPoint COM preview export remains unavailable in this sandbox, so final full-slide visual verification should still happen in PowerPoint.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` and visually skim Slides 4 and 6 at projector scale.
+
+### 2026-04-18 - Checkpoint: Audience-Facing Presentation Polish + Math Pass
+
+- Date / checkpoint:
+  - 2026-04-18 focused pass on the latest manually revised editable PowerPoint in `docs/presentation_2026/`.
+- Change made:
+  - Inspected the latest `.pptx` object structure and extracted its embedded figure images before changing the generator.
+  - Updated `src/presentation_editable_pptx_builder.py` so future renders preserve the manually simplified Slide 7, keep Slides 1/3/5/7 visually stable, and keep editable text at `18 pt` or larger.
+  - Reworded Slide 2 as an audience-facing end-to-end urban heat workflow while preserving the colored stage blocks and scale numbers.
+  - Rebuilt Slide 4's left-side explanation as project-specific math for `hotspot_10pct`, the six safe predictors, train-city-only preprocessing, and tuned logistic / random-forest settings; kept the logistic-versus-RF result diagram on the right.
+  - Reworked Slide 6's climate heterogeneity figure to show per-city deltas, climate means, standard deviations, and middle-50% spread bars, with a concise interpretation note.
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+- Files touched:
+  - `src/presentation_editable_pptx_builder.py`
+  - `src/presentation_visual_assets.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+  - Verified the active `.pptx` object structure after replacement: `7` slides, intended figure counts, and no editable text runs below `18 pt`.
+- Manual verification status:
+  - Manually inspected extracted embedded images for the revised Slide 2 workflow, Slide 4 benchmark diagram, and Slide 6 climate figure.
+  - Native PowerPoint COM PNG export was attempted but still blocked in this sandbox by `80070520 A specified logon session does not exist`, so no fresh full-slide render claim is made.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in PowerPoint for a final projector-scale skim, especially Slide 4's math panel and Slide 6's climate figure.
+
+### 2026-04-18 - Checkpoint: Report-Aligned Presentation Revision
+
+- Date / checkpoint:
+  - 2026-04-18 targeted revision of the editable cross-city transfer PowerPoint deck after manual slide edits.
+- Change made:
+  - Replaced the redundant Slide 2 transfer-framing schematic with a workflow/product slide using `figures/presentation/data_to_transfer_workflow.(png|svg)`.
+  - Kept Slide 1, Slide 3, Slide 5, and Slide 7 visually unchanged in purpose; Slide 3 remains the held-out-city validation slide.
+  - Reworked Slide 4 left-side method text into math-style logistic and random-forest formulas with actual pipeline/tuning context, and made the `5,000 rows/city` sampled benchmark caveat explicit.
+  - Adjusted the Slide 4 benchmark figure spacing so the logistic/random-forest legend no longer overlaps the recall-at-top-10% values.
+  - Replaced the Slide 6 text-card summary with `figures/presentation/transfer_climate_heterogeneity.(png|svg)`, a scientific RF-minus-logistic climate-delta figure built from retained report tables.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Manually inspected the regenerated reusable figure PNGs for Slide 2, Slide 4, and Slide 6; fixed a Slide 2 stats/benchmark overlap and a Slide 4 subtitle/value-label overlap before final render.
+  - Verified from the regenerated `.pptx` object structure that the deck remains `7` slides, title/Q&A slides have no picture objects, and Slides 2 through 6 each contain one separate figure image plus editable text.
+  - Attempted native PowerPoint COM slide export for a fresh rendered preview, but this sandbox session returned `80070520 A specified logon session does not exist`; no visual-render claim is made from COM export.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in Microsoft PowerPoint for a final projector-scale visual skim, especially around the new math-style formulas on Slide 4.
+
+### 2026-04-18 - Checkpoint: Figure-Led Scientific Redesign Pass For Transfer Presentation
+
+- Date / checkpoint:
+  - 2026-04-18 focused redesign pass on the editable cross-city transfer PowerPoint deck.
+- Change made:
+  - Reworked `src.presentation_editable_pptx_builder` so Slide 1 is now a minimal title opener and Slides 2, 3, 4, and 6 are rebuilt around one dominant scientific-style figure per slide rather than card-heavy PowerPoint composition.
+  - Expanded `src.presentation_visual_assets` from two schematics to four reusable presentation figures, refreshing the transfer framing and benchmark-design assets and adding new reusable result-comparison and takeaway-summary figures under `figures/presentation/`.
+  - Tightened Slide 4 model-definition text, shortened and clarified Slide 5 title/caption copy, and improved title sizing / box geometry across the deck so awkward wrapping and underfilled containers no longer drive the layout.
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx` and updated the presentation changelog / asset manifest to document the figure-led redesign.
+- Files touched:
+  - `src/presentation_visual_assets.py`
+  - `src/presentation_editable_pptx_builder.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Verified by scratch rendering that Slide 1 is title-dominant and minimal, Slides 2 and 3 are now figure-led scientific schematics, Slide 4 is organized around one dominant result figure with compact model labels, Slide 5 preserves the Denver figure while using tighter text, and Slide 6 closes with a compact summary figure rather than text cards.
+  - Verified that `figures/presentation/transfer_problem_schematic.(png|svg)`, `heldout_city_cv_schematic.(png|svg)`, `transfer_benchmark_result_comparison.(png|svg)`, and `transfer_takeaway_summary.(png|svg)` all exist as reusable assets.
+  - Verified that the regenerated `.pptx` remains a native editable `7`-slide PowerPoint with editable text objects and separate picture objects where intended.
+  - Scratch preview folders under `docs/presentation_2026/preview_rendered*` remain untracked because a cleanup delete was blocked by the sandbox policy.
+- Immediate Next Step:
+  - If any final tweak is still desired, it is now a projector-specific manual nudge in PowerPoint rather than another structural redesign pass.
+
+### 2026-04-18 - Checkpoint: Narrow PowerPoint Cleanup + Visual Strengthening Pass
+
+- Date / checkpoint:
+  - 2026-04-18 cleanup pass on the editable cross-city transfer presentation deck.
+- Change made:
+  - Updated `src.presentation_editable_pptx_builder` to tighten text-box sizing, padding, and slide-space usage across all seven slides while preserving the deck sequence, editable-object workflow, and overall visual language.
+  - Simplified Slide 1 and Slide 7, pushed Slides 2, 3, and 6 further toward figure-led communication, and cleaned up Slide 4 and Slide 5 spacing without changing the core story or benchmark claims.
+  - Refreshed the reusable Slide 2 and Slide 3 schematic builders in `src.presentation_visual_assets`, writing updated `transfer_problem_schematic.(png|svg)` and `heldout_city_cv_schematic.(png|svg)` under `figures/presentation/`.
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx` and updated `docs/presentation_2026/presentation_changelog.md` with the slide-by-slide cleanup notes.
+- Files touched:
+  - `src/presentation_editable_pptx_builder.py`
+  - `src/presentation_visual_assets.py`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests/test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Verified from the regenerated `.pptx` object text that Slide 1 now carries the simplified title framing, Slide 2 uses the cleaned `Question` label and figure-led transfer framing, and Slide 7 is a minimal Q&A card with only question + author/course text.
+  - Verified by scratch rendering that Slide 3 now reads as a benchmark-design slide, Slide 4 has cleaner method-card spacing, Slide 5 preserves the figure-led map treatment, and Slide 6 uses a graphical signal / caveat / next-step close instead of the older text-card layout.
+  - Verified that the updated schematic assets were rewritten in `figures/presentation/` and that the deck remains a native editable PowerPoint with `7` slides and editable text objects on every slide.
+- Immediate Next Step:
+  - Open `docs/presentation_2026/urban_heat_transfer_presentation.pptx` in Microsoft PowerPoint for any last projector-specific nudges, especially if the external benchmark chart or Denver figure need source-level recropping rather than slide-level framing.
+
 ### 2026-04-18 - Checkpoint: Figure-Led Editable Deck Revision
 
 - Date / checkpoint:

@@ -1,0 +1,27 @@
+{
+  "source_csv": "C:\\Users\\golde\\Downloads\\per_city_logistic_rf_results.csv",
+  "copied_csv": "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\partner_per_city_logistic_rf_results.csv",
+  "rows": 60,
+  "cities": 30,
+  "models": [
+    "logistic",
+    "rf"
+  ],
+  "inferred_support_fraction_mean": 0.3000003971676046,
+  "figure_paths": [
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\figures\\partner_city_class1_metrics.png",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\figures\\partner_metric_summary.png",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\figures\\partner_rf_minus_logistic_class1_deltas.png",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\figures\\partner_support_alignment.png",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\figures\\partner_vs_repo_delta_contrast.png"
+  ],
+  "table_paths": [
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_city_model_metrics.csv",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_climate_summary.csv",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_model_summary.csv",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_rf_minus_logistic_deltas.csv",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_support_alignment.csv",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_vs_repo_city_comparison.csv",
+    "C:\\Users\\golde\\OneDrive - University of Virginia\\STAT5630_FinalProject_DataProcessing\\outputs\\modeling\\partner_data\\per_city_logistic_rf_results\\tables\\partner_vs_repo_correlations.csv"
+  ]
+}

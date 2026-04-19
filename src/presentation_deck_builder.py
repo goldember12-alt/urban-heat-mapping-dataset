@@ -32,6 +32,18 @@ class BenchmarkRun:
 
 
 @dataclass(frozen=True)
+class PartnerModelSummary:
+    model: str
+    model_label: str
+    city_count: int
+    class_1_precision_mean: float
+    class_1_recall_mean: float
+    class_1_f1_mean: float
+    macro_f1_mean: float
+    accuracy_mean: float
+
+
+@dataclass(frozen=True)
 class PresentationData:
     city_count: int
     row_count: int
@@ -41,6 +53,9 @@ class PresentationData:
     held_out_cities_per_fold: int
     logistic_5k: BenchmarkRun
     rf_frontier: BenchmarkRun
+    partner_logistic: PartnerModelSummary
+    partner_rf: PartnerModelSummary
+    partner_support_fraction_mean: float
     benchmark_figure_path: Path
     denver_figure_path: Path
 
@@ -75,6 +90,18 @@ def load_presentation_data(repo_root: Path) -> PresentationData:
     benchmark_rows = _load_csv(
         _repo_path(repo_root, "outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv")
     )
+    partner_model_rows = _load_csv(
+        _repo_path(
+            repo_root,
+            "outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_model_summary.csv",
+        )
+    )
+    partner_metadata = _load_json(
+        _repo_path(
+            repo_root,
+            "outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_metadata.json",
+        )
+    )
 
     fold_ids = sorted({int(row["outer_fold"]) for row in folds_rows})
     fold_sizes = {fold_id: 0 for fold_id in fold_ids}
@@ -91,6 +118,20 @@ def load_presentation_data(repo_root: Path) -> PresentationData:
         for row in benchmark_rows
         if row["model_family"] == "random_forest" and row["preset"] == "frontier"
     )
+    partner_logistic_row = next(row for row in partner_model_rows if row["model"] == "logistic")
+    partner_rf_row = next(row for row in partner_model_rows if row["model"] == "rf")
+
+    def partner_summary(row: dict[str, str]) -> PartnerModelSummary:
+        return PartnerModelSummary(
+            model=str(row["model"]),
+            model_label=str(row["model_label"]),
+            city_count=int(row["city_count"]),
+            class_1_precision_mean=float(row["class_1_precision_mean"]),
+            class_1_recall_mean=float(row["class_1_recall_mean"]),
+            class_1_f1_mean=float(row["class_1_f1_mean"]),
+            macro_f1_mean=float(row["macro_f1_mean"]),
+            accuracy_mean=float(row["accuracy_mean"]),
+        )
 
     return PresentationData(
         city_count=int(audit_summary["city_count"]),
@@ -115,6 +156,9 @@ def load_presentation_data(repo_root: Path) -> PresentationData:
             mean_city_pr_auc=float(rf_row["mean_city_pr_auc"]),
             pooled_recall_at_top_10pct=float(rf_row["pooled_recall_at_top_10pct"]),
         ),
+        partner_logistic=partner_summary(partner_logistic_row),
+        partner_rf=partner_summary(partner_rf_row),
+        partner_support_fraction_mean=float(partner_metadata["inferred_support_fraction_mean"]),
         benchmark_figure_path=_repo_path(
             repo_root, "figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png"
         ),
