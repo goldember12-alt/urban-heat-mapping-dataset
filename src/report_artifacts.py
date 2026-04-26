@@ -1036,6 +1036,35 @@ def plot_city_metric_deltas(city_error: pd.DataFrame, output_path: Path) -> None
     plt.close(fig)
 
 
+def plot_city_rf_pr_auc(city_error: pd.DataFrame, output_path: Path) -> None:
+    """Write absolute retained random-forest PR AUC by held-out city."""
+
+    plot_df = city_error.copy()
+    plot_df["Climate group"] = plot_df["climate_group"].map(_format_climate_group)
+    plot_df = plot_df.sort_values("pr_auc_rf", ascending=True).reset_index(drop=True)
+    y_positions = np.arange(len(plot_df))
+    colors = [CLIMATE_COLORS[group] for group in plot_df["Climate group"]]
+
+    fig, ax = plt.subplots(figsize=(9, 10.5))
+    ax.barh(y_positions, plot_df["pr_auc_rf"], color=colors)
+    ax.axvline(0.10, color="#333333", linewidth=1.2, linestyle="--", alpha=0.85)
+    ax.text(0.103, len(plot_df) - 1.0, "10% reference", ha="left", va="center", fontsize=8.5)
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(plot_df["city_name"], fontsize=9)
+    ax.set_xlabel("Random-forest city PR AUC")
+    ax.set_ylabel("")
+    ax.set_title("Absolute Random-Forest Performance by Held-Out City")
+    ax.set_xlim(0.06, max(0.48, float(plot_df["pr_auc_rf"].max()) + 0.03))
+    ax.grid(axis="x", alpha=0.25)
+    ax.set_axisbelow(True)
+
+    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in CLIMATE_COLORS.values()]
+    ax.legend(handles, list(CLIMATE_COLORS.keys()), title="Climate group", loc="lower right", frameon=False)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def generate_report_artifacts(project_root: Path) -> list[Path]:
     """Generate high-priority report tables and the optional row-count figure."""
 
@@ -1080,6 +1109,7 @@ def generate_report_artifacts(project_root: Path) -> list[Path]:
     evaluation_design_path = paths.figures_dir / "evaluation_design.png"
     benchmark_figure_path = paths.figures_dir / "benchmark_metrics.png"
     city_delta_figure_path = paths.figures_dir / "city_metric_deltas.png"
+    city_rf_pr_auc_figure_path = paths.figures_dir / "city_rf_pr_auc.png"
 
     data_sources.to_csv(data_sources_path, index=False)
     final_columns.to_csv(final_columns_path, index=False)
@@ -1097,6 +1127,7 @@ def generate_report_artifacts(project_root: Path) -> list[Path]:
     plot_evaluation_design(evaluation_design_path)
     plot_benchmark_metric_comparison(benchmark_report, benchmark_figure_path)
     plot_city_metric_deltas(city_error, city_delta_figure_path)
+    plot_city_rf_pr_auc(city_error, city_rf_pr_auc_figure_path)
 
     return [
         data_sources_path,
@@ -1115,4 +1146,5 @@ def generate_report_artifacts(project_root: Path) -> list[Path]:
         evaluation_design_path,
         benchmark_figure_path,
         city_delta_figure_path,
+        city_rf_pr_auc_figure_path,
     ]

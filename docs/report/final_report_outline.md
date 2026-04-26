@@ -2,7 +2,7 @@
 
 Working title:
 
-**Cross-City Urban Heat Hotspot Prediction: A 30 m Dataset and City-Held-Out Transfer Benchmark**
+**Cross-City Urban Heat Hotspot Screening: Within-City Learning and City-Held-Out Transfer**
 
 Collaborators:
 
@@ -37,9 +37,9 @@ Working interpretation after reading the assignment:
 
 ## Core Narrative
 
-Urban heat varies at fine spatial scales, but models evaluated with ordinary row-level splits can overstate how well they would generalize to cities that did not contribute training labels. This project builds a standardized 30 m cell-level dataset for 30 U.S. cities and evaluates whether non-thermal geospatial predictors can identify the hottest within-city cells in fully held-out cities. The main contribution is therefore twofold: a reproducible cross-city urban heat dataset and a leakage-safe city-held-out modeling benchmark.
+Urban heat varies at fine spatial scales, but the meaning of model performance depends on the validation design. This project builds a standardized 30 m cell-level dataset for 30 U.S. cities and evaluates whether basic environmental and built-environment predictors can identify the hottest within-city cells under two settings: within-city held-out evaluation and whole-city holdout transfer. The main contribution is therefore threefold: a reproducible cross-city urban heat dataset, an explicit comparison of same-city hotspot screening against unseen-city transfer, and a leakage-safe city-held-out benchmark.
 
-The conclusion should be deliberately bounded. The retained predictors show limited but real transferable ranking signal, strongest in hot-arid cities; the current model is not a robust all-city hotspot identifier. The strongest current random-forest checkpoint improves pooled PR AUC and top-decile recall relative to the matched logistic regression checkpoint, but its gains over simple baselines are modest and city-level wins are heterogeneous. The project supports a transfer-screening benchmark with clear limits, not deployment-ready heat-risk classification.
+The conclusion should be deliberately bounded but not apologetic. The retained predictors contain real hotspot signal. Within-city held-out evaluation makes random forest look clearly stronger than logistic regression on hotspot precision, recall, and F1. City-held-out transfer is weaker, closer between models, and more heterogeneous: random forest modestly improves pooled PR AUC and top-decile recall relative to the matched logistic checkpoint, while logistic remains competitive and slightly stronger on mean city PR AUC. The project supports a validation-design comparison and transfer-screening benchmark with clear limits, not deployment-ready heat-risk classification.
 
 ## Main Text
 
@@ -55,7 +55,7 @@ Purpose:
   - many remote-sensing urban heat studies map one city or summarize correlations.
   - LST studies commonly link heat with impervious surface, vegetation/NDVI, water, and land cover.
   - spatial prediction can look stronger under random row/cell splits than under spatial or city-level validation.
-  - this project asks the harder transfer question by holding out entire cities.
+  - this project separates the easier same-city screening question from the harder transfer question by also holding out entire cities.
 
 Target expansion:
 
@@ -77,9 +77,9 @@ Update from proposal:
 - Avoid presenting Phoenix exploratory summaries as the project result.
 - Cite the completed final dataset size and city coverage.
 
-Partner gap:
+Insertion note:
 
-`[PARTNER TODO: Add 1-2 paragraphs of related-work context and citations on urban heat mapping, remotely sensed LST, or transfer/generalization in spatial ML. Keep this aligned with the dataset and transfer benchmark rather than a broad climate-change essay.]`
+`[Insert related-work extension here: add 1-2 paragraphs of related-work context and citations on urban heat mapping, remotely sensed LST, or transfer/generalization in spatial ML. Keep this aligned with the two-design validation narrative rather than a broad climate-change essay.]`
 
 Suggested references to verify and use:
 
@@ -93,13 +93,19 @@ Suggested references to verify and use:
 
 Primary question:
 
-- Can a model trained on a multi-city urban heat dataset identify hotspot cells in cities that were entirely excluded from training?
+- Can basic environmental and built-environment features identify urban heat hotspots across a multi-city dataset, and how does performance change when evaluation moves from within-city held-out cells to whole-city held-out transfer?
+
+Explicit subquestions:
+
+- Within-city screening: when a city is represented during model development, can the model identify held-out hotspot cells from that same city?
+- City-held-out transfer: when a whole city is excluded from training, can the model rank that unseen city's cells by hotspot risk?
 
 Secondary questions:
 
-- Do non-thermal geospatial predictors contain transferable signal for hotspot screening?
-- Does random forest improve cross-city ranking or retrieval relative to logistic regression and simple baselines?
+- Do non-thermal geospatial predictors contain useful signal for hotspot screening?
+- Does random forest improve over logistic regression and simple baselines, and does that model ranking change by validation design?
 - Does performance vary systematically by climate group or city?
+- Does within-city success predict city-held-out transfer success?
 
 Target population:
 
@@ -173,18 +179,18 @@ Variables to describe:
 - Extra dataset columns:
   - neighborhood-context Phase 3A features, kept for expansion but not part of the frozen headline benchmark.
 
-Partner gap:
+Insertion note:
 
-`[PARTNER TODO: Review this section for domain-language clarity. Add one sentence on why city-relative top-decile hotspots are more appropriate than one national absolute LST cutoff for a cross-climate city set.]`
+`[Insert city-relative target language here: add one concise sentence on why city-relative top-decile hotspots are more appropriate than one national absolute LST cutoff for a cross-climate city set.]`
 
 ### 4. Model and Method
 
 Purpose:
 
 - Translate the dataset into a statistical learning problem.
-- Emphasize leakage-safe city-held-out evaluation.
-- Spend more methodological detail on whole-city held-out validation because it is the paper's core design contribution.
-- Reserve a clearly marked paragraph/subsection for partner-provided within-city held-out validation, framed as complementary and easier than unseen-city transfer.
+- Separate within-city held-out evaluation from city-held-out transfer.
+- Emphasize that city-held-out evaluation is the stricter transfer result.
+- Use the within-city result as the necessary contrast for interpreting how validation design changes apparent model performance.
 
 Prediction task:
 
@@ -201,18 +207,25 @@ Excluded first-pass predictive fields:
 - `centroid_lon`
 - `centroid_lat`
 
-Evaluation design:
+Evaluation designs:
 
-- Five deterministic outer folds.
-- Six held-out cities per fold.
-- Every city held out exactly once.
-- All preprocessing, imputation, scaling, encoding, feature selection, and tuning fit only on training-city rows.
+- Within-city held-out cells:
+  - verified 70/30 within-city evaluation.
+  - cities are represented during model development.
+  - evaluates held-out cells from those same cities.
+  - reports hotspot precision, recall, and F1.
+  - answers same-city screening/interpolation, not unseen-city transfer.
+- City-held-out transfer:
+  - five deterministic outer folds.
+  - six held-out cities per fold.
+  - every city held out exactly once.
+  - all preprocessing, imputation, scaling, encoding, feature selection, and tuning fit only on training-city rows.
 
-Partner-method boundary:
+Interpretive boundary:
 
-- Main/headline validation = whole-city held-out validation.
-- Partner may add within-city held-out validation as a supplemental diagnostic.
-- Within-city validation should not be described as evidence of transfer to new cities.
+- City-held-out validation remains the headline benchmark for transfer.
+- Within-city validation is not replacing it; it shows what happens when local examples from the same cities are available.
+- The two settings may use different metrics, so compare directional patterns and implications rather than raw magnitudes across designs.
 
 Metrics:
 
@@ -242,9 +255,9 @@ Computational caveat:
 
 - Retained benchmark results use sampled all-fold runs, especially 5,000 to 20,000 rows per city, because exhaustive all-row tuning over 71.4 million rows was not the practical benchmark path on the available workstation.
 
-Partner gap:
+Insertion note:
 
-`[PARTNER TODO: Add or refine statistical-method explanations in course language, especially PR AUC, grouped cross-validation, logistic regression, and random forest. Keep formulas short and interpretable.]`
+`[Insert within-city held-out design details and results here: describe the verified 70/30 within-city evaluation, report logistic-versus-random-forest precision, recall, and F1, and explain that this setting measures same-city hotspot screening rather than unseen-city transfer.]`
 
 ### 5. Analysis and Results
 
@@ -255,8 +268,13 @@ Purpose:
 
 Required result claims:
 
-- Learned models beat strongest simple baselines on pooled PR AUC.
-- Matched 5,000 rows-per-city comparison:
+- Within-city held-out evaluation:
+  - random forest clearly outperforms logistic regression on hotspot precision, recall, and F1.
+  - presentation metric checks: logistic precision 0.3887, recall 0.0727, F1 0.1083; random forest precision 0.7310, recall 0.3433, F1 0.4480.
+  - interpret as evidence that nonlinear structure helps when local city examples are available.
+- City-held-out transfer:
+  - learned models beat strongest simple baselines on pooled PR AUC.
+  - matched 5,000 rows-per-city comparison:
   - Logistic SAGA pooled PR AUC: 0.1421.
   - Random forest frontier pooled PR AUC: 0.1486.
   - Logistic recall at top 10%: 0.1647.
@@ -264,9 +282,13 @@ Required result claims:
   - Logistic mean city PR AUC: 0.1803.
   - Random forest mean city PR AUC: 0.1781.
 - Interpretation:
-  - RF improves aggregate ranking and retrieval.
+  - RF modestly improves aggregate ranking and retrieval.
   - Logistic remains slightly stronger on average city PR AUC.
   - RF gains are concentrated in hot-arid cities and selected cities, not uniform.
+- Evaluation-design comparison:
+  - the main result is not one universal model ranking.
+  - performance and model advantage change when moving from within-city held-out evaluation to whole-city transfer.
+  - within-city success should not be treated as evidence of cross-city transfer.
 
 Climate/city heterogeneity:
 
@@ -281,8 +303,9 @@ Climate/city heterogeneity:
 
 Spatial example:
 
-- Denver held-out map triptych is a representative benchmark snapshot, not an exhaustive citywide inference surface.
+- Denver held-out map example is a representative benchmark snapshot, not an exhaustive citywide inference surface.
 - Use it to show that transfer errors are spatially structured and the model captures partial but imperfect hotspot geography.
+- Mention the presentation lesson: false positives and false negatives are spatially organized, suggesting partial built-environment signal but missed city-specific detail.
 
 Feature interpretation:
 
@@ -298,9 +321,15 @@ Analysis expansion priorities:
 - Mention feature-importance evidence only as supplemental/non-causal.
 - Strengthen validity/limitations language around sampled benchmark, LST versus human exposure, city-relative target, and spatial dependence.
 
-Partner gap:
+Signal-shift diagnostic:
 
-`[PARTNER TODO: Decide whether to add the partner-provided per-city logistic/RF classification results. If included, label them supplemental/easier-split diagnostics and do not let them replace the retained city-held-out benchmark.]`
+- Within-city RF hotspot F1 versus city-held-out RF PR AUC correlation is about 0.08.
+- Within-city RF hotspot recall versus city-held-out RF recall@top10 correlation is about 0.03.
+- Same-city learnability does not imply cross-city transferability.
+
+Insertion note:
+
+`[Insert evaluation-design signal-shift analysis here: compare city-level within-city random-forest F1/recall against city-held-out random-forest PR AUC/recall@top10, report the weak correlations from the presentation, and explain that same-city learnability does not imply cross-city transferability.]`
 
 ### 6. Discussion and Limitations
 
@@ -315,7 +344,8 @@ Main limitations:
 
 Validity discussion:
 
-- City-held-out evaluation is the main validity strength.
+- City-held-out evaluation is the main transfer-validity strength.
+- Within-city evaluation should be interpreted as same-city screening evidence.
 - Train-only preprocessing and tuning reduce leakage.
 - PR AUC and recall-at-top-10% are appropriate for a 10% hotspot-screening target.
 - Remaining validity concern is external generalization beyond the selected 30-city sample.
@@ -332,7 +362,7 @@ Future directions:
 
 Core conclusion:
 
-- The project successfully built a reproducible 30-city, 30 m urban heat dataset and a leakage-safe transfer benchmark.
+- The project successfully built a reproducible 30-city, 30 m urban heat dataset and compared same-city hotspot screening with leakage-safe city-held-out transfer.
 - Cross-city hotspot prediction is feasible but difficult.
 - Random forest provides a modest aggregate gain in pooled PR AUC and top-decile recall, especially in hot-arid cities, while logistic regression remains competitive and steadier by mean city PR AUC.
 - The best framing is a transferable screening framework with documented limits.
@@ -355,9 +385,12 @@ Recommended main figures:
 - Figure 1. Study city locations.
 - Figure 2. Dataset construction workflow.
 - Figure 3. City-held-out evaluation design.
-- Figure 4. Benchmark metric comparison.
-- Figure 5. City-level RF minus logistic deltas.
-- Figure 6. Denver held-out map triptych.
+- Figure 4. Within-city and city-held-out results side by side.
+- Figure 5. City-level signal shifts across evaluation designs.
+- Figure 6. City-held-out benchmark metric comparison.
+- Figure 7. City-level RF minus logistic transfer deltas.
+- Figure 8. Absolute RF city PR AUC.
+- Figure 9. Held-out Denver map example.
 
 Recommended appendix figures:
 
@@ -378,8 +411,8 @@ Include:
 
 Possible appendix placeholders:
 
-`[APPENDIX TODO: Add final dataset column table from docs/data_dictionary.md.]`
+`[Insert appendix table here: add final dataset column table from docs/data_dictionary.md.]`
 
-`[APPENDIX TODO: Add hyperparameter grid / retained run metadata for logistic and RF.]`
+`[Insert appendix table here: add hyperparameter grid / retained run metadata for logistic and RF.]`
 
-`[APPENDIX TODO: Add brief reproducibility note listing canonical repo entrypoints and retained artifact paths.]`
+`[Insert reproducibility appendix here: add brief reproducibility note listing canonical repo entrypoints and retained artifact paths.]`

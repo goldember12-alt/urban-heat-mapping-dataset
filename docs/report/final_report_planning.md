@@ -26,7 +26,8 @@ Important context:
 
 - The final paper should not simply paste the existing technical report.
 - The clean first writing pass should start with Background Information and Dataset Construction.
-- The completed project is broader than the original proposal: it now includes a final 30-city dataset, city-held-out folds, retained logistic/RF benchmarks, supplemental modeling checks, held-out maps, and transfer packaging.
+- The completed project is broader than the original proposal: it now includes a final 30-city dataset, within-city held-out results, city-held-out folds, retained logistic/RF benchmarks, signal-shift diagnostics, held-out maps, and transfer packaging.
+- The active report narrative should follow the authoritative presentation PDFs in `docs/presentation_2026/`: `Urban Heat Transfer Prediction Presentation.pdf` and `Notes Readoff for Presentation.pdf`.
 - Latest rendered PDF check:
   - `docs/report/stat5630_final_report_draft.pdf` renders successfully with title page, embedded figures, Tables and Figures section, and Appendix.
   - The latest rendered draft is 26 pages after adding stricter results framing, variability tables, and appendix support.
@@ -35,26 +36,41 @@ Important context:
   - Render command currently uses 12 pt font and 1 inch margins; the PDF appears single-spaced under the Pandoc/XeLaTeX render path.
   - Do not treat the 18-page total PDF as a violation unless the Main Text itself exceeds 15 pages.
 
+## Presentation Narrative Anchor
+
+Use the presentation PDFs as the report's narrative spine. The report should be a fuller written version of that story, not a city-held-out-only paper.
+
+Slide-by-slide claims to preserve:
+
+1. Slide 1 frames the project as cross-city urban heat hotspot prediction and explicitly signals two ways to evaluate hotspot prediction.
+2. Slide 2 defines the research question, the 30-city 30 m dataset, the six first-pass predictors, the `hotspot_10pct` target, and the two validation designs: within-city held-out cells and city-held-out transfer.
+3. Slide 3 compares logistic regression and random forest as two model forms using the same predictor contract: logistic is a global additive risk score, while random forest can capture nonlinear thresholds and interactions.
+4. Slide 4 places within-city held-out and city-held-out transfer results side by side. Random forest clearly wins within-city hotspot precision, recall, and F1; city-held-out transfer is weaker and closer, with RF modestly ahead on pooled PR AUC and recall@top10 and logistic slightly ahead on mean city PR AUC.
+5. Slide 5 is a core diagnostic, not an appendix afterthought. City-level within-city RF F1 correlates only about 0.08 with city-held-out RF PR AUC, and within-city RF recall correlates only about 0.03 with city-held-out RF recall@top10. Same-city learnability does not reliably predict transfer success.
+6. Slide 6 uses Denver as a representative hot-arid held-out example. It shows predicted top-decile risk, true hotspot cells, and categorical errors; false positives and false negatives are spatially structured, indicating partial built-environment signal and missed city-specific detail.
+7. Slide 7's takeaway is that basic environmental and built-environment factors contain real hotspot signal, but signal strength and model advantage depend on validation design.
+
 ## Report Narrative To Preserve
 
 Main story:
 
 1. Urban heat varies locally and matters for planning/public health.
-2. Many easier modeling setups do not test whether predictions transfer to unseen cities.
+2. The project asks whether basic environmental and built-environment features can identify hotspot cells, and how the answer changes across validation designs.
 3. This project builds a standardized 30 m dataset for 30 U.S. cities.
 4. The target is `hotspot_10pct`, a within-city top-decile ECOSTRESS LST label.
-5. The benchmark holds out entire cities, with all preprocessing and tuning fit only on training cities.
-6. The retained predictors show limited but real transferable ranking signal, strongest in hot-arid cities.
-7. Random forest improves pooled PR AUC and recall at top 10% relative to matched logistic regression, but gains over simple baselines are modest and city-level wins are heterogeneous.
-8. The defensible conclusion is "transfer-screening benchmark with clear limits," not "robust all-city hotspot identifier" or "deployment-ready heat-risk classifier."
+5. The report compares within-city held-out evaluation with whole-city holdout transfer.
+6. Within-city held-out evaluation shows random forest clearly outperforming logistic regression on hotspot precision, recall, and F1.
+7. City-held-out transfer is weaker, closer between models, and more heterogeneous; random forest modestly improves pooled PR AUC and recall@top10 while logistic remains slightly stronger on mean city PR AUC.
+8. The defensible conclusion is that the project separates learnable same-city hotspot structure from cross-city transferability.
 
 Avoid these narrative traps:
 
 - Do not describe sampled benchmark runs as full exhaustive 71.4M-row benchmark results.
 - Do not present Phoenix proposal figures as final project evidence.
 - Do not imply `hotspot_10pct` is an absolute national heat-risk threshold.
-- Do not use partner-provided easier-split results as the headline benchmark.
-- Do not let supplemental HGB, climate-interaction, richer-feature, or within-city results replace the retained logistic/RF comparison.
+- Do not let within-city held-out results replace the stricter city-held-out transfer benchmark.
+- Do not collapse within-city precision/recall/F1 and city-held-out PR AUC/recall@top10 into one direct metric leaderboard.
+- Do not let supplemental HGB, climate-interaction, or richer-feature results replace the two-design logistic/RF comparison.
 
 ## Assignment Formatting Interpretation
 
@@ -92,7 +108,7 @@ Purpose:
 - Establish why urban heat mapping matters.
 - Explain what thermal remote sensing and land-surface-temperature studies have already shown.
 - Explain why land cover, imperviousness, vegetation, elevation, and water proximity are plausible predictors.
-- Establish the research gap: many studies are single-city, descriptive, correlation-focused, or within-city; fewer ask whether hotspot prediction transfers to fully unseen cities under a leakage-safe evaluation design.
+- Establish the research gap: many studies are single-city, descriptive, correlation-focused, or within-city; fewer separate same-city hotspot screening from fully unseen-city transfer under a leakage-safe evaluation design.
 
 Recommended structure:
 
@@ -106,8 +122,9 @@ Recommended structure:
 5. This project's gap:
    - standardized cross-city dataset.
    - city-relative hotspot target.
+   - within-city held-out validation.
    - entire-city held-out validation.
-   - explicit contrast with easier within-city held-out validation that partner will describe.
+   - explicit contrast between the two validation designs.
 
 Candidate reference directions:
 
@@ -155,25 +172,27 @@ Add detail on:
 
 Do not turn this into a code walkthrough. Keep it methodological and reproducible.
 
-### Third Priority: Methodology Split Between Authors
+### Third Priority: Two-Design Methodology
 
 The report should distinguish two validation concepts:
 
-- **Our side / headline method:** whole-city held-out validation.
+- **Within-city held-out cells:** same-city screening/interpolation.
+  - Cities are represented during model development.
+  - Models are evaluated on held-out cells from those same cities.
+  - The verified 70/30 result reports hotspot precision, recall, and F1.
+- **City-held-out transfer:** stricter unseen-city transfer.
   - This remains the canonical benchmark for transfer to unseen cities.
   - Emphasize grouped city folds and train-city-only preprocessing/tuning.
-- **Partner side:** within-city held-out validation.
-  - Partner should describe this as a complementary/easier diagnostic, not the headline transfer benchmark.
-  - It can help show how performance changes when train/test data come from the same city.
-  - It should be clearly labeled as not equivalent to unseen-city transfer.
 
 Suggested placement:
 
 - Main Method section:
-  - Put whole-city held-out validation first and in greatest detail.
-  - Add a subsection or paragraph: "Complementary within-city validation" reserved for partner language.
+  - Introduce both validation designs as first-class methods.
+  - Keep city-held-out validation as the stricter transfer benchmark with the most leakage-control detail.
+  - Add an outward-facing insertion bracket for fuller within-city split details if the current source lacks them.
 - Results/Discussion:
-  - Use within-city results only as context for how much harder transfer is, if partner elects to include them.
+  - Present within-city results first, then city-held-out transfer, then the signal-shift comparison.
+  - Emphasize that within-city success does not establish cross-city transfer.
 
 ### Fourth Priority: Analysis And Results Rigor
 
@@ -343,12 +362,30 @@ These files already exist under `docs/report/figures/` and can be referenced fro
 - Status: Ready.
 - Caption direction: This is the central leakage-safe benchmark design.
 
+### Figure: Within-City and City-Held-Out Results Side by Side
+
+- File: `docs/report/figures/within_city_vs_transfer_results.png`
+- Source/provenance: copied from `figures/presentation/within_city_vs_transfer_results.png`.
+- Use in report: Analysis and Results.
+- Message: Slide 4 comparison: RF dominates within-city precision/recall/F1, while city-held-out transfer is weaker and closer.
+- Status: Ready.
+- Caption direction: Compare validation-design patterns, not raw metric magnitudes across panels.
+
+### Figure: City-Level Signal Shifts Across Evaluation Designs
+
+- File: `docs/report/figures/city_signal_transfer_relationship.png`
+- Source/provenance: copied from `figures/presentation/city_signal_transfer_relationship.png`.
+- Use in report: Analysis and Results.
+- Message: Slide 5 diagnostic: within-city RF F1 has about 0.08 correlation with transfer RF PR AUC, and within-city RF recall has about 0.03 correlation with transfer RF recall@top10.
+- Status: Ready.
+- Caption direction: Same-city learnability does not reliably rank transfer success.
+
 ### Figure: Benchmark Metrics
 
 - File: `docs/report/figures/benchmark_metrics.png`
 - Source/provenance: copied from `figures/modeling/reporting/cross_city_benchmark_report_benchmark_metrics.png`.
 - Use in report: Analysis and Results.
-- Message: Compares retained benchmark metrics across simple baselines, logistic checkpoints, and RF.
+- Message: Compares retained city-held-out transfer metrics across simple baselines, logistic checkpoints, and RF.
 - Status: Ready.
 - Caption direction: State the sampled rows-per-city caveat and identify the matched 5k logistic/RF comparison.
 
@@ -361,14 +398,14 @@ These files already exist under `docs/report/figures/` and can be referenced fro
 - Status: Ready.
 - Caption direction: Use this to explain why pooled and mean-city results differ.
 
-### Figure: Denver Held-Out Map Triptych
+### Figure: Held-Out Denver Map Example
 
-- File: `docs/report/figures/denver_heldout_map_triptych.png`
-- Source/provenance: copied from `figures/modeling/heldout_city_maps/denver_heldout_map_triptych.png`.
+- File: `docs/report/figures/heldout_denver_map_focus.png`
+- Source/provenance: copied from `figures/presentation/heldout_denver_map_focus.png`.
 - Use in report: Analysis and Results or Appendix.
-- Message: Representative held-out-city prediction/true/error spatial example.
+- Message: Representative hot-arid held-out-city prediction/true/error spatial example.
 - Status: Ready.
-- Caption direction: Explicitly state it is a sampled held-out benchmark snapshot, not a full citywide deployment map.
+- Caption direction: State that false positives and false negatives are spatially organized, suggesting partial built-environment signal and missed city-specific detail.
 
 ### Figure: Feature Importance Ranked Summary
 
@@ -532,23 +569,22 @@ Feature missingness:
 - Source: `data_processed/modeling/final_dataset_feature_missingness.csv`
 - Use for appendix data-quality table if needed.
 
-## Partner-Owned Gaps
+## Outward-Facing Insertion Notes
 
 Use visible placeholders in the draft so gaps are intentional and easy to fill.
 
 Recommended placeholders:
 
-- `[PARTNER TODO: Add 1-2 paragraphs of related-work context and citations on urban heat mapping, remotely sensed LST, or transfer/generalization in spatial ML.]`
-- `[PARTNER TODO: Review city-relative target wording and add one sentence on why top-decile hotspots are useful across climate groups.]`
-- `[PARTNER TODO: Add or refine statistical-method explanations in course language, especially PR AUC, grouped cross-validation, logistic regression, and random forest.]`
-- `[PARTNER TODO: Decide whether to add the partner-provided per-city logistic/RF classification results. If included, label them supplemental/easier-split diagnostics.]`
-- `[PARTNER TODO: Review discussion/future-work section and add any project-management or domain caveats from your part of the work.]`
+- `[Insert related-work extension here: add 1-2 paragraphs of related-work context and citations on urban heat mapping, remotely sensed LST, or transfer/generalization in spatial ML.]`
+- `[Insert within-city held-out design details and results here: describe the verified 70/30 within-city evaluation, report logistic-versus-random-forest precision, recall, and F1, and explain that this setting measures same-city hotspot screening rather than unseen-city transfer.]`
+- `[Insert evaluation-design signal-shift analysis here: compare city-level within-city random-forest F1/recall against city-held-out random-forest PR AUC/recall@top10, report the weak correlations from the presentation, and explain that same-city learnability does not imply cross-city transferability.]`
+- `[Insert final discussion polish here: add any project-management, domain, or validity caveats that clarify the two-design interpretation without changing retained model results.]`
 
 Suggested partner responsibilities:
 
 - Related work and citations.
 - Course-language statistical explanation.
-- Partner-supplied supplemental analysis, if included.
+- Any supplemental analysis needed to complete the two-design interpretation.
 - Final discussion polish.
 - Appendix/code-output curation.
 

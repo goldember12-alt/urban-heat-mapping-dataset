@@ -1,5 +1,114 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-26 - Checkpoint: Final Report Two-Design Narrative Alignment
+
+- Date / checkpoint:
+  - 2026-04-26 narrative-alignment pass to make the final report match the final presentation story rather than a city-held-out-only report.
+- Change made:
+  - Read the two authoritative presentation PDFs in `docs/presentation_2026/`: `Urban Heat Transfer Prediction Presentation.pdf` and `Notes Readoff for Presentation.pdf`.
+  - Updated `docs/report/final_report_planning.md` with a slide-by-slide presentation narrative anchor covering the research question, dataset construction, two validation designs, logistic/RF model-form comparison, side-by-side results, signal-shift correlations, Denver map example, and final takeaway.
+  - Updated `docs/report/final_report_outline.md` so the report spine is now within-city held-out screening plus city-held-out transfer, with outward-facing insertion notes instead of internal TODO language.
+  - Updated `docs/report/stat5630_final_report_draft.md` title, research question, methods, results, discussion, and figure references to present within-city held-out evaluation first, retained city-held-out transfer second, and the signal-shift diagnostic as a core result.
+  - Added report-facing copies of presentation-aligned figures: `within_city_vs_transfer_results.png`, `city_signal_transfer_relationship.png`, and `heldout_denver_map_focus.png`.
+  - Moved the Denver map into the main Tables and Figures sequence as Figure 9 and reframed RF-minus-logistic deltas as transfer heterogeneity rather than the entire conclusion.
+  - Removed internal `PARTNER TODO` / Nick-facing placeholder style from updated report docs and used bracketed insertion notes that describe the missing substantive content.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/final_report_outline.md`
+  - `docs/report/final_report_planning.md`
+  - `docs/report/figures/within_city_vs_transfer_results.png`
+  - `docs/report/figures/city_signal_transfer_relationship.png`
+  - `docs/report/figures/heldout_denver_map_focus.png`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, section headings, figure headings, and insertion-note text.
+  - `rg -n "Figure [0-9]|Appendix Figure A[0-9]|\[Insert|TODO|PARTNER|Nick TODO|ask Nicholas" docs\report\stat5630_final_report_draft.md docs\report\final_report_outline.md docs\report\final_report_planning.md`
+- Test status:
+  - No Python test suite was run; this was a report/documentation alignment pass with no code changes.
+  - Pandoc/XeLaTeX PDF render succeeded.
+- Manual verification status:
+  - Rendered PDF inspection reported 31 pages and found `Main Text`, `Tables and Figures`, `Appendix`, Figure 9, and the two intentional within-city/signal-shift insertion notes.
+  - Source scan found no `TODO`, `PARTNER TODO`, `Nick TODO`, or `ask Nicholas` language in the updated report docs.
+  - Figure headings in the rendered PDF run from Figure 1 through Figure 9 plus Appendix Figures A1-A2.
+- Remaining caveats:
+  - The report intentionally still contains outward-facing insertion notes for fuller related-work prose, fuller within-city design/write-up detail, and expanded signal-shift interpretation.
+  - No underlying modeling results were changed or invented; within-city numbers and signal-shift correlations came from retained partner/presentation artifacts.
+
+### 2026-04-26 - Checkpoint: Final Report Nicholas-Placeholder and Figure-Story Polish
+
+- Date / checkpoint:
+  - 2026-04-26 focused edit pass on `docs/report/stat5630_final_report_draft.md` responding to the request to make the STAT 5630 final report cleaner, less repetitive, more outward-facing, and ready for Nicholas's contribution.
+- Change made:
+  - Removed the internal "partner extension and diagnostic expansion" bridge sentence from the Methods section.
+  - Added 3 bracketed, presentable Nicholas insertion notes: Background/literature motivation, Methods/results bridge for complementary diagnostics, and Discussion interpretation of city/climate heterogeneity.
+  - Tightened repeated caveats around 30 m analytic-grid interpretation, LST-versus-exposure interpretation, sampled benchmark scope, and city-held-out leakage control.
+  - Reframed the main result language around modest transferable ranking signal, strong simple baselines, heterogeneous RF gains, and screening/model-comparison use rather than operational deployment.
+  - Strengthened Figure 4, Figure 5, Figure 6, and Appendix Figure A3 captions so they match the report story: modest learned-model gains, RF-minus-logistic heterogeneity, absolute RF PR AUC as a guardrail against overinterpreting deltas, and Denver as a sampled held-out spatial diagnostic rather than deployment evidence.
+  - Kept the Denver triptych in the appendix, but added main-text interpretation explaining why it is representative enough for a supplemental diagnostic snapshot and what the predicted/actual/error patterns show.
+  - Added modest reference support from Harlan et al. (2006) and Stewart and Oke (2012).
+  - Demoted References from `##` to `###` so the top-level report structure remains `Main Text`, `Tables and Figures`, and `Appendix`.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - `rg -n "partner|TODO|PARTNER TODO|Nick TODO|project management|extension sentence|fragile|beautiful|strongest evidence|sharper conclusion|harder test|deployment-ready|weakly and unevenly|\bproves\b|definitive|nationally representative|universal transfer|Caption draft|APPENDIX TODO|Drafting note" docs\report\stat5630_final_report_draft.md`
+- Test status:
+  - `py_compile` passed for `src/report_artifacts.py` and `src/run_report_artifacts.py`.
+  - `src.run_report_artifacts` passed and regenerated report-facing tables and figures from retained artifacts.
+  - Pandoc/XeLaTeX PDF render succeeded.
+- Manual verification status:
+  - Bundled `pypdf` inspection reported 30 PDF pages and located Main Text, Tables and Figures, Appendix, References, Figures 4-6, Appendix Figure A3, the new RF-minus-logistic guardrail sentence, Harlan, Stewart, and 3 intentional `Insert Nicholas` placeholders in the rendered PDF text.
+  - Source checks confirmed the top-level Markdown sections are exactly `Main Text`, `Tables and Figures`, and `Appendix`.
+  - Source checks found no missing Markdown image references and no non-placeholder `TODO` markers.
+  - Visually inspected the regenerated Figure 4, Figure 5, Figure 6, and existing Denver triptych PNGs for alignment with the revised captions.
+- Remaining caveats:
+  - The 3 Nicholas placeholders are intentional and should be filled before final submission.
+  - The Denver map remains supplemental; it should not be promoted as full-city scoring or proof of model success unless a new full-city map workflow is explicitly generated and documented.
+  - Current working tree still includes changes outside this pass: modified `src/report_artifacts.py`, deleted `docs/report/new_content_critique.md`, untracked `docs/report/new_critique.md`, untracked `docs/report/figures/city_rf_pr_auc.png`, and presentation-folder deletions/untracked PDFs shown by `git status`.
+
+### 2026-04-26 - Checkpoint: Final Report Transfer-Narrative Tightening Pass
+
+- Date / checkpoint:
+  - 2026-04-26 focused edit pass on `docs/report/stat5630_final_report_draft.md` responding to `docs/report/new_critique.md`.
+- Change made:
+  - Strengthened the Background flow so the transfer/statistical motivation arrives earlier: local/descriptive urban heat mapping, the harder unseen-city transfer question, and why standardized data plus city-held-out validation matter.
+  - Clarified the 30-city selection rationale in Dataset Construction: broad geographic/climate variation, feasibility for a standardized acquisition/modeling pipeline, benchmark-panel rather than representative-sample interpretation, and no national-average performance claim.
+  - Added a short Methods transition reserving conceptual space for partner extension/diagnostic expansion while preserving the retained city-held-out benchmark as the headline result.
+  - Added a sampling-design sentence explaining that equal positive/negative contributions by city make the retained benchmark a controlled cross-city ranking comparison rather than full-map operational scoring.
+  - Added a compact Section 5 answer to the primary research question: yes, but weakly and unevenly; above-chance held-out ranking, modest gains over imperviousness/land-cover baselines, and gains mainly concentrated in selected hot-arid cities.
+  - Added Appendix Figure A2 caution that NLCD land-cover categories are encoded categorical levels and logistic coefficient signs depend on the reference category.
+  - Added a new retained-artifact-only Figure 6, `docs/report/figures/city_rf_pr_auc.png`, showing absolute random-forest city PR AUC by city, colored by climate group, with a 0.10 reference line; no new model results were generated.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/figures/city_rf_pr_auc.png`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - `rg -n "TODO|PARTNER TODO|Landsat NDVI|calibration tables|src\.|Phase 3A|frontier|retained repository|handoff|Codex" docs\report\stat5630_final_report_draft.md`
+- Test status:
+  - `py_compile` passed for `src/report_artifacts.py` and `src/run_report_artifacts.py`.
+  - `src.run_report_artifacts` passed and regenerated report tables plus Figures 1-6/A1.
+  - Pandoc/XeLaTeX PDF render succeeded.
+- Manual verification status:
+  - Stale/internal-language search returned only the intentional `src.run_report_artifacts` command in Reproducibility Notes.
+  - Bundled `pypdf` inspection reported 29 PDF pages and located the new Background sentence, controlled sampling sentence, Figure 6, and Appendix A2 caution in the rendered PDF text.
+  - Visually inspected the rendered PDF in the in-app browser around Background/Research Questions, Dataset Construction, the Methods sampling paragraph, Results/Discussion, Figure 5, new Figure 6, and Appendix Figure A2.
+  - Visually inspected regenerated `city_rf_pr_auc.png`, `city_metric_deltas.png`, and `feature_importance_ranked_summary.png`.
+- Remaining caveats:
+  - The city-selection rationale remains intentionally qualitative because no formal sampling frame or formal climate-classification method is documented.
+  - Figure 6 uses existing retained city-level RF artifacts only; it should not be described as new model evidence or full-city operational scoring.
+  - Current working tree still contains pre-existing user-side report-critique file changes: deleted `docs/report/new_content_critique.md` and untracked `docs/report/new_critique.md`.
+
 ### 2026-04-26 - Checkpoint: Final Report Critique Response Pass
 
 - Date / checkpoint:
