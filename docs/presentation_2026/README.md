@@ -36,7 +36,7 @@ The script will build a native editable PowerPoint and write:
 - The deck is intentionally sparse. Explanatory detail belongs in `presentation_speaker_notes.md`, not on the slides.
 - Benchmark values are pulled from retained repo artifacts rather than retyped by hand.
 - The active narrative contrasts within-city held-out evaluation from the isolated partner logistic/RF table with this repo's city-held-out transfer benchmark.
-- The deck phrases the partner split carefully as appearing consistent with a within-city or row-level 70/30 holdout based on support counts, unless partner code later verifies the exact split.
+- The partner split is documented as a verified within-city 70/30 holdout for the presentation notes.
 - The active render path produces only PowerPoint because the deck is optimized for live presentation, not dual-format parity.
 - The active deck is rebuilt from editable PowerPoint objects plus reusable presentation figures.
 - Reusable presentation figures now live under `figures/presentation/` for Slides 2 through 6.

@@ -24,7 +24,7 @@ The current editable deck is:
 1. Cross-City Urban Heat Hotspot Prediction
 2. Research Question + Validation Design
 3. Modeling Section: Logistic vs Random Forest
-4. Results Side By Side
+4. Results Side by Side
 5. City-Level Signal Shifts Across Evaluation Designs
 6. Held-Out Denver Map Example
 7. Questions

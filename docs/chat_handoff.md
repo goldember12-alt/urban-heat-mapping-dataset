@@ -1,5 +1,93 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-26 - Checkpoint: Final Report Planning Scaffold
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to begin final-report planning from `docs/` and `docs/report/`, with continuity documentation for a future chat.
+- Change made:
+  - Added `docs/report/final_report_outline.md`, a course-format outline for the final report with assignment constraints, core narrative, planned main-text sections, partner TODO placeholders, and recommended tables/figures.
+  - Added `docs/report/final_report_planning.md`, a handoff-oriented planning document summarizing current report state, completed dataset facts, retained benchmark facts, existing report figures, new tables/figures to generate, partner-owned gaps, and the recommended first writing pass.
+  - Documented all existing `docs/report/figures/` assets and their intended report use.
+  - Identified high-priority new report artifacts to generate next: data-sources/variables table, final dataset by climate group table, and optionally a city row-count figure.
+- Files touched:
+  - `docs/report/final_report_outline.md`
+  - `docs/report/final_report_planning.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - No code execution required; documentation-only planning pass.
+- Test status:
+  - Not run; documentation-only change.
+- Manual verification status:
+  - Confirmed the new outline and planning filenames did not already exist before creating them.
+  - Read the assignment PDF, original proposal PDF, existing technical report draft, workflow/data/modeling docs, retained benchmark table, and final dataset audit summaries before drafting the planning files.
+- Immediate Next Step:
+  - Generate the high-priority report tables from retained artifacts, then begin the first writing pass on Background Information, Research Questions, and Dataset Construction.
+
+### 2026-04-19 - Checkpoint: Detailed Speaker Notes Accuracy Pass
+
+- Date / checkpoint:
+  - 2026-04-19 response to request for a documentation pass prioritizing accuracy between the final presentation deck and supplemental documentation, especially speaker notes.
+- Change made:
+  - Rewrote `docs/presentation_2026/presentation_speaker_notes.md` as a detailed slide-by-slide companion document.
+  - Removed the introductory line under `Speaker Notes` so the file starts directly with Slide 1.
+  - Replaced presenter-prompt language such as "open by," "set a tone," and "transition" with direct descriptions of what each slide shows and how to interpret it.
+  - Expanded Slide 2 notes on target definition, leakage-safe predictor exclusions, and the distinction between within-city held-out cells and city-held-out transfer.
+  - Expanded Slide 3 notes on the logistic weighted-sum mechanism, random-forest split/vote mechanism, and train-city-only preprocessing requirements.
+  - Expanded Slide 4 notes with precise metric definitions and comparison rules for thresholded within-city precision / recall / F1 versus city-held-out PR AUC, mean city PR AUC, and recall at top 10%.
+  - Added explicit Slide 4 documentation that the retained city-held-out comparison uses a `5,000` rows-per-city sample cap for computational feasibility rather than a full all-row exhaustive benchmark.
+  - Expanded Slide 5 notes on city-level correlations and what weak relationships imply.
+  - Expanded Slide 6 notes on predicted top-decile risk, observed hotspots, error categories, map interpretation, and practical-use limits.
+  - Removed the likely question about whether the partner 70/30 split is verified, and expanded the remaining likely questions.
+  - Updated `README.md`, `presentation_outline.md`, and `presentation_asset_manifest.md` so the partner 70/30 split is described as verified rather than tentative.
+  - Added a presentation changelog entry for the documentation pass.
+- Files touched:
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/README.md`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_asset_manifest.md`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - No render required; documentation-only pass.
+- Test status:
+  - Not run; documentation-only pass.
+- Manual verification status:
+  - Scanned the active presentation documentation for stale presenter-prompt language and outdated partner-split hedging after edits.
+  - Recreated `docs/presentation_2026/urban_heat_transfer_presentation_content_revision.pptx` after it appeared deleted in the working tree, so the review-copy artifact remains present.
+- Immediate Next Step:
+  - Review `presentation_speaker_notes.md` alongside the final deck and make any taste-level edits for desired speaking depth or wording.
+
+### 2026-04-19 - Checkpoint: Title-Case Label Pass
+
+- Date / checkpoint:
+  - 2026-04-19 response to request to title-case slide titles, panel titles, chart labels, axis titles, and map titles.
+- Change made:
+  - Updated editable slide headings on Slides 2 through 6 to title case.
+  - Updated generated figure labels on Slides 2 through 6, including panel titles, model titles, chart titles, y-axis labels, x-axis labels, map titles, and visible legends.
+  - Updated the inactive comparison-table asset labels for source consistency, although that figure is not in the active deck.
+  - Updated focused presentation tests to expect the new title-case slide headings.
+  - Aligned documentation references for the Slide 4 title to `Results Side by Side`.
+- Files touched:
+  - `src/presentation_editable_pptx_builder.py`
+  - `src/presentation_visual_assets.py`
+  - `tests/test_presentation_deck_builder.py`
+  - `docs/presentation_2026/presentation_outline.md`
+  - `docs/presentation_2026/presentation_speaker_notes.md`
+  - `docs/presentation_2026/slides_powerpoint.qmd`
+  - `docs/presentation_2026/presentation_changelog.md`
+  - `docs/presentation_2026/urban_heat_transfer_presentation.pptx`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `powershell -ExecutionPolicy Bypass -File .\docs\presentation_2026\render_presentation.ps1`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+- Manual verification status:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2 through 6.
+- Immediate Next Step:
+  - No known capitalization issues remain in the rendered slide titles, panel titles, chart labels, or map titles.
+
 ### 2026-04-19 - Checkpoint: Presentation Documentation Alignment Refresh
 
 - Date / checkpoint:

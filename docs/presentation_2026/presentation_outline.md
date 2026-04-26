@@ -28,7 +28,7 @@ The current content pass is intentionally denser and more data-forward. It keeps
 ## Slide 4 - Results Side by Side
 
 - compresses the prior within-city and city-held-out result slides into a single two-panel comparison
-- left panel: partner within-city-style hotspot precision, recall, and F1
+- left panel: verified partner within-city 70/30 hotspot precision, recall, and F1
 - right panel: repo city-held-out pooled PR AUC, mean city PR AUC, and recall at top 10%
 - goal: make the contrast visible without asking the audience to remember numbers across slides
 

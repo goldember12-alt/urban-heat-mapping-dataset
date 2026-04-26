@@ -7,7 +7,7 @@
 | `data_processed/final/final_dataset_artifact_summary.json` | canonical dataset size and schema summary | 2 | supplies the row context for the modeling handoff |
 | `data_processed/modeling/final_dataset_audit_summary.json` | modeling-input audit summary | 2 | confirms `30` cities and the `hotspot_10pct` target |
 | `data_processed/modeling/city_outer_folds.csv` | held-out-city split contract | 2, 4 | confirms `5` outer folds and `6` held-out cities per fold |
-| `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_metadata.json` | partner result metadata | 4 | records the inferred support fraction used for careful 70/30 split language |
+| `outputs/modeling/partner_data/per_city_logistic_rf_results/partner_results_metadata.json` | partner result metadata | 4 | records the support fraction for the verified within-city 70/30 split used in the presentation |
 | `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_model_summary.csv` | partner model summary | 4 | supplies mean hotspot precision, recall, and F1 for logistic and random forest |
 | `outputs/modeling/partner_data/per_city_logistic_rf_results/tables/partner_vs_repo_city_comparison.csv` | city-level partner/repo comparison | 5 | supplies the 30-city scatter comparison between within-city RF metrics and city-held-out RF metrics |
 | `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv` | retained city-held-out benchmark metrics | 4 | supplies logistic 5k and RF frontier transfer metrics |
@@ -28,7 +28,7 @@
 - City count: `30`
 - Final dataset rows: `71,394,894`
 - Target: `hotspot_10pct`
-- Partner support fraction: approximately `30%` of canonical city rows
+- Partner support fraction: approximately `30%` of canonical city rows under the verified within-city 70/30 split
 - Partner mean hotspot precision:
   - logistic: `0.3887`
   - random forest: `0.7310`

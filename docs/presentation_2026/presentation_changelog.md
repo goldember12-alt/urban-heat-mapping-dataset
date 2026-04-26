@@ -1,5 +1,29 @@
 # Presentation Changelog
 
+## 2026-04-19 Detailed Speaker Notes Accuracy Pass
+
+- Documentation refresh:
+  - Rewrote `presentation_speaker_notes.md` as a detailed slide-by-slide companion document rather than presenter-prompt notes.
+  - Removed the introductory note under the `Speaker Notes` heading so the document starts directly with Slide 1.
+  - Expanded each slide section to explain the project mechanisms, figure elements, validation designs, metric definitions, conclusions, and limitations.
+  - Added detailed Slide 4 notes explaining thresholded within-city precision / recall / F1 versus city-held-out PR AUC, mean city PR AUC, and recall at top 10%.
+  - Added explicit notes that the retained city-held-out runs shown in the deck use a `5,000` rows-per-city sample cap for computational feasibility.
+  - Removed the obsolete likely question about whether the partner 70/30 split is verified and expanded the remaining likely-questions section.
+  - Updated the presentation README, outline, and asset manifest so the partner split is described as verified rather than tentative.
+- Verification:
+  - Scanned the current presentation documentation for stale presenter-prompt language and outdated partner-split hedging after the edits.
+
+## 2026-04-19 Title-Case Label Pass
+
+- Capitalization pass:
+  - Updated slide headings, panel titles, chart titles, axis labels, map titles, and visible legends on Slides 2 through 6 to use title-case styling.
+  - Updated the focused presentation tests to expect the revised title-case slide headings.
+  - Aligned documentation headings for Slide 4 with the current deck title, `Results Side by Side`.
+- Verification:
+  - Regenerated `docs/presentation_2026/urban_heat_transfer_presentation.pptx`.
+  - Rendered all 7 slides to PNG previews through the non-interactive deck render path and visually inspected Slides 2 through 6.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_presentation_deck_builder.py` passed with `3 passed`.
+
 ## 2026-04-19 Documentation Alignment Refresh
 
 - Documentation refresh:
