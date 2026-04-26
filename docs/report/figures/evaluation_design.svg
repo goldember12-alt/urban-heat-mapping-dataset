@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+  <title id="title">City-held-out evaluation design</title>
+  <desc id="desc">Diagram showing 30 cities partitioned into 5 folds, with 24 training cities and 6 held-out cities per fold, and training-only preprocessing and tuning.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbf8f2; }
+      .panel { fill: #ffffff; stroke: #304b5a; stroke-width: 2; rx: 18; ry: 18; }
+      .accent { fill: #eef4f7; stroke: #304b5a; stroke-width: 2; rx: 18; ry: 18; }
+      .stage { font: 700 24px Arial, sans-serif; fill: #20333d; }
+      .body { font: 16px Arial, sans-serif; fill: #304b5a; }
+      .small { font: 15px Arial, sans-serif; fill: #304b5a; }
+      .city { fill: #7aa0b8; opacity: 0.85; }
+      .heldout { fill: #b34a33; opacity: 0.95; }
+      .arrow { stroke: #8b5e3c; stroke-width: 4; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#8b5e3c" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="480" />
+
+  <rect class="accent" x="40" y="50" width="280" height="170" />
+  <text class="stage" x="180" y="92" text-anchor="middle">Benchmark Population</text>
+  <text class="body" x="180" y="128" text-anchor="middle">30 cities total</text>
+  <text class="body" x="180" y="156" text-anchor="middle">10 hot_arid</text>
+  <text class="body" x="180" y="184" text-anchor="middle">10 hot_humid</text>
+  <text class="body" x="180" y="212" text-anchor="middle">10 mild_cool</text>
+
+  <rect class="panel" x="360" y="40" width="380" height="190" />
+  <text class="stage" x="550" y="82" text-anchor="middle">Outer Folds</text>
+  <text class="body" x="550" y="116" text-anchor="middle">5 deterministic folds</text>
+  <text class="body" x="550" y="144" text-anchor="middle">6 held-out cities per fold</text>
+  <text class="body" x="550" y="172" text-anchor="middle">24 training cities per fold</text>
+
+  <g transform="translate(392,188)">
+    <rect class="heldout" x="0" y="0" width="40" height="20" rx="4" />
+    <rect class="heldout" x="48" y="0" width="40" height="20" rx="4" />
+    <rect class="heldout" x="96" y="0" width="40" height="20" rx="4" />
+    <rect class="heldout" x="144" y="0" width="40" height="20" rx="4" />
+    <rect class="heldout" x="192" y="0" width="40" height="20" rx="4" />
+    <rect class="heldout" x="240" y="0" width="40" height="20" rx="4" />
+    <rect class="city" x="0" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="48" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="96" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="144" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="192" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="240" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="288" y="32" width="40" height="20" rx="4" />
+    <rect class="city" x="0" y="64" width="40" height="20" rx="4" />
+    <rect class="city" x="48" y="64" width="40" height="20" rx="4" />
+    <rect class="city" x="96" y="64" width="40" height="20" rx="4" />
+    <rect class="city" x="144" y="64" width="40" height="20" rx="4" />
+    <rect class="city" x="192" y="64" width="40" height="20" rx="4" />
+    <rect class="city" x="240" y="64" width="40" height="20" rx="4" />
+    <rect class="city" x="288" y="64" width="40" height="20" rx="4" />
+  </g>
+
+  <rect class="accent" x="790" y="50" width="360" height="170" />
+  <text class="stage" x="970" y="92" text-anchor="middle">Leakage Guardrail</text>
+  <text class="body" x="970" y="128" text-anchor="middle">Imputation, scaling, encoding,</text>
+  <text class="body" x="970" y="156" text-anchor="middle">feature processing, and tuning</text>
+  <text class="body" x="970" y="184" text-anchor="middle">are fit on training-city rows only</text>
+
+  <rect class="panel" x="190" y="285" width="820" height="130" />
+  <text class="stage" x="600" y="326" text-anchor="middle">Fold k</text>
+  <text class="body" x="600" y="358" text-anchor="middle">Train on cities in C \ F_k, tune inside training cities, evaluate on held-out cities in F_k.</text>
+  <text class="small" x="600" y="388" text-anchor="middle">This is harder than a random row split because no city contributes rows to both training and testing in the same outer fold.</text>
+
+  <path class="arrow" d="M320 135 L360 135" />
+  <path class="arrow" d="M740 135 L790 135" />
+  <path class="arrow" d="M600 230 L600 285" />
+
+  <text class="small" x="600" y="450" text-anchor="middle">Primary metric: PR AUC. Supporting metric: recall among the top 10% highest-risk held-out cells.</text>
+</svg>

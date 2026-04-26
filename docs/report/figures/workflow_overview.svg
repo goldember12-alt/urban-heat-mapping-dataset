@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Cross-city urban heat workflow overview</title>
+  <desc id="desc">Schematic showing study areas and grids, remote sensing and support layers, per-city feature assembly, final dataset creation, auditing and folds, and cross-city benchmarking and transfer packaging.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbf8f2; }
+      .box { fill: #ffffff; stroke: #304b5a; stroke-width: 2; rx: 18; ry: 18; }
+      .accent { fill: #eef4f7; stroke: #304b5a; stroke-width: 2; rx: 18; ry: 18; }
+      .stage { font: 700 22px Arial, sans-serif; fill: #20333d; }
+      .body { font: 16px Arial, sans-serif; fill: #304b5a; }
+      .small { font: 15px Arial, sans-serif; fill: #304b5a; }
+      .arrow { stroke: #8b5e3c; stroke-width: 4; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#8b5e3c" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="520" />
+
+  <rect class="accent" x="40" y="70" width="210" height="150" />
+  <text class="stage" x="145" y="110" text-anchor="middle">Study Design</text>
+  <text class="body" x="145" y="145" text-anchor="middle">30 cities</text>
+  <text class="body" x="145" y="172" text-anchor="middle">Census urban area</text>
+  <text class="body" x="145" y="199" text-anchor="middle">plus 2 km buffer</text>
+
+  <rect class="box" x="280" y="70" width="210" height="150" />
+  <text class="stage" x="385" y="110" text-anchor="middle">City Grids</text>
+  <text class="body" x="385" y="145" text-anchor="middle">Local UTM master grid</text>
+  <text class="body" x="385" y="172" text-anchor="middle">30 m cells</text>
+  <text class="body" x="385" y="199" text-anchor="middle">core and buffered extents</text>
+
+  <rect class="box" x="520" y="30" width="270" height="230" />
+  <text class="stage" x="655" y="70" text-anchor="middle">Input Layers</text>
+  <text class="body" x="655" y="110" text-anchor="middle">MODIS/Terra MOD13A1.061 NDVI</text>
+  <text class="body" x="655" y="138" text-anchor="middle">via AppEEARS, May-Aug 2023</text>
+  <text class="body" x="655" y="166" text-anchor="middle">ECOSTRESS LST via AppEEARS</text>
+  <text class="body" x="655" y="194" text-anchor="middle">DEM elevation</text>
+  <text class="body" x="655" y="222" text-anchor="middle">NLCD land cover and imperviousness</text>
+  <text class="body" x="655" y="250" text-anchor="middle">Hydrography and distance-to-water</text>
+
+  <rect class="accent" x="830" y="70" width="250" height="150" />
+  <text class="stage" x="955" y="110" text-anchor="middle">Per-City Features</text>
+  <text class="body" x="955" y="145" text-anchor="middle">Aligned to the master grid</text>
+  <text class="body" x="955" y="172" text-anchor="middle">One parquet and GeoPackage</text>
+  <text class="body" x="955" y="199" text-anchor="middle">per city</text>
+
+  <rect class="box" x="150" y="320" width="260" height="150" />
+  <text class="stage" x="280" y="360" text-anchor="middle">Final Dataset</text>
+  <text class="body" x="280" y="395" text-anchor="middle">71,394,894 rows</text>
+  <text class="body" x="280" y="422" text-anchor="middle">17 columns</text>
+  <text class="body" x="280" y="449" text-anchor="middle">one row per 30 m cell per city</text>
+
+  <rect class="accent" x="470" y="320" width="280" height="150" />
+  <text class="stage" x="610" y="360" text-anchor="middle">Audit And Split Contract</text>
+  <text class="body" x="610" y="395" text-anchor="middle">Required columns and missingness audit</text>
+  <text class="body" x="610" y="422" text-anchor="middle">Binary target validation</text>
+  <text class="body" x="610" y="449" text-anchor="middle">Deterministic city-held-out folds</text>
+
+  <rect class="box" x="810" y="320" width="320" height="150" />
+  <text class="stage" x="970" y="360" text-anchor="middle">Modeling And Delivery</text>
+  <text class="body" x="970" y="395" text-anchor="middle">Leakage-safe cross-city benchmarking</text>
+  <text class="body" x="970" y="422" text-anchor="middle">Held-out prediction tables and maps</text>
+  <text class="body" x="970" y="449" text-anchor="middle">Final-train transfer package and inference</text>
+
+  <path class="arrow" d="M250 145 L280 145" />
+  <path class="arrow" d="M490 145 L520 145" />
+  <path class="arrow" d="M790 145 L830 145" />
+  <path class="arrow" d="M955 220 L955 285 L280 285 L280 320" />
+  <path class="arrow" d="M410 395 L470 395" />
+  <path class="arrow" d="M750 395 L810 395" />
+
+  <text class="small" x="600" y="502" text-anchor="middle">Canonical benchmark story: data construction leads to a city-held-out transfer test, not a same-city interpolation exercise.</text>
+</svg>

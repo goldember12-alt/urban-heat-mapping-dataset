@@ -1,5 +1,412 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-04-26 - Checkpoint: Final Report Critique Response Pass
+
+- Date / checkpoint:
+  - 2026-04-26 focused response to `docs/report/new_content_critique.md` for the current STAT 5630 final report draft.
+- Change made:
+  - Updated `docs/report/stat5630_final_report_draft.md` with a clearer positive contribution paragraph: the report now frames the result as a transfer benchmark showing fragile but real cross-city screening signal rather than as a deployment-ready classifier.
+  - Added main-text clarification that "30 m" refers to the analytic grid and row unit, while MODIS NDVI, ECOSTRESS LST, DEM, and vector-derived inputs are aligned or summarized to that grid rather than all being independent native 30 m observations.
+  - Expanded sampling-validity language to explain the 5,000 rows-per-city target-rate-stratified design, including 500 positives and 4,500 negatives per city, comparable train/test sizes, and the limits around spatial density, clustering, and full-population feature distributions.
+  - Added concise design-validity context for the purposive 30-city benchmark set, broad climate-group labels, the fixed 2 km buffer, ECOSTRESS pass-count limitations, and the screening interpretation of the within-city top-decile target.
+  - Tempered the hot-arid interpretation so it is explicitly hypothesis-generating rather than a demonstrated causal mechanism.
+  - Fixed Figure 2 NDVI wording in both the SVG source and regenerated PNG: it now identifies MODIS/Terra MOD13A1.061 NDVI via AppEEARS for May-August 2023 rather than Landsat NDVI.
+  - Fixed Figure 3 by removing the unsupported calibration-table language from the SVG source and regenerated PNG.
+  - Rebuilt Figure 5 as a readable two-panel horizontal city-level RF-minus-logistic delta chart with city labels, PR AUC sorting, recall deltas, and climate-group colors.
+  - Updated `src/report_artifacts.py` so Figure 2, Figure 3, and Figure 5 are reproducibly regenerated from the report artifact command.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/figures/workflow_overview.svg`
+  - `docs/report/figures/workflow_overview.png`
+  - `docs/report/figures/evaluation_design.svg`
+  - `docs/report/figures/evaluation_design.png`
+  - `docs/report/figures/city_metric_deltas.png`
+  - `docs/report/tables/data_sources_variables.csv`
+  - `docs/report/tables/final_dataset_columns.csv`
+  - `docs/report/tables/final_dataset_by_climate_group.csv`
+  - `docs/report/tables/benchmark_metrics.csv`
+  - `docs/report/tables/rf_vs_logistic_by_climate.csv`
+  - `docs/report/tables/rf_vs_logistic_by_fold.csv`
+  - `docs/report/tables/rf_vs_logistic_city_paired_summary.csv`
+  - `docs/report/tables/city_fold_composition.csv`
+  - `docs/report/tables/model_baseline_specifications.csv`
+  - `docs/report/tables/retained_model_run_metadata.csv`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - `rg -n "TODO|PARTNER TODO|Landsat NDVI|calibration tables|src\.|Phase 3A|frontier|retained repository|handoff|Codex" docs\report\stat5630_final_report_draft.md`
+- Test status:
+  - `py_compile` passed for `src/report_artifacts.py` and `src/run_report_artifacts.py`.
+  - `src.run_report_artifacts` passed and regenerated report tables plus Figures 1-5/A1.
+  - Pandoc/XeLaTeX PDF render succeeded.
+- Manual verification status:
+  - Visually inspected regenerated Figure 2, Figure 3, and Figure 5 PNGs. Figure 2 no longer contains Landsat NDVI wording, Figure 3 no longer contains calibration-table wording, and Figure 5 has readable city labels including Las Vegas, Bakersfield, Tucson, Fresno, San Jose, Chicago, Portland, and Atlanta.
+  - Bundled `pypdf` inspection of `docs/report/stat5630_final_report_draft.pdf` reported 27 rendered pages and 8 embedded images; text extraction located Table 1, Figures 2/3/5, Results/Discussion, and Appendix Table A4 in the rendered PDF.
+  - The required stale-language search returned only the intentional `src.run_report_artifacts` command inside the Reproducibility Notes appendix; no TODOs, `PARTNER TODO`, `Landsat NDVI`, `calibration tables`, `Phase 3A`, `frontier`, `handoff`, or `Codex` hits remain in the report markdown.
+  - A page-level rasterizer was not available in the environment, so visual inspection was performed on the regenerated figure images plus PDF text/image-object inspection rather than full rendered page screenshots.
+- Remaining caveats:
+  - The report still uses a concise purposive-city-selection explanation because no formal city-selection sampling frame or formal climate-classification source was discoverable in the existing project artifacts.
+  - No new modeling analysis, full-city scoring, repeated-sample uncertainty analysis, or calibration table was added.
+
+### 2026-04-26 - Checkpoint: Final Report Reader-Facing Polish Pass
+
+- Date / checkpoint:
+  - 2026-04-26 final reader-facing polish pass focused on `docs/report/stat5630_final_report_draft.md`.
+- Change made:
+  - Reframed the report title and primary research question from hotspot prediction/identification toward city-held-out ranking and screening of 30 m cells likely to fall in the within-city hottest decile.
+  - Removed the visible partner TODO placeholders from the final report draft and replaced unresolved partner-note language with concise reader-facing prose or limitations.
+  - Corrected NDVI provenance from Landsat wording to the project-recorded MODIS/Terra MOD13A1.061 AppEEARS source.
+  - Strengthened Table 1 provenance with 2020 Census TIGERweb urban areas, Annual NLCD 2021 Collection 1 land-cover/imperviousness, USGS 3DEP 1 arc-second DEM, NHDPlus HR, MOD13A1.061 NDVI, ECO_L2T_LSTE.002 LST, and the May 1-August 31, 2023 NDVI/LST window.
+  - Added an explicit note that Table 1 variables are summarized to the 30 m grid-cell row, with MODIS NDVI interpreted as an aligned warm-season vegetation summary.
+  - Added a clear spatial-dependence caveat: the 71.4 million 30 m rows are not independent observations because nearby cells share land cover, sensor conditions, spatial context, and thermal structure.
+  - Removed main-body/internal report-generation language such as source-file callouts and module-generation wording; retained paths and commands only in the Reproducibility Notes appendix.
+  - Updated `src.report_artifacts` so regenerated report tables preserve the corrected provenance and `docs/report/figures/study_city_points.png` is regenerated as a climate-colored, labeled city-location figure.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/tables/data_sources_variables.csv`
+  - `docs/report/tables/final_dataset_columns.csv`
+  - `docs/report/tables/final_dataset_by_climate_group.csv`
+  - `docs/report/tables/benchmark_metrics.csv`
+  - `docs/report/tables/rf_vs_logistic_by_climate.csv`
+  - `docs/report/tables/rf_vs_logistic_by_fold.csv`
+  - `docs/report/tables/rf_vs_logistic_city_paired_summary.csv`
+  - `docs/report/tables/city_fold_composition.csv`
+  - `docs/report/tables/model_baseline_specifications.csv`
+  - `docs/report/tables/retained_model_run_metadata.csv`
+  - `docs/report/figures/study_city_points.png`
+  - `docs/report/figures/final_dataset_city_row_counts.png`
+  - `docs/report/figures/benchmark_metrics.png`
+  - `docs/report/figures/city_metric_deltas.png`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+- Test status:
+  - `src.run_report_artifacts` passed and regenerated report tables/figures.
+  - `py_compile` passed for `src/report_artifacts.py` and `src/run_report_artifacts.py`.
+  - Pandoc/XeLaTeX render succeeded.
+- Manual verification status:
+  - Searched the final draft for visible TODOs, obsolete identification/detection phrasing, source-file callouts, module names outside Reproducibility Notes, and stale Landsat-derived NDVI wording.
+  - Bundled `pypdf` inspection reported 26 rendered PDF pages and confirmed the title page, updated main text, Table 1, benchmark tables, appendix tables, and Reproducibility Notes are present.
+  - Visually inspected the rendered PDF in the in-app browser at the title page, Table 1/Table 3 region, Figure 1/Figure 2 region, Figure 3/Figure 4/Figure 5 region, Appendix Table A4, and Appendix Figures A1-A3.
+- Cleanup status:
+  - Identified conservative cleanup candidates in `docs/report`: `final_report_next_codex_prompt.md`, `STAT5630_final_report_harsh_content_critique.md`, `final_report_planning.md`, `final_report_outline.md`, and `cross_city_urban_heat_report.md`.
+  - Did not delete these files yet because local deletion requires action-time confirmation. The current report source/PDF, report figures/tables, assignment PDF, and project proposal were intentionally retained.
+- Immediate Next Step:
+  - If deletion is confirmed, remove the five identified obsolete planning/critique/older-report files and record the removal here.
+
+### 2026-04-26 - Checkpoint: Final Report Critique Follow-Up Review
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to compare the latest rendered report PDF against the prior harsh critique and prepare a next Codex prompt if improvement remains.
+- Change made:
+  - Reviewed `docs/report/stat5630_final_report_draft.pdf` as the latest rendered PDF by file timestamp and compared the current draft/source against `docs/report/STAT5630_final_report_harsh_content_critique.md`.
+  - Determined that the current version addresses most of the critique's highest-value statistical concerns: cautious conclusion, no-skill baseline, additional baseline rows, sampling transparency, fold/city variability evidence, city/fold appendix, model specification appendix, feature-importance appendix, Figure 4 prevalence line, climate-group Figure 5 context, and stronger validity framing.
+  - Identified remaining room for improvement: five visible `[PARTNER TODO]` placeholders, primary-question wording that still says "identify hotspot cells," generic Figure 1, incomplete product vintage/version details in Table 1, missing explicit non-independence sentence for the 30 m cells, and residual internal artifact/report-generation language.
+  - Added `docs/report/final_report_next_codex_prompt.md` with a focused last-mile revision prompt.
+- Files touched:
+  - `docs/report/final_report_next_codex_prompt.md`
+  - `docs/chat_handoff.md`
+- Test status:
+  - No tests or PDF rerender were run; this was a review and prompt-preparation pass.
+- Manual verification status:
+  - Confirmed current report PDF is newer than the critique document.
+  - Searched the current draft for remaining TODOs and internal artifact-language markers.
+  - Read the major critique sections and current report sections/tables that correspond to the critique.
+- Immediate Next Step:
+  - Use `docs/report/final_report_next_codex_prompt.md` for a final polish pass, then rerender and visually inspect the PDF before submission.
+
+### 2026-04-26 - Checkpoint: Final Report Cautious Benchmark Revision
+
+- Date / checkpoint:
+  - 2026-04-26 response to request for highest-value edits in `docs/report`.
+- Change made:
+  - Reframed `docs/report/stat5630_final_report_draft.md` conclusion from broad feasibility to the sharper claim that retained predictors show limited but real transferable ranking signal, strongest in hot-arid cities, and that the current model is not a robust all-city hotspot identifier.
+  - Expanded Table 3 to include the no-skill/prevalence reference, global-mean baseline, climate-only baseline, impervious-only baseline, land-cover-only baseline, matched 5k logistic/RF rows, and 20k logistic context.
+  - Added explicit sampling and benchmark-scope language: 5,000 sampled rows per city, target-rate stratification, 500 positives / 4,500 negatives per city, random state 42, sampled city preload, 120,000 train rows and 30,000 test rows per fold, and 5k as the matched headline comparison.
+  - Added fold-level and city-level paired variability evidence from existing modeling artifacts.
+  - Added appendix model/baseline specification and city/fold composition tables.
+  - Regenerated report-specific benchmark and city-delta figures; Figure 4 now includes the 10% prevalence reference, and Figure 5 uses climate-group coloring/separators.
+  - Moved the Denver held-out map to appendix support and added the feature-importance summary as an appendix-only, non-causal diagnostic figure.
+  - Added an explicit validity paragraph covering leakage/internal validity, sampling validity, spatial validity, construct validity, external validity, and model-comparison validity.
+  - Reduced main-text internal project language and kept detailed paths in the appendix/reproducibility section.
+  - Updated `docs/report/final_report_planning.md` and `docs/report/final_report_outline.md` to preserve the new cautious benchmark framing.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/final_report_planning.md`
+  - `docs/report/final_report_outline.md`
+  - `docs/report/tables/benchmark_metrics.csv`
+  - `docs/report/tables/rf_vs_logistic_by_fold.csv`
+  - `docs/report/tables/rf_vs_logistic_city_paired_summary.csv`
+  - `docs/report/tables/city_fold_composition.csv`
+  - `docs/report/tables/model_baseline_specifications.csv`
+  - `docs/report/tables/final_dataset_columns.csv`
+  - `docs/report/tables/retained_model_run_metadata.csv`
+  - `docs/report/figures/benchmark_metrics.png`
+  - `docs/report/figures/city_metric_deltas.png`
+  - `docs/report/figures/final_dataset_city_row_counts.png`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+- Test status:
+  - `src.run_report_artifacts` passed and regenerated report tables/figures.
+  - `py_compile` passed for `src/report_artifacts.py` and `src/run_report_artifacts.py`.
+  - Pandoc/XeLaTeX render succeeded.
+  - No full pytest suite was run; this was a report-writing and artifact-generation pass.
+- Manual verification status:
+  - Inspected the updated generated CSVs for benchmark metrics, fold deltas, city paired deltas, model specifications, and city/fold composition.
+  - Bundled `pypdf` inspection reported 26 rendered PDF pages, 8 image objects, 5 intentional `[PARTNER TODO]` placeholders, and no `Caption draft` or `APPENDIX TODO` markers.
+  - PDF text inspection indicates Main Text starts on page 2, references occupy page 11, Tables/Figures begin afterward, and the Main Text remains under the 15-page cap.
+- Immediate Next Step:
+  - Do one final partner TODO/citation polish pass and inspect the rendered wide tables visually before submission.
+
+### 2026-04-26 - Checkpoint: Final Report High-Value Expansion Pass
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to begin the next STAT 5630 final-report expansion pass using the High-Value Expansion Plan.
+- Change made:
+  - Expanded `docs/report/stat5630_final_report_draft.md` Background Information with:
+    - urban heat motivation.
+    - thermal remote sensing and LST framing.
+    - literature context for LST, NDVI, impervious surface, and urban thermal mapping.
+    - a clearer research gap around single-city/descriptive studies and spatial validation.
+  - Added verified references in a new `## References` section before Tables and Figures:
+    - Voogt and Oke (2003).
+    - Weng, Lu, and Schubring (2004).
+    - Yuan and Bauer (2007).
+    - NASA Earthdata/AppEEARS and ECOSTRESS documentation.
+    - NASA Science land-surface-temperature documentation.
+    - Roberts et al. (2017).
+    - Meyer et al. (2018).
+  - Expanded Dataset Construction with city/climate-group rationale, Census urban area plus 2 km buffer, preserved core geometry, local UTM 30 m grids, grid alignment, May-August NDVI/LST summaries, ECOSTRESS pass-count filtering, post-filter city-specific top-decile hotspot recomputation, and feature-missingness/audit details.
+  - Strengthened Model and Method with train-city-only preprocessing/tuning language and a reserved within-city validation paragraph framed as complementary/easier than unseen-city transfer.
+  - Expanded Results/Discussion with PR AUC interpretation against 10% prevalence, pooled versus mean-city interpretation, climate heterogeneity discussion, non-causal feature-importance framing, and stronger limitations.
+  - Kept partner TODO placeholders intact and did not change retained benchmark claims.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- Render command used:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+- Test status:
+  - No Python test suite was run; this was a report-writing and PDF-render pass.
+  - Pandoc/XeLaTeX render succeeded.
+- Manual verification status:
+  - Read the assignment PDF, report planning/outline files, current draft, final dataset audit, feature missingness table, climate-group summary table, and prior chat handoff before editing.
+  - Verified candidate citation details from primary/official or reliable source pages before adding references.
+  - Bundled `pypdf` inspection of the rendered PDF reported 22 total pages and 7 embedded image objects.
+  - Main Text starts on page 2 and Tables and Figures starts on page 11, so Main Text plus references occupies 9 pages before Tables and Figures and remains under the 15-page Main Text cap.
+  - Confirmed the rendered PDF still contains 5 intentional `[PARTNER TODO]` placeholders and contains no `Caption draft`, `APPENDIX TODO`, or `Drafting note` markers.
+- Immediate Next Step:
+  - Partner fill-in or final polish pass for the reserved related-work/statistical-method/discussion TODOs, then rerender and do one final table-wrap/figure placement inspection before producing the submission-named PDF.
+
+### 2026-04-26 - Checkpoint: Final Report Expansion Design Update
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to determine remaining high-value additions after the latest rendered PDF, without directly adding those sections to the manuscript.
+- Change made:
+  - Updated `docs/report/final_report_planning.md` with the latest formatting interpretation from the assignment and rendered PDF:
+    - the 15-page limit applies to Main Text only.
+    - title page, Tables and Figures, and Appendix are outside that limit.
+    - the current rendered Main Text leaves room for meaningful expansion.
+  - Added a high-value expansion plan to `docs/report/final_report_planning.md` prioritizing:
+    - 1-2 pages of background/literature and research-gap framing.
+    - a more detailed dataset-construction methodology section.
+    - clearer separation between whole-city held-out validation and partner-provided within-city held-out validation.
+    - more rigorous analysis/results interpretation.
+  - Updated `docs/report/final_report_outline.md` to reflect the same expansion priorities and partner-method boundary.
+- Files touched:
+  - `docs/report/final_report_planning.md`
+  - `docs/report/final_report_outline.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - No render required; planning/design documentation only.
+- Test status:
+  - Not run; documentation-only change.
+- Manual verification status:
+  - Re-read the assignment requirement text: Main Text is single-spaced, 12 pt, 1 inch margins, limited to 15 pages for a two-person project.
+  - Re-read the latest rendered PDF status: full PDF is 18 pages, but Main Text is roughly pages 2-7, leaving space to expand while remaining under the Main Text limit.
+  - Checked the current draft title-page/Pandoc setup and current git status before editing planning docs.
+- Immediate Next Step:
+  - Start a focused expansion pass that adds referenced background/research-gap text, expands dataset-construction methodology, strengthens whole-city held-out validation methods, reserves within-city validation for partner contribution, and then rerenders to confirm the Main Text remains under 15 pages.
+
+### 2026-04-26 - Checkpoint: Final Report Title Page, Image Embeds, And PDF Layout Pass
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to prepare the STAT 5630 final-report draft for a more realistic local PDF render with title page, embedded figures, and layout inspection.
+- Change made:
+  - Added a separate rendered title page to `docs/report/stat5630_final_report_draft.md` with the project title, collaborators, course, final-report label, and date.
+  - Replaced the figure source-path-only entries in the Tables and Figures section with actual Markdown image embeds and retained polished captions as caption text below the images.
+  - Converted `docs/report/figures/workflow_overview.svg` and `docs/report/figures/evaluation_design.svg` to PDF-render PNG copies because the local Pandoc/XeLaTeX toolchain did not have `rsvg-convert` available for direct SVG conversion.
+  - Added small-font wrappers around wide tables and moved long note columns out of Table 3 and Appendix Table A2 into nearby explanatory text to reduce PDF table squeezing without dropping the content.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/figures/workflow_overview.png`
+  - `docs/report/figures/evaluation_design.png`
+  - `docs/chat_handoff.md`
+- Render command used:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+- Test status:
+  - Pandoc/XeLaTeX render succeeded.
+  - Bundled Python `pypdf` inspection succeeded.
+  - `pypdf` reported 18 pages and 7 unique embedded image objects in the rendered PDF.
+- Manual verification status:
+  - Extracted PDF text confirms the title page, collaborator names, course, Main Text, Tables and Figures, and Appendix are present.
+  - Confirmed the five intentional `[PARTNER TODO]` placeholders remain in the draft and rendered PDF.
+  - Rendered page PNG previews locally with Ghostscript and visually inspected the title/main-text, tables/figures, and appendix contact sheets.
+  - Figures now appear as actual images in the Tables and Figures section instead of source-path-only listings.
+- Remaining formatting concerns:
+  - Table 1 and Appendix Table A1 are readable but still dense because they contain long schema/source descriptions.
+  - The main benchmark tables are less cramped after moving long notes outside the table body, but the final submission would still benefit from one last PDF pass after partner TODOs and citations are filled.
+- Immediate Next Step:
+  - Resolve partner TODO placeholders and citations, then rerender with the same command and do a final page-count/table-wrap check before creating the submission-named PDF copy.
+
+### 2026-04-26 - Checkpoint: Final Report Local PDF Render Read
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to render the current final-report draft locally and read the resulting PDF.
+- Change made:
+  - Rendered `docs/report/stat5630_final_report_draft.md` to `docs/report/stat5630_final_report_draft.pdf` using Quarto's bundled Pandoc directly with `xelatex`.
+  - Extracted and inspected the PDF text with bundled Python `pypdf`.
+  - Checked PDF page resources and confirmed the rendered PDF contains no embedded image objects.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from gfm --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+- Test status:
+  - Render command succeeded.
+  - PDF text extraction with bundled `pypdf` succeeded.
+- Manual verification status:
+  - Rendered PDF has 11 pages.
+  - Main text plus tables/figures/appendix render as text.
+  - Five intentional partner TODO placeholders remain in the PDF.
+  - No `Caption draft`, `APPENDIX TODO`, or `Drafting note` markers appear in the PDF.
+  - The current Tables and Figures section lists figure source paths and captions, but does not embed the actual figure images; `pypdf` reported zero image XObjects.
+- Immediate Next Step:
+  - Before final PDF submission, replace figure source-path listings with actual Markdown image embeds or a report-rendering format that includes the figures, resolve partner TODO placeholders, add a proper title page, and rerender for layout/table wrapping review.
+
+### 2026-04-26 - Checkpoint: Final Report Appendix And Coherence Pass
+
+- Date / checkpoint:
+  - 2026-04-26 response to request for the third STAT 5630 final-report writing pass: complete appendix scaffolding and tighten the report without changing the retained benchmark story.
+- Change made:
+  - Completed the Appendix in `docs/report/stat5630_final_report_draft.md` with:
+    - Appendix Table A1, a concise final-dataset schema table.
+    - Appendix Table A2, retained logistic/RF run metadata.
+    - A reproducibility note with the report-artifact command, canonical dataset paths, audit/fold paths, report table/figure paths, and retained benchmark source paths.
+  - Replaced all `Caption draft:` wording in the Tables and Figures section with polished captions.
+  - Added explicit notes that Table 3 and Table 4 are simplified report-facing tables generated from retained artifacts.
+  - Tightened transitions between Dataset Construction, Model and Method, and Analysis without changing the core retained logistic/RF comparison.
+  - Kept all partner TODO placeholders intact.
+  - Extended `src.report_artifacts` so `src.run_report_artifacts` now also generates:
+    - `docs/report/tables/final_dataset_columns.csv`
+    - `docs/report/tables/retained_model_run_metadata.csv`
+  - Updated `docs/report/final_report_planning.md` to record the new appendix-ready generated tables.
+- Files touched:
+  - `src/report_artifacts.py`
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/tables/final_dataset_columns.csv`
+  - `docs/report/tables/retained_model_run_metadata.csv`
+  - `docs/report/final_report_planning.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts` passed and regenerated all report tables plus the city row-count figure.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py` passed.
+  - Full modeling pipeline was not run.
+- Manual verification status:
+  - Read the requested report draft, planning/outline docs, data dictionary, modeling plan, retained benchmark report, feature-importance summary, held-out map summary, and report artifact generator before editing.
+  - Inspected the generated final-dataset column and retained model metadata CSVs.
+  - Searched the draft to confirm no `Caption draft`, `APPENDIX TODO`, or `Drafting note` markers remain, and that partner TODO placeholders remain.
+- Immediate Next Step:
+  - Final copyedit and partner fill-in for related work, course-language method polish, and discussion caveats, followed by PDF rendering/format review.
+
+### 2026-04-26 - Checkpoint: Final Report Method And Results Writing Pass
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to continue the STAT 5630 final-report draft with Model and Method plus retained benchmark Analysis/Discussion prose.
+- Change made:
+  - Expanded `docs/report/stat5630_final_report_draft.md` Section 4 with polished Model and Method prose covering the prediction task, leakage-safe feature contract, excluded variables, five-fold city-held-out design, baselines, logistic SAGA, random forest, PR AUC, mean city PR AUC, recall at top 10% predicted risk, and the sampled benchmark caveat.
+  - Expanded Section 5 with retained benchmark Analysis/Discussion prose centered on the matched `5,000` rows-per-city logistic-vs-RF comparison.
+  - Added main-text callouts to Figure 3, Table 3, Table 4, Figure 4, Figure 5, and Figure 6.
+  - Extended `src.report_artifacts` / `src.run_report_artifacts` to generate simplified report-facing benchmark and climate-delta tables from retained modeling outputs.
+  - Generated `docs/report/tables/benchmark_metrics.csv` for Table 3.
+  - Generated `docs/report/tables/rf_vs_logistic_by_climate.csv` for Table 4.
+  - Updated `docs/report/final_report_planning.md` to record the generated report-facing Table 3 and Table 4 files.
+- Files touched:
+  - `src/report_artifacts.py`
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/tables/benchmark_metrics.csv`
+  - `docs/report/tables/rf_vs_logistic_by_climate.csv`
+  - `docs/report/final_report_planning.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py` passed.
+  - No full pytest suite was run; this was a scoped report-writing/artifact-generation pass.
+- Manual verification status:
+  - Read the requested report planning, draft, technical report, retained benchmark report, benchmark CSVs, city/climate error tables, and modeling plan before drafting.
+  - Inspected generated `benchmark_metrics.csv` and `rf_vs_logistic_by_climate.csv`.
+  - Searched the draft to confirm the old drafting notes were removed and the requested table/figure callouts were present.
+  - Preserved partner TODO placeholders and kept supplemental model families/results subordinate to the retained logistic/RF city-held-out comparison.
+- Immediate Next Step:
+  - Continue with appendix completion: final dataset column table, hyperparameter/run metadata, and reproducibility notes, then do a whole-report tightening pass for page length and flow.
+
+### 2026-04-26 - Checkpoint: Final Report First Writing Pass And Dataset Artifacts
+
+- Date / checkpoint:
+  - 2026-04-26 response to request to begin the STAT 5630 final-report writing pass after generating the high-priority report artifacts.
+- Change made:
+  - Added `src.report_artifacts` and `src.run_report_artifacts` to regenerate the final-report dataset tables and city row-count figure from retained audit artifacts.
+  - Generated `docs/report/tables/data_sources_variables.csv`.
+  - Generated `docs/report/tables/final_dataset_by_climate_group.csv`.
+  - Generated `docs/report/figures/final_dataset_city_row_counts.png`.
+  - Added `docs/report/stat5630_final_report_draft.md` with the first writing pass for Background Information, Research Questions, and Dataset Construction, plus separate Tables and Figures and Appendix scaffolding.
+  - Preserved the intentional partner TODO placeholders from `docs/report/final_report_outline.md`.
+  - Updated `docs/report/final_report_planning.md` to mark the high-priority artifacts as generated and point to the draft manuscript.
+  - Added a narrow `.gitignore` exception so `docs/report/figures/` report assets are visible to version control instead of hidden by the broad `figures/` ignore rule.
+- Files touched:
+  - `.gitignore`
+  - `src/report_artifacts.py`
+  - `src/run_report_artifacts.py`
+  - `docs/report/tables/data_sources_variables.csv`
+  - `docs/report/tables/final_dataset_by_climate_group.csv`
+  - `docs/report/figures/final_dataset_city_row_counts.png`
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/final_report_planning.md`
+  - `docs/chat_handoff.md`
+- How to run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+- Test status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py` passed.
+  - No full pytest suite was run; this was a report-writing/artifact-generation pass.
+- Manual verification status:
+  - Read the required report-planning, technical-report, data-dictionary, workflow, audit, and city-summary files before drafting.
+  - Inspected the generated data-source table and climate-group summary table.
+  - Confirmed the climate-group totals sum to 30 cities, 71,394,894 rows, and 7,139,588 hotspot positives.
+  - Opened the generated city row-count figure and confirmed it renders with city labels and climate-group colors.
+- Immediate Next Step:
+  - Continue drafting Model and Method, then Analysis/Discussion, using the retained sampled benchmark caveat and keeping tables/figures outside the main text.
+
 ### 2026-04-26 - Checkpoint: Final Report Planning Scaffold
 
 - Date / checkpoint:

@@ -29,11 +29,17 @@ Course:
   - Analysis, Conclusion and Discussion
   - Appendix
 
+Working interpretation after reading the assignment:
+
+- The 15-page cap applies to Main Text only, not to the title page, Tables and Figures section, or Appendix.
+- The current rendered draft leaves substantial Main Text space available, so the report should be expanded for rigor rather than kept artificially short.
+- Preserve single spacing, 12 pt font, and 1 inch margins in the Pandoc/XeLaTeX render command.
+
 ## Core Narrative
 
 Urban heat varies at fine spatial scales, but models evaluated with ordinary row-level splits can overstate how well they would generalize to cities that did not contribute training labels. This project builds a standardized 30 m cell-level dataset for 30 U.S. cities and evaluates whether non-thermal geospatial predictors can identify the hottest within-city cells in fully held-out cities. The main contribution is therefore twofold: a reproducible cross-city urban heat dataset and a leakage-safe city-held-out modeling benchmark.
 
-The conclusion should be deliberately bounded. Cross-city hotspot prediction is feasible because learned models outperform simple transfer baselines, but performance is moderate and uneven across cities and climate groups. The strongest current random-forest checkpoint improves pooled PR AUC and top-decile recall relative to the matched logistic regression checkpoint, while logistic regression remains slightly stronger on mean city PR AUC. The project supports transferable screening, not deployment-ready heat-risk classification.
+The conclusion should be deliberately bounded. The retained predictors show limited but real transferable ranking signal, strongest in hot-arid cities; the current model is not a robust all-city hotspot identifier. The strongest current random-forest checkpoint improves pooled PR AUC and top-decile recall relative to the matched logistic regression checkpoint, but its gains over simple baselines are modest and city-level wins are heterogeneous. The project supports a transfer-screening benchmark with clear limits, not deployment-ready heat-risk classification.
 
 ## Main Text
 
@@ -45,6 +51,16 @@ Purpose:
 - Explain why fine-scale land-surface characteristics matter.
 - Introduce the transfer gap: within-city prediction is easier than predicting hotspots in cities not seen during training.
 - Identify the public data sources used to construct the dataset.
+- Establish a clear research gap from existing work:
+  - many remote-sensing urban heat studies map one city or summarize correlations.
+  - LST studies commonly link heat with impervious surface, vegetation/NDVI, water, and land cover.
+  - spatial prediction can look stronger under random row/cell splits than under spatial or city-level validation.
+  - this project asks the harder transfer question by holding out entire cities.
+
+Target expansion:
+
+- Add at least 1-2 pages of background/literature context before the research questions.
+- Include formal references and a References section later in the document.
 
 Use from proposal:
 
@@ -64,6 +80,14 @@ Update from proposal:
 Partner gap:
 
 `[PARTNER TODO: Add 1-2 paragraphs of related-work context and citations on urban heat mapping, remotely sensed LST, or transfer/generalization in spatial ML. Keep this aligned with the dataset and transfer benchmark rather than a broad climate-change essay.]`
+
+Suggested references to verify and use:
+
+- Voogt and Oke (2003) on thermal remote sensing of urban climates.
+- Weng, Lu, and Schubring (2004) and/or Yuan and Bauer (2007) on LST, impervious surface, and NDVI.
+- NASA Earthdata / ECOSTRESS documentation on LST and ECOSTRESS spatial/temporal data properties.
+- NASA Earthdata / AppEEARS documentation for data access/subsetting.
+- Spatial cross-validation literature such as Roberts et al. (2017) or Meyer et al. (2018) for transfer/validation concerns.
 
 ### 2. Research Questions
 
@@ -88,6 +112,7 @@ Purpose:
 
 - This should be the first major writing pass.
 - Explain the completed dataset clearly enough that the modeling setup feels inevitable.
+- Use additional Main Text space to make this section a methodological contribution, not just a schema summary.
 
 Key facts:
 
@@ -119,6 +144,17 @@ Construction steps:
    - drop rows with fewer than 3 valid ECOSTRESS passes
    - recompute `hotspot_10pct` within each city after filtering
 
+Expansion priorities:
+
+- Explain why city selection and climate grouping matter for transfer.
+- Explain why the Census urban area plus 2 km buffer is used.
+- Explain why the core urban geometry is preserved.
+- Explain why local UTM and a master 30 m grid are important for distances and alignment.
+- Explain how raster and vector layers are converted to cell-level features.
+- Explain May-August summaries for NDVI and ECOSTRESS LST.
+- Explain pass-count filtering and city-specific hotspot recomputation.
+- Add a short data-quality paragraph using audit totals and missingness if space allows.
+
 Variables to describe:
 
 - Predictors used in headline models:
@@ -147,6 +183,8 @@ Purpose:
 
 - Translate the dataset into a statistical learning problem.
 - Emphasize leakage-safe city-held-out evaluation.
+- Spend more methodological detail on whole-city held-out validation because it is the paper's core design contribution.
+- Reserve a clearly marked paragraph/subsection for partner-provided within-city held-out validation, framed as complementary and easier than unseen-city transfer.
 
 Prediction task:
 
@@ -169,6 +207,12 @@ Evaluation design:
 - Six held-out cities per fold.
 - Every city held out exactly once.
 - All preprocessing, imputation, scaling, encoding, feature selection, and tuning fit only on training-city rows.
+
+Partner-method boundary:
+
+- Main/headline validation = whole-city held-out validation.
+- Partner may add within-city held-out validation as a supplemental diagnostic.
+- Within-city validation should not be described as evidence of transfer to new cities.
 
 Metrics:
 
@@ -207,6 +251,7 @@ Partner gap:
 Purpose:
 
 - Present the benchmark as evidence for bounded transfer, not as a claim of high accuracy.
+- Use available Main Text space to interpret not only which model is higher, but why the metrics disagree and what that implies for transfer reliability.
 
 Required result claims:
 
@@ -243,6 +288,15 @@ Feature interpretation:
 
 - Retained RF permutation importance and logistic coefficients suggest vegetation, imperviousness, land cover, elevation, and climate group carry most of the transferable signal.
 - State clearly that feature importance is not causal evidence.
+
+Analysis expansion priorities:
+
+- Interpret PR AUC relative to the 10% hotspot prevalence.
+- Explain pooled PR AUC versus mean city PR AUC.
+- Emphasize matched 5k logistic/RF comparison as the cleanest model contrast.
+- Discuss climate-group heterogeneity as a main result, not a side note.
+- Mention feature-importance evidence only as supplemental/non-causal.
+- Strengthen validity/limitations language around sampled benchmark, LST versus human exposure, city-relative target, and spatial dependence.
 
 Partner gap:
 

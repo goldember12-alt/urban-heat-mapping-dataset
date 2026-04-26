@@ -1,0 +1,31 @@
+City ID,City,Climate group,Final rows,Hotspot count,Hotspot prevalence,Outer fold
+1,Phoenix,Hot-arid,3199440,319949,0.1,2
+2,Tucson,Hot-arid,1779906,177991,0.1,0
+3,Las Vegas,Hot-arid,1718669,171867,0.1,3
+4,Albuquerque,Hot-arid,1336755,133676,0.1,4
+5,El Paso,Hot-arid,738527,73853,0.1,4
+6,Denver,Hot-arid,1859393,185943,0.1,1
+7,Salt Lake City,Hot-arid,863557,86356,0.1,1
+8,Fresno,Hot-arid,459104,45912,0.1,1
+9,Bakersfield,Hot-arid,382964,38297,0.1,0
+10,Reno,Hot-arid,475828,47583,0.1,2
+11,Houston,Hot-humid,5054661,505468,0.1,2
+12,Columbia,Hot-humid,1055916,105626,0.1,2
+13,Richmond,Hot-humid,1481846,148185,0.1,0
+14,New Orleans,Hot-humid,700063,70008,0.1,3
+15,Tampa,Hot-humid,2847118,284712,0.1,0
+16,Miami,Hot-humid,3635068,363510,0.1,3
+17,Jacksonville,Hot-humid,1664542,166458,0.1,2
+18,Atlanta,Hot-humid,7081699,708171,0.1,0
+19,Charlotte,Hot-humid,1896996,189703,0.1,3
+20,Nashville,Hot-humid,1680248,168025,0.1,4
+21,Seattle,Mild-cool,2831875,283189,0.1,2
+22,Portland,Mild-cool,1496116,149618,0.1,1
+23,San Francisco,Mild-cool,1466276,146628,0.1,3
+24,San Jose,Mild-cool,817627,81764,0.1,0
+25,Los Angeles,Mild-cool,4736063,473607,0.1,4
+26,San Diego,Mild-cool,1948679,194869,0.1,4
+27,Chicago,Mild-cool,6722963,672306,0.1,1
+28,Minneapolis,Mild-cool,2946162,294619,0.1,1
+29,Detroit,Mild-cool,3702849,370291,0.1,4
+30,Boston,Mild-cool,4813984,481404,0.1,3

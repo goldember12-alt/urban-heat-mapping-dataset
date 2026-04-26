@@ -1,0 +1,4 @@
+Climate group,City count,RF PR AUC wins,Logistic PR AUC wins,Mean PR AUC delta,RF recall wins,Logistic recall wins,Mean recall-at-top-10% delta
+Hot-arid,10,5,5,0.0336,6,4,0.0762
+Hot-humid,10,2,8,-0.0123,2,8,-0.0164
+Mild-cool,10,2,8,-0.0281,1,9,-0.028

@@ -24,6 +24,8 @@ Thumbs.db
 data_raw/
 data_processed/
 figures/
+!docs/report/figures/
+!docs/report/figures/**
 
 # Local diagnostics and oversized transfer-inference export
 gcm-diagnose.log
