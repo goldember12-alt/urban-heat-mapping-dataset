@@ -1,4 +1,4 @@
-climate_group,city_count,total_rows,total_hotspot_positives,hotspot_prevalence,min_city_rows,median_city_rows,max_city_rows,median_valid_ecostress_passes
-Hot-arid,10,12814143,1281427,0.1,382964,1100156,3199440,30.0
-Hot-humid,10,27098157,2709866,0.1,700063,1788622,7081699,21.5
-Mild-cool,10,31482594,3148295,0.1,817627,2889018,6722963,33.0
+Climate group,City count,Total rows,Hotspot count,Hotspot prev.,Min rows,Median rows,Max rows,Median valid passes
+Hot arid,10,12814143,1281427,0.1,382964,1100156,3199440,30.0
+Hot humid,10,27098157,2709866,0.1,700063,1788622,7081699,21.5
+Mild cool,10,31482594,3148295,0.1,817627,2889018,6722963,33.0

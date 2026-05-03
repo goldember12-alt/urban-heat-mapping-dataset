@@ -1,0 +1,3 @@
+run,rows,positive_rate,ap_original,ap_inverted_scores,roc_auc_original,roc_auc_inverted_scores,top10_positive_rate_original,top10_positive_rate_inverted,interpretation
+logistic_5k,150000,0.100000,0.142109,0.073091,0.629389,0.370611,0.164667,0.035600,"Original scores rank hotspots above non-hotspots; inverted scores perform worse."
+rf_frontier_5k,150000,0.100000,0.148591,0.075173,0.621411,0.378589,0.196067,0.049667,"Original scores rank hotspots above non-hotspots; inverted scores perform worse."

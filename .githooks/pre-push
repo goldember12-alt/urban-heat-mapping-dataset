@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+"""Block pushes that introduce parquet artifacts into Git history."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import PurePosixPath
+
+
+ZERO_SHA = "0" * 40
+
+
+def git_lines(args: list[str]) -> list[str]:
+    """Run a Git command and return nonempty output lines."""
+    result = subprocess.run(
+        ["git", *args],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def parquet_paths_for_update(remote_sha: str, local_sha: str) -> list[str]:
+    """Return parquet paths added or modified by a ref update."""
+    if local_sha == ZERO_SHA:
+        return []
+
+    if remote_sha == ZERO_SHA:
+        candidate_paths = git_lines(["ls-tree", "-r", "--name-only", local_sha])
+    else:
+        candidate_paths = git_lines(
+            ["diff", "--name-only", "--diff-filter=AMR", remote_sha, local_sha]
+        )
+
+    return [
+        path
+        for path in candidate_paths
+        if PurePosixPath(path).suffix.lower() == ".parquet"
+    ]
+
+
+def main() -> int:
+    blocked_paths: list[str] = []
+
+    for line in sys.stdin:
+        fields = line.strip().split()
+        if len(fields) != 4:
+            continue
+        _local_ref, local_sha, _remote_ref, remote_sha = fields
+        blocked_paths.extend(parquet_paths_for_update(remote_sha, local_sha))
+
+    if not blocked_paths:
+        return 0
+
+    print(
+        "Push blocked: commits being pushed add or modify parquet artifacts.",
+        file=sys.stderr,
+    )
+    print(
+        "Parquet files are generated outputs and should stay local or be stored "
+        "outside Git.",
+        file=sys.stderr,
+    )
+    for path in sorted(set(blocked_paths)):
+        print(f"  - {path}", file=sys.stderr)
+
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

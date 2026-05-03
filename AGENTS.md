@@ -202,15 +202,19 @@ Do not claim a full canonical benchmark has been completed unless it is actually
 
 ## Python Environment Rules
 
-Use the repo-local virtual environment as the standard interpreter:
+Use the user-level virtual environment as the standard interpreter:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ...
+C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m ...
 ```
 
 Environment rules:
 
-- prefer the repo-local `.venv` for normal repo work
+- prefer `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\` for normal repo work
+- do not create or recreate `.venv` inside the repository
+- keep temporary files under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\`, not under repo-local `.tmp`, `.codex_tmp`, or other scratch folders
+- keep pip/cache material under `C:\Users\golde\.pip-cache\` or another user-level cache root, not under the repository
+- for temp-heavy or install commands, set `TEMP`, `TMP`, and `PIP_CACHE_DIR` to those user-level roots before running the command
 - treat parquet as the canonical modeling path
 - keep CSV support as a compatibility path, not the primary modeling reference
 - do not hardcode credentials

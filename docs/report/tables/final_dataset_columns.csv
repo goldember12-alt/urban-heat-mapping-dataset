@@ -1,4 +1,4 @@
-Column,Definition,Role in report,Used in headline model?
+Column,Definition,Role in report,Primary predictor?
 city_id,Integer city identifier used for joins and grouped cross-validation.,Grouping / metadata,No
 city_name,Human-readable city name.,Metadata,No
 climate_group,Broad climate grouping label for the city.,Predictor / stratifier,Yes

@@ -1,0 +1,26 @@
+* text=auto eol=lf
+
+# Keep generated/binary artifacts out of line-ending normalization.
+*.csv text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.svg text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.docx binary
+*.pptx binary
+*.xlsx binary
+*.gpkg binary
+*.tif binary
+*.tiff binary
+*.parquet binary
+*.joblib binary

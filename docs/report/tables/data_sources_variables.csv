@@ -1,8 +1,8 @@
-Source,Raw product / layer,Constructed final variable(s),Spatial role,Used in headline model?
-U.S. Census urban areas,2020 Census TIGERweb urban-area polygon containing each selected city center,Study-area and core-city geometry; 30 m city grid,"Defines the city footprint, 2 km buffered study area, and grid alignment target",No
-NLCD,Annual NLCD 2021 Collection 1 land-cover class raster,land_cover_class,Categorical built and natural surface-cover predictor; open-water filter where class 11 is present,Yes
-NLCD,Annual NLCD 2021 Collection 1 impervious percentage raster,impervious_pct,Cell-level built-intensity predictor aligned to the 30 m grid,Yes
-USGS 3DEP,3DEP 1 arc-second digital elevation model,elevation_m,Terrain predictor aligned to the 30 m grid,Yes
-NHDPlus HR,NHDPlus High Resolution hydrography water features,dist_to_water_m,Distance-to-nearest-water predictor derived from clipped vector water features,Yes
-MODIS/Terra via AppEEARS,"MOD13A1.061 500 m 16-day NDVI observations, May 1-August 31, 2023",ndvi_median_may_aug,Summertime vegetation predictor summarized to each grid cell,Yes
-ECOSTRESS via AppEEARS,"ECO_L2T_LSTE.002 daytime land-surface-temperature observations, May 1-August 31, 2023",lst_median_may_aug; n_valid_ecostress_passes; hotspot_10pct,"Thermal outcome source, LST quality support field, and within-city top-decile target",No
+Source,Product/layer,Constructed variable(s),Role
+U.S. Census urban areas,2020 TIGERweb urban-area polygon,Study-area and core-city geometry; 30 m city grid,Study region and grid target
+NLCD,2021 land-cover raster,land_cover_class,Predictor; open-water filter
+NLCD,2021 impervious percentage raster,impervious_pct,Built-intensity predictor
+USGS 3DEP,1 arc-second DEM,elevation_m,Terrain predictor
+NHDPlus HR,High-resolution hydrography,dist_to_water_m,Water-proximity predictor
+MODIS/Terra via AppEEARS,"MOD13A1.061 NDVI, May-Aug. 2023",ndvi_median_may_aug,Vegetation predictor
+ECOSTRESS via AppEEARS,"ECO_L2T_LSTE.002 LST, May-Aug. 2023",lst_median_may_aug; n_valid_ecostress_passes; hotspot_10pct,Outcome source and quality support

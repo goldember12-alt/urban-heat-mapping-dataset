@@ -7,7 +7,9 @@
 
 {\huge\bfseries Cross-City Urban Heat Hotspot Screening:\par}
 \vspace{0.12in}
-{\huge\bfseries Within-City Learning and City-Held-Out Transfer\par}
+{\huge\bfseries Same-City Learning, City-Held-Out Transfer,\par}
+\vspace{0.12in}
+{\huge\bfseries and Spatial Alignment\par}
 \vspace{0.75in}
 
 {\Large Final Report\par}
@@ -28,125 +30,135 @@
 
 ### 1. Background Information
 
-Extreme urban heat is a public-health, infrastructure, and planning problem because thermal exposure is not distributed evenly across a city. At fine spatial scales, differences in pavement, roof surfaces, vegetation, water proximity, terrain, building density, and local land cover can produce large contrasts in surface heat across neighborhoods that are close together. A citywide average therefore hides the places where heat-mitigation investments, additional monitoring, or planning attention may be most useful. For a statistical learning project, the practical question is not only whether a city contains hot areas, but whether publicly available spatial variables can help rank local cells for screening when direct thermal labels are limited.
+Extreme urban heat is a public-health, infrastructure, and planning problem because surface heat is not distributed evenly within cities. Pavement, roofs, vegetation, water proximity, terrain, and land cover can create large temperature contrasts across nearby neighborhoods. A citywide average therefore hides the local places where heat-mitigation investment, additional monitoring, or planning attention may be most useful. For statistical learning, the practical question is whether public spatial variables can rank local grid cells for hotspot screening when direct thermal measurement is unavailable, incomplete, or reserved for evaluation.
 
-Much urban heat mapping is local and descriptive: it shows where hotter surfaces occur within one city or estimates associations between LST and surface descriptors in familiar places. The statistical question in this report is broader: whether basic environmental and built-environment features can identify urban heat hotspots across a multi-city dataset, and how the answer changes when evaluation moves from held-out cells inside represented cities to whole-city holdout transfer. That framing makes both the standardized multi-city dataset and the validation design contrast central to the contribution rather than just pipeline details.
+This report builds a standardized 30-city, 30 m grid-cell dataset and tests whether six public non-thermal predictors can identify each city's hottest surface-temperature cells. The central finding is that validation design changes the scientific conclusion: random forest performs strongly for same-city screening, but transfer to whole unseen cities is much weaker and only modestly better than simple imperviousness and land-cover baselines. A supplemental spatial-alignment diagnostic adds nuance by showing that weak exact-cell transfer does not always mean the prediction surface is spatially random.
 
-Remote sensing is central to this problem because satellites can observe spatial patterns that are difficult to measure with ground stations alone. Thermal infrared sensors measure emitted radiation from the land surface and can be converted into land surface temperature, or LST. LST is not the same as the two-meter air temperature reported in a weather forecast: it describes how warm the observed surface would feel to the touch, so a roof, road, tree canopy, irrigated field, or bare soil patch may all behave differently. NASA's land-surface-temperature documentation emphasizes that land heats and cools differently from the air, and ECOSTRESS documentation describes a thermal mission that measures surface temperature at fine spatial detail from the International Space Station. That distinction is important for this report. The target is based on surface temperature, so the results should be interpreted as surface hotspot screening rather than direct human heat-exposure measurement.
+The analysis separates three evaluation uses. Same-city screening asks whether held-out cells can be ranked within cities represented during model development. Exact-cell city-held-out transfer asks whether the model ranks the same 30 m cells as hotspots that the observed LST label identifies as hotspots in an unseen city. Broad spatial placement asks whether high predicted risk falls in the same smoothed parts of an unseen city as observed hotspot concentration, even when the exact 30 m cells do not match. These three ideas are related, but they answer different planning and validation questions.
 
-Urban thermal remote sensing has a long history, but the literature also shows why this project needs a careful validation design. Voogt and Oke (2003) review thermal remote sensing of urban climates and note that many urban thermal studies historically emphasized qualitative maps of thermal patterns and simple correlations with surface descriptors. Later Landsat-based work gave more quantitative evidence for specific predictors. Weng, Lu, and Schubring (2004) studied the relationship between land surface temperature and vegetation abundance in Indianapolis and treated NDVI as a standard indicator of vegetation abundance in urban heat-island analysis. Yuan and Bauer (2007) compared NDVI and impervious surface as indicators of surface urban heat-island effects in the Twin Cities and found that percent impervious surface had a strong relationship with LST across seasons, while NDVI remained useful but more seasonally variable. Stewart and Oke (2012) also show why urban thermal behavior depends on local surface form, land cover, and urban structure rather than climate alone. Together, this work motivates the feature set used here: vegetation, imperviousness, land cover, terrain, and water proximity are not arbitrary columns, but physically plausible surface descriptors.
+Remote sensing makes the hotspot label possible because satellites can observe spatial surface-temperature patterns that ground stations alone cannot. Thermal infrared sensors measure emitted radiation from the land surface and can be converted into LST. LST is surface temperature, not two-meter air temperature: a roof, road, tree canopy, irrigated field, or bare-soil patch can heat differently from the surrounding air. NASA land-surface-temperature documentation emphasizes this distinction, and ECOSTRESS documentation describes a thermal mission that measures surface temperature at fine spatial detail from the International Space Station. The target in this report is therefore a surface-hotspot screening target, not a direct measure of human heat exposure.
 
-[Insert related-work extension here: briefly connect additional urban heat, spatial transfer, or spatial machine-learning literature to the report's motivation, emphasizing why the report compares within-city hotspot screening with city-held-out transfer rather than treating either design as sufficient by itself.]
+Urban thermal remote sensing has a long history, but the literature also shows why this project needs a careful validation design. Voogt and Oke (2003) review thermal remote sensing of urban climates and note that many urban thermal studies historically emphasized qualitative maps of thermal patterns and simple correlations with surface descriptors. Later Landsat-based work gave more quantitative evidence for specific predictors. Weng, Lu, and Schubring (2004) studied the relationship between land surface temperature and vegetation abundance in Indianapolis, while Yuan and Bauer (2007) compared NDVI and impervious surface as indicators of surface urban heat-island effects in the Twin Cities. Stewart and Oke (2012) also show why urban thermal behavior depends on local surface form, land cover, and urban structure rather than climate alone. Together, this work motivates an interpretable feature set based on vegetation, imperviousness, land cover, terrain, water proximity, and broad climate context, while heat vulnerability also depends on people, resources, and exposure conditions beyond surface temperature itself (Harlan et al., 2006).
 
-Vegetation matters because evapotranspiration and shading can lower surface temperatures, while low vegetation often leaves more exposed built or bare surfaces. Impervious surfaces matter because roads, roofs, sidewalks, and parking areas store and reradiate heat and reduce evaporative cooling. Land-cover class provides a compact description of surface type, distinguishing developed, forested, grass, wetland, and other covers. Water proximity matters because water bodies and riparian corridors can be associated with local cooling or with land-cover transitions. Terrain is also relevant: elevation, slope context, and valley or coastal settings can influence radiation, drainage, and local thermal patterns. Heat vulnerability also depends on people, resources, and exposure conditions, not surface temperature alone, as shown in neighborhood-scale heat-stress work such as Harlan et al. (2006). This report uses elevation directly and keeps distance-to-water as a simple hydrologic-context variable, while avoiding a larger feature expansion in the headline model so the first benchmark stays interpretable.
+AppEEARS, NASA's tool for requesting and subsetting Earth observation products, supports the reproducible remote-sensing part of the workflow by subsetting MODIS/Terra NDVI and ECOSTRESS LST to the same city study regions and May-August 2023 window used for modeling. The dataset therefore relies on consistent area requests and preprocessing rules rather than manually selected images.
 
-The data-access workflow also follows established remote-sensing practice. AppEEARS, the Application for Extracting and Exploring Analysis Ready Samples, is a NASA Earthdata/LP DAAC tool for spatial, temporal, and layer subsetting of remote-sensing products. In this project it supports reproducible area requests for MODIS/Terra NDVI and ECOSTRESS LST over city study regions. ECOSTRESS provides atmospherically corrected LST and emissivity products, while AppEEARS helps reduce those products to the city polygons and seasonal windows used for analysis. This matters for reproducibility because the report does not rely on manually downloaded images; it uses consistent acquisition and preprocessing rules tied to the same city definitions used for modeling.
+The validation design follows from the transfer question. Ordinary row or cell splits can be too easy for spatial data because nearby cells and cells from the same city can appear in both training and testing. Roberts et al. (2017) argue that ignoring spatial, temporal, or hierarchical structure in cross-validation can underestimate predictive error, and Meyer et al. (2018) show that target-oriented validation can reveal weaker performance when models must predict beyond familiar locations. This project applies the same principle at the city scale while also reporting the same-city screening question that planners often face inside a mapped city.
 
-The validation design follows from that gap. Even when prediction models are used, ordinary random row or cell splits can be too easy for spatial data because nearby cells and cells from the same city can appear in both training and testing. Roberts et al. (2017) argue that ignoring spatial, temporal, or hierarchical structure in cross-validation can underestimate predictive error, and Meyer et al. (2018) show that target-oriented validation can reveal much weaker performance than random folds when models must predict beyond familiar locations. This project applies the same principle at the city scale while also retaining the easier same-city screening question: within-city held-out evaluation asks whether the feature set can recover local hotspot structure when city examples are available, while city-held-out transfer asks whether those relationships carry to cities whose labels were completely unseen during training.
+The urban-heat literature motivates the feature set, while the spatial-validation literature motivates the evaluation design. Prior LST studies show that vegetation, imperviousness, land cover, and urban form can explain local thermal variation, but those relationships are often estimated within a single familiar city. The transfer question is harder: a model may interpolate well within a city yet lose accuracy when every cell in the evaluation city is outside the fitting process.
 
-This project therefore contributes a course-scale benchmark with three linked pieces: a standardized multi-city dataset, an explicit comparison between within-city held-out screening and city-held-out transfer, and a transparent model comparison using simple baselines, logistic regression, and random forest. The completed dataset contains 71,394,894 rows and 17 columns, with one row representing one analytic 30 m grid cell in one of 30 selected U.S. cities. The cities are balanced across three broad climate groups: 10 hot-arid, 10 hot-humid, and 10 mild-cool cities. The city-held-out benchmark remains the stricter transfer result, but it is interpreted alongside the within-city result rather than as a separate project. Figure 1 shows the selected city locations, and Table 2 summarizes the final audited dataset by climate group.
+The model comparison is deliberately modest. Logistic regression provides a linear benchmark, while random forest provides a nonlinear comparison that can capture threshold effects and interactions without adding a more complex deep-learning or spatial-statistical architecture. Because hotspots make up roughly one tenth of eligible cells, the city-held-out benchmark emphasizes precision-recall metrics rather than overall accuracy.
 
-The dataset combines public geospatial and remote-sensing sources that describe both the urban surface and the thermal outcome. 2020 Census urban-area geometry defines each study region. Annual NLCD 2021 land-cover and impervious-surface products provide categorical land cover and built-intensity measures. USGS 3DEP elevation supplies terrain information, while NHDPlus HR hydrography supports a distance-to-water feature. MODIS/Terra MOD13A1.061 NDVI, acquired through AppEEARS for May 1-August 31, 2023, summarizes warm-season vegetation. ECOSTRESS ECO_L2T_LSTE.002 land surface temperature, also acquired through AppEEARS for the same May-August 2023 window, provides the thermal measurement used to define the hotspot label. Table 1 lists these source layers and the final variables constructed from them.
+The report proceeds in four steps. First, it constructs a standardized 30-city grid-cell dataset from public geospatial and remote-sensing sources. Second, it defines a city-relative hotspot label based on the hottest 10% of valid May-August ECOSTRESS LST cells within each city. Third, it compares logistic regression and random forest under same-city screening and city-held-out transfer. Finally, it uses city-level and spatial diagnostics to show where transfer succeeds, where it weakens, and when broad spatial placement remains visible despite exact-cell errors.
 
-The modeling setup deliberately excludes the thermal variables from the predictive feature set. ECOSTRESS LST is used to define the outcome, not to predict it. The first-pass headline models use non-thermal, transferable predictors: impervious percentage, land-cover class, elevation, distance to water, median May-August NDVI, and broad climate group. This feature contract makes the prediction task intentionally constrained, avoids leaking the answer, and keeps the model closer to a screening workflow that could be applied before collecting city-specific hotspot labels.
+The contribution has four linked pieces: a 30-city aligned dataset, an explicit validation-design comparison, a transparent transfer benchmark using simple baselines, logistic regression, and random forest, and a supplemental full-city spatial-placement diagnostic for the random-forest transfer model. The completed dataset contains 71,394,894 rows and 17 columns, with one row representing one analytic 30 m grid cell in one selected U.S. city. The cities are balanced across three broad climate groups: 10 hot arid, 10 hot humid, and 10 mild cool cities. Figure 1 shows the selected city locations, and Table 2 summarizes the final audited dataset by climate group.
+
+The resulting dataset combines public geospatial and remote-sensing sources summarized in Table 1. The modeling specification excludes thermal variables, using ECOSTRESS LST to define the outcome rather than to predict it. The final modeling dataset was constructed by the authors from public source layers rather than downloaded as a single preexisting study dataset; source products are cited in the References, and reproducibility notes at the end of the report list the generated artifacts used to produce the report tables and figures.
 
 ### 2. Research Questions
 
-The primary research question is:
+The primary research question has two parts:
 
-Can basic environmental and built-environment features identify urban heat hotspots across a multi-city dataset, and how does performance change when evaluation moves from within-city held-out cells to whole-city held-out transfer?
+Can basic environmental and built-environment features identify urban heat hotspots across a multi-city dataset? How does performance change when evaluation moves from within-city held-out cells to city-held-out transfer?
 
-This question has two explicit parts. The within-city screening question asks whether, when a city is represented during model development, the model can identify held-out hotspot cells from that same city. The city-held-out transfer question asks whether, when a whole city is excluded from training, the model can rank that unseen city's cells by hotspot risk. The unit of analysis is a 30 m grid cell, but the stricter transfer evaluation uses city as the grouping unit: a held-out city must remain fully unseen while model preprocessing, imputation, scaling, encoding, and tuning are learned from other cities. The target population for inference is 30 m grid cells inside buffered Census urban-area study regions for the selected U.S. cities, with cautious extension to similar urban areas.
+The within-city held-out design asks whether a model can identify held-out hotspot cells from cities represented during model development. The city-held-out transfer design asks whether a model can rank cells in a whole unseen city by hotspot risk. In this report, transfer means training on one set of cities and evaluating on complete cities withheld from all model fitting and preprocessing. The unit of analysis is a 30 m grid cell, but the strict transfer evaluation groups by city: every cell from a held-out city is excluded from training, preprocessing, and tuning.
 
-The project also asks four secondary questions. First, do non-thermal geospatial predictors contain useful signal for the locally hottest urban grid cells? Second, does a nonlinear random forest improve hotspot screening compared with logistic regression and simple baselines? Third, does model performance vary systematically by city or climate group? Fourth, does success under within-city evaluation predict success under city-held-out transfer?
+Three secondary questions organize the results. First, do non-thermal geospatial predictors contain useful signal for the locally hottest urban grid cells? Second, does a nonlinear random forest improve hotspot screening compared with logistic regression and simple baselines, especially under city-held-out transfer? Third, do full-city prediction surfaces show evidence of broad spatial alignment with observed hotspot concentration when exact-cell transfer is limited?
 
-The outcome is `hotspot_10pct`, a city-relative binary label. A positive cell is one of the hottest 10% of valid eligible cells within its own city, based on median May-August ECOSTRESS LST after final filtering. This is not an absolute national heat threshold. A positive cell in Boston and a positive cell in Phoenix both represent the upper tail of their local city distributions, even though their absolute temperatures may differ. That choice makes the target appropriate for relative within-city screening across a cross-climate city set, where a practical planning question is often which local cells should be prioritized for closer inspection.
+The target population for inference is the set of eligible 30 m grid cells in the 30 selected U.S. urban-area study regions. The outcome is `hotspot_10pct`, a city-relative binary label. A positive cell is one of the hottest 10% of valid eligible cells within its own city, based on median May-August ECOSTRESS LST after final filtering. A top-10% label creates a common within-city screening task across cities with different absolute temperature distributions and matches a practical prioritization frame: if a city inspected or targeted only the highest-risk decile of cells, how many true local hotspots would be recovered? This surface-temperature target supports local hotspot screening; national heat exposure, air-temperature risk, and vulnerability remain outside this benchmark's scope.
 
 ### 3. Dataset Construction
 
-The dataset construction workflow starts with city selection and study-region definition. The project uses 30 U.S. cities, balanced across three broad climate groups: hot-arid, hot-humid, and mild-cool. Cities were selected to provide broad geographic and climate variation while remaining feasible for a standardized data-acquisition and modeling pipeline. The set should therefore be treated as a purposive benchmark panel rather than a statistically representative sample of U.S. urban areas. Performance differences across the selected cities are informative for transfer diagnostics, but they should not be interpreted as estimates of national average performance. Ten cities were assigned to each group to create a transfer test spanning dry western metros, humid southern and eastern metros, and cooler or milder metros. The climate groups are intentionally coarse design labels. They are not meant to replace formal climatology or local meteorology, but they make the transfer question more interpretable by asking whether a model trained across one mixture of cities behaves differently across broad regional climate contexts. This balance also prevents the benchmark from becoming only a large-city or only a hot-desert exercise.
+The dataset construction workflow starts with city selection and study-region definition. The project uses 30 U.S. cities balanced across three broad climate groups: hot arid, hot humid, and mild cool. Cities were selected to provide geographic and climate variation while remaining feasible for a standardized acquisition and modeling pipeline, so the set is a purposive benchmark panel. The coarse climate groups help structure the transfer comparison and later heterogeneity discussion; formal climatology and local meteorological analysis remain separate tasks.
 
-For each selected city, the study region begins with the 2020 Census urban area containing the city center. That urban-area polygon is used as the core geometry, and the analysis also preserves it separately from the buffered study area. The default study area then applies a 2 km buffer around the core urban area. The buffer matters because heat patterns, water adjacency, and built/natural land-cover transitions do not stop exactly at administrative or Census boundaries. It is a fixed design choice rather than an optimized parameter, so it can include some fringe land differently across cities. Preserving the unbuffered core geometry keeps the original urban-area definition available for comparing core-city and buffered-area filters.
+For each selected city, the study region begins with the 2020 Census urban area containing the city center. That urban-area polygon is preserved as the core geometry, and the default study area applies a 2 km buffer around it. The 2 km distance is a pragmatic fixed rule that captures near-urban land-cover and water-adjacency transitions without redefining each city manually; buffer sensitivity is left for future work. The unbuffered core remains available for core-city filters.
 
-Each city receives a master 30 m grid built in a local UTM coordinate reference system. This is a practical geospatial choice. A local projected CRS makes distances and cell areas meaningful within a city, which is necessary for 30 m cell construction and for the distance-to-water feature. The grid is the analytic backbone of the project: every final row is one grid cell, and every raster or vector source is converted into a value for that same cell. Without a master grid, differences in source resolution, projection, and pixel alignment could create hidden inconsistencies across variables.
+Each city receives a city-specific 30 m analytic grid built in a local UTM coordinate reference system, which makes distances and cell areas meaningful within that city. The grid is the analytic backbone of the project: every final row is one grid cell, and every raster or vector source is converted into a value for that same cell.
 
-The phrase "30 m dataset" therefore refers to the analytic grid and row unit, not to the native resolution of every source variable. NLCD is naturally close to the grid scale, but MODIS/Terra NDVI is coarser, ECOSTRESS has its own thermal-pixel and overpass structure, and vector-derived quantities such as distance to water are summarized to cell centroids or cell geometry. The resulting table is valuable because it gives every city a common modeling unit, but it should not be interpreted as 71.4 million independent 30 m native-resolution measurements of every phenomenon.
+The phrase "30 m dataset" refers to the analytic grid and row unit, not the native resolution of every source variable. NLCD aligns closely with the grid, while MODIS/Terra NDVI is coarser, ECOSTRESS has its own thermal-pixel and overpass structure, and vector quantities such as distance to water are summarized to cell centroids or geometry. The common grid gives every city the same modeling unit rather than native 30 m measurement for every variable.
 
 The source layers are then prepared against this grid. NLCD 2021 land cover supplies a categorical surface class for each cell, and NLCD 2021 imperviousness supplies a continuous percent-impervious value. USGS 3DEP elevation is aligned to the grid to provide terrain context. NHDPlus HR hydrography is handled as vector information: water features are clipped to the city study area and converted to a distance from each grid cell to the nearest selected hydro feature. MODIS/Terra NDVI and ECOSTRESS LST are acquired through AppEEARS using the city area of interest and summarized for May-August 2023. The project uses median May-August NDVI as the vegetation predictor and median May-August ECOSTRESS LST as the thermal outcome ingredient.
 
-The May-August seasonal summary is a compromise between heat relevance and data robustness. It focuses the target and vegetation feature on the warm season, when surface heat is most relevant to the urban heat problem, while aggregating over multiple observations rather than depending on one satellite pass. ECOSTRESS also has irregular overpass timing because it is mounted on the International Space Station, so the analysis records `n_valid_ecostress_passes` as a quality-support field. Cells with fewer than three valid ECOSTRESS observations are removed when LST is available. This filter reduces the chance that a cell is labeled from an unstable or nearly missing thermal summary, but pass count alone does not make all cities observationally identical. Overpass time, clouds, seasonality within May-August, and weather conditions can still vary across cities and remain part of the remote-sensing limitation.
+The May-August seasonal summary is a compromise between heat relevance and data robustness. It focuses the target and vegetation feature on the warm season, when surface heat is most relevant to the urban heat problem, while aggregating over multiple observations rather than depending on one satellite pass. ECOSTRESS also has irregular overpass timing because it is mounted on the International Space Station, so the analysis records `n_valid_ecostress_passes` as a quality-support field. Cells are retained for labeling only when at least three valid ECOSTRESS observations contribute to the May-August LST summary. This filter reduces the chance that a cell is labeled from an unstable or nearly missing thermal summary, but pass count alone does not make all cities observationally identical. Overpass time, clouds, seasonality within May-August, and weather conditions can still vary across cities and remain part of the remote-sensing limitation.
 
-The final assembly step merges the per-city feature tables into a single modeling-ready dataset, with CSV also written as a compatibility output. Open-water cells are dropped where `land_cover_class == 11`, because open water is a different thermal surface and would complicate the urban land-cell screening target. After the water and ECOSTRESS pass-count filters, the hotspot label is recomputed within each city. This recomputation is essential: the positive class should represent the hottest 10% of the eligible modeling population in that city, not the top decile of a larger pre-filtered set that included cells no longer eligible for modeling.
+The final assembly step merges the per-city feature tables into a single modeling-ready dataset. Open-water cells are removed when NLCD land cover identifies class 11, so the hotspot label is not driven by water surfaces that are outside the intended land-focused screening task. After this open-water filter and the ECOSTRESS quality filter, `hotspot_10pct` is recomputed within each city. Concretely, eligible cells in a city are ranked by median May-August LST, the hottest decile is labeled 1, and the remaining eligible cells are labeled 0.
 
-The target, `hotspot_10pct`, is therefore city-specific. A cell is positive if its median May-August LST falls in the top 10% among valid eligible cells in its own city. This design supports cross-climate comparison because it asks about local hotspot screening rather than one absolute national LST threshold. A Phoenix hotspot and a Boston hotspot may have different absolute surface temperatures, but both represent locally high surface temperature within their urban context. The top-decile target is useful for screening because it turns each city into a ranked local prioritization problem. The tradeoff is that the target should not be interpreted as an absolute heat-risk standard or as a direct planning action without local validation.
+The final dataset contains the city identifier and name, broad climate group, cell identifier, centroid longitude and latitude, six primary predictors, ECOSTRESS-derived LST and pass count, the `hotspot_10pct` label, and three neighborhood-context variables reserved for supplemental modeling. The primary six-predictor benchmark keeps the feature specification fixed and does not use those neighborhood variables in the logistic-versus-random-forest comparison. The neighborhood-context variables are excluded from this benchmark to keep the first model comparison simple and to separate the value of basic cell-level public predictors from more engineered spatial-context features.
 
-The final dataset contains the city identifier and name, broad climate group, cell identifier, cell centroid longitude and latitude, six headline predictors, ECOSTRESS-derived LST and pass count, the `hotspot_10pct` label, and three neighborhood-context variables constructed for later model extensions. The main benchmark keeps the six-feature specification fixed and does not use those neighborhood variables in the logistic-versus-random-forest comparison. This separation is important because it lets richer-feature experiments be reported as extensions rather than silent changes to the main benchmark.
+The completed audit confirms 30 cities, 71,394,894 rows, and 7,139,588 hotspot-positive cells. Because `hotspot_10pct` is recomputed within city, overall prevalence is approximately 10% by construction, though it is not exactly 10% because rare ties can occur around the city-specific LST threshold. Each climate group has nearly the same hotspot prevalence despite large differences in total row count. Missingness is low for the primary predictors: imperviousness, land cover, distance to water, and climate group have no missing values in the final table; elevation is missing for only 3,426 cells, and median May-August NDVI is missing for 99,625 cells, about 0.14% of the dataset. The row-count distribution is uneven across cities because study-area extents differ substantially; Appendix Figure A1 is included as support for that point.
 
-The completed audit confirms 30 cities, 71,394,894 rows, and 7,139,588 hotspot-positive cells. Because `hotspot_10pct` is recomputed within city, overall prevalence is approximately 10% by construction, and each climate group has nearly the same hotspot prevalence despite large differences in total row count. The feature-missingness summary is favorable for the headline predictors: imperviousness, land cover, distance to water, and climate group have no missing values in the final table; elevation is missing for only 3,426 cells, and median May-August NDVI is missing for 99,625 cells, about 0.14% of the dataset. The row-count distribution is uneven across cities because study-area extents differ substantially; Appendix Figure A1 is included as support for that point.
+The large row count should be interpreted with the analytic-grid caveat above: nearby cells can share source summaries, sensor conditions, and spatial context, so the effective independent information is smaller than the raw row count.
 
-The large row count should be interpreted with the 30 m analytic-grid caveat above. Nearby cells share land cover, repeated coarser-source summaries, sensor conditions, spatial context, and thermal structure, so the effective independent information is smaller than the raw row count. The city-held-out design addresses one major source of leakage across cities, but it does not erase within-city spatial dependence.
-
-Figure 2 summarizes the end-to-end dataset construction workflow. The key modeling implication is that the final table is not an ad hoc spreadsheet: it starts from public data sources, aligns every layer to a 30 m city grid, applies explicit row filters, and creates a target suitable for testing generalization to unseen cities.
+Figure 2 summarizes the end-to-end dataset construction workflow. The key modeling implication is that the final table is a standardized, reproducible grid-cell dataset rather than a manually assembled collection of city-specific summaries: it starts from public data sources, aligns every layer to a 30 m city grid, applies explicit row filters, and creates a target suitable for testing generalization to unseen cities.
 
 ### 4. Model and Method
 
-Given that construction, the statistical learning task is to estimate, for each grid cell, the probability that the cell belongs to the hottest 10% of valid eligible cells in its own city. The response variable is `hotspot_10pct`, and the headline models use only the six non-thermal predictors in the main benchmark: `impervious_pct`, `land_cover_class`, `elevation_m`, `dist_to_water_m`, `ndvi_median_may_aug`, and `climate_group`.
+Using this constructed dataset, the statistical learning task is to estimate, for each grid cell, a screening score for whether the cell belongs to the hottest 10% of valid eligible cells in its own city. The response variable is `hotspot_10pct`, and the primary six-predictor benchmark uses only these non-thermal predictors: `impervious_pct`, `land_cover_class`, `elevation_m`, `dist_to_water_m`, `ndvi_median_may_aug`, and `climate_group`. Climate group is included as a broad, preassigned city-level descriptor rather than a city identifier; it does not identify individual held-out cities but may capture coarse regional thermal context and support later city-group interpretation.
 
-Several columns are intentionally excluded from the predictive feature set. The target itself, `hotspot_10pct`, cannot be used as an input. The thermal variables `lst_median_may_aug` and `n_valid_ecostress_passes` are also excluded because LST defines the label and ECOSTRESS pass count is a data-quality support variable rather than a stable urban-form predictor. Cell identifiers, city identifiers, city names, and centroid coordinates are excluded because they could let a model memorize location-specific patterns instead of learning a portable relationship between urban surface characteristics and hotspot status.
+Several columns are intentionally excluded from the predictive feature set. The target itself, `hotspot_10pct`, is the response. The thermal variables `lst_median_may_aug` and `n_valid_ecostress_passes` are excluded because LST defines the label and ECOSTRESS pass count is a data-quality support variable used in dataset construction rather than a stable urban-form predictor. Cell identifiers, city identifiers, city names, and centroid coordinates are excluded to focus the benchmark on portable surface-characteristic relationships rather than location identity. Location-aware and spatial-context predictors are logical future extensions once they can be evaluated separately from this six-feature public-predictor benchmark.
 
-The report separates two validation designs because they answer different scientific questions. The first is within-city held-out evaluation: cities are represented during model development, and models are evaluated on held-out cells from those same cities. The retained within-city summary uses a verified 70/30 held-out structure and reports class-1 hotspot precision, recall, and F1 for logistic regression and random forest. This design measures same-city hotspot screening or interpolation. It is valuable because it tests whether the feature set contains local hotspot signal when the model has access to examples from the same urban systems it is asked to screen.
+The two validation designs answer different scientific questions. The first is same-city held-out evaluation: cities are represented during model development, and models are evaluated on held-out cells from those same cities. The same-city summary uses a verified 70/30 held-out structure, with approximately 30% of each city's final filtered cells appearing in the evaluation support. It reports class-1 hotspot precision, recall, and F1 for logistic regression and random forest using thresholded class predictions. These results are central to the validation-design comparison because they estimate the easier screening task in cities represented during fitting. The city-held-out pipeline below is the more fully artifacted transfer benchmark, so Figure 4 should be read as a contrast between validation designs rather than a symmetric comparison of identical rerunnable experiments.
 
-[Insert within-city held-out design details and results here: describe the verified 70/30 within-city evaluation, report logistic-versus-random-forest precision, recall, and F1, and explain that this setting measures same-city hotspot screening rather than unseen-city transfer.]
+The second design is city-held-out transfer, shown schematically in Figure 3. The 30 cities are partitioned into five deterministic outer folds, with six complete cities held out in each fold and the remaining 24 cities used for training. Every city is held out exactly once. For each outer fold, preprocessing, imputation, scaling, categorical encoding, and hyperparameter tuning are fit using training-city rows only. Inner cross-validation also holds out groups of training cities rather than randomly splitting individual cells. The final held-out prediction table is therefore a transfer test at the city level, not a same-city interpolation exercise.
 
-The second design is city-held-out transfer, shown schematically in Figure 3. The 30 cities are partitioned into five deterministic outer folds, with six complete cities held out in each fold and the remaining 24 cities used for training. Every city is held out exactly once. This design is stricter than a random cell-level split because all rows from a test city are unseen during model fitting. For each outer fold, all preprocessing, imputation, scaling, categorical encoding, feature construction inside the model pipeline, and hyperparameter tuning are fit using training-city rows only. The held-out cities are touched only after the full training pipeline has been selected and fit.
+The analysis compares simple transfer baselines, logistic regression, and random forest. The simple baselines provide checks for whether a learned model improves beyond simple ranking rules. The baseline set includes a no-skill prevalence reference, a global-mean baseline, a land-cover-only baseline, an impervious-only baseline, and a climate-only baseline. These baselines show how much transfer performance can be obtained from single-feature or prevalence-style rules before fitting a richer model.
 
-This train-city-only rule is the core leakage control for the transfer benchmark. Numeric imputation values, scaling parameters, categorical encodings, and tuned hyperparameters are all learned without looking at the held-out cities. The rule also applies to model selection: inner cross-validation for tuning is performed only inside the training-city portion of each outer fold. As a result, a held-out city's labels cannot influence preprocessing choices, feature encodings, or tuning decisions. The final held-out prediction table is therefore a transfer test at the city level, not a same-city interpolation exercise. The city-held-out benchmark remains the stricter headline result for transfer, while the within-city result provides the comparison needed to interpret how validation design changes apparent performance.
+The logistic regression model is the linear comparison in the primary six-predictor benchmark. Missing-value imputation, numeric scaling, one-hot encoding of categorical features, and the classifier are fit together inside each training fold. The classifier uses the `saga` solver to support regularized L1, L2, and elastic-net logistic models over the same feature specification. Logistic regression models hotspot log-odds as an additive function of the predictors, making it an interpretable reference point for asking whether nonlinear structure adds value.
 
-The report compares simple transfer baselines, logistic regression, and random forest. The simple baselines provide sanity checks for whether a learned model improves beyond very limited rules. The baseline set includes a no-skill prevalence reference, a global-mean baseline, a land-cover-only baseline, an impervious-only baseline, and a climate-only baseline. These baselines are useful because they show how much performance can be obtained from single-feature or prevalence-style transfer rules before fitting a richer model.
+The random forest model is the nonlinear comparison in the primary six-predictor benchmark. It uses the same training-only preprocessing rule. Numeric predictors are imputed, categorical predictors are encoded inside the training fold, and the forest is tuned over tree count, tree depth, feature subsampling, and minimum leaf size. A random forest averages predictions from many decision trees, allowing threshold effects and interactions among variables such as land cover, vegetation, imperviousness, and climate group. The model is therefore a natural test of whether nonlinear relationships improve city-held-out screening under the fixed six-predictor feature specification.
 
-The logistic regression model is the main linear benchmark. Missing-value imputation, numeric scaling, one-hot encoding of categorical features, and the classifier are fit together inside each training fold. The classifier uses the `saga` solver, which supports regularized logistic regression over the six-feature set. In course terms, logistic regression models the log-odds of hotspot status as an additive function of the predictors. It is useful here because it is relatively interpretable and because a strong linear model is a fair reference point for asking whether nonlinear structure adds value.
+The two validation settings use related but not identical metrics, so the report compares patterns rather than treating all numbers as one leaderboard. Within-city held-out results are summarized with thresholded hotspot precision, recall, and F1. City-held-out transfer is evaluated primarily with average precision (AP), reported in the tables and figures as PR AUC, and recall at the top 10% predicted risk. Because hotspots make up roughly 10% of each city's eligible cells, a PR-ranking score near 0.10 corresponds to little useful ranking beyond prevalence; values above 0.10 indicate that true hotspots tend to receive higher scores than non-hotspots.
 
-The random forest model is the main nonlinear benchmark. It uses the same training-only preprocessing rule. Numeric predictors are imputed, categorical predictors are encoded inside the training fold, and the forest is tuned over tree count, tree depth, feature subsampling, and minimum leaf size. A random forest averages predictions from many decision trees, allowing threshold effects and interactions among variables such as land cover, vegetation, imperviousness, and climate group. The model is therefore a natural test of whether nonlinear relationships improve city-held-out screening under the same six-feature contract.
+City-held-out performance is also summarized with mean city PR AUC and recall at the top 10% predicted risk. Pooled PR AUC weights cities roughly by their sampled held-out row counts, so larger cities can influence the aggregate more strongly. Mean city PR AUC first computes PR AUC for each held-out city and then averages across cities, giving each city equal interpretive weight. Recall at top 10% predicted risk is a screening-oriented metric: it asks what fraction of true hotspots would be recovered if a city inspected only the cells the model ranked in the highest-risk decile. Because the target itself is also a top-decile label, this metric is easy to interpret as top-decile retrieval. The benchmark uses target-rate-stratified samples, so the reported scores are interpreted primarily as rankings for screening rather than calibrated probabilities of hotspot status in the full city population.
 
-The two validation settings use related but not identical metrics, so the report compares patterns and implications rather than treating all numbers as one leaderboard. Within-city held-out results are summarized with thresholded hotspot precision, recall, and F1. City-held-out transfer uses precision-recall area under the curve, or PR AUC, as the primary ranking metric. PR AUC summarizes how well a model ranks true hotspots above non-hotspots across possible score thresholds. It is more informative than raw accuracy in this project because the positive class is intentionally about 10% of cells. A trivial model that predicts "not hotspot" for every cell would be highly accurate but useless for finding hotspots. PR AUC focuses instead on the tradeoff between precision, the share of predicted positives that are true positives, and recall, the share of true positives recovered.
+Sampling and benchmark scope are important for interpreting the city-held-out numbers. The main transfer comparison uses 5,000 rows sampled per city with target-rate stratification: 500 positives and 4,500 negatives per city, using random state 42. Each outer fold therefore trains on 120,000 sampled rows from 24 cities and tests on 30,000 sampled rows from six held-out cities. The matched 5k comparison is the primary logistic-versus-random-forest comparison because both models share the same sample cap and fold design; the 20,000 rows-per-city logistic run is higher-sample linear context. This controlled sampled benchmark gives each city equal sample size while preserving the grouped city-held-out validation design. Exhaustive full-city scoring would answer a broader operational question and is left for later work; the larger logistic run suggests that increasing row count alone does not eliminate the transfer challenge.
 
-The report also uses mean city PR AUC and recall at the top 10% predicted risk. Pooled PR AUC weights cities roughly by their sampled held-out row counts, so larger cities can influence the aggregate more strongly. Mean city PR AUC first computes PR AUC for each held-out city and then averages across cities, giving each city equal interpretive weight. Recall at top 10% predicted risk is a screening-oriented metric: it asks what fraction of true hotspots would be recovered if a city inspected only the cells the model ranked in the highest-risk decile. Because the target itself is also a top-decile label, this metric is easy to interpret as top-decile retrieval.
+The spatial diagnostic asks a different question from the sampled transfer benchmark. Each outer-fold random-forest model is trained and tuned only on training cities, then used to score all eligible rows in the held-out cities for spatial analysis. Observed hotspot and predicted-risk surfaces are reconstructed on each city's 30 m grid and smoothed at 150 m, 300 m, and 600 m. These radii act as neighborhood-scale checks: 150 m is a fine local surface, 300 m is the medium scale emphasized in the main interpretation, and 600 m tests whether broader gradients persist. The metrics summarize Spearman surface correlation, overlap between observed and predicted top smoothed regions, observed hotspot mass captured by the predicted top region, centroid distance, and median nearest-region distance. These full-city scores are supplemental diagnostics, not replacements for sampled AP and recall-at-top-10% transfer metrics.
 
-Sampling and benchmark scope are important for interpreting the numbers. The benchmark results are sampled all-fold runs, not exhaustive model fitting and scoring over all 71,394,894 rows. The main comparison uses 5,000 rows sampled per city with target-rate stratification: 500 positives and 4,500 negatives per city, using random state 42. The same sampled city preload is used for training rows and held-out scoring rows, so each outer fold trains on 120,000 sampled rows from 24 cities and tests on 30,000 sampled rows from six held-out cities. The matched 5k comparison is the headline logistic-versus-random-forest comparison because both models share the same sample cap and fold design. A 20,000 rows-per-city logistic run is included only as higher-sample linear context. This sampling choice is a computational caveat, not a change in the grouped evaluation design: cities are still held out as complete units, and training-only preprocessing and tuning are still required.
+### 5. Results and Discussion
 
-The sampled design is also an inferential choice. It gives each city the same benchmark row count, which keeps train and test sizes comparable across held-out cities instead of letting the largest study areas dominate every model comparison. Target-rate stratification preserves the 10% hotspot prevalence in each sampled city, so PR AUC and top-decile recall are evaluated under the same class balance used to define the target. Because every city contributes the same number of positives and negatives, the retained benchmark is best interpreted as a controlled comparison of model ranking behavior across cities, not as full-map operational performance. What it does not preserve exactly is full spatial density, all within-city clustering, or the exact full-population distribution of land cover, imperviousness, vegetation, and terrain. The retained benchmark should therefore be read as a sampled transfer-screening comparison, not exhaustive full-city scoring. Repeated samples or full-city scoring would be needed to quantify sampling variability.
+#### 5.1 Same-City Screening
 
-### 5. Analysis, Conclusion and Discussion
+The analysis first considers the same-city held-out setting. In the 70/30 same-city evaluation summarized in Figure 4, random forest clearly outperforms logistic regression on class-1 hotspot precision, recall, and F1. Averaged across the 30 cities, random forest reaches mean hotspot precision 0.7310, recall 0.3433, and F1 0.4480, compared with logistic regression means of 0.3887, 0.0727, and 0.1083. This result shows that the six non-thermal predictors contain useful same-city hotspot-screening signal and that nonlinear or interaction-like structure helps when local city examples are available during model development. The combination of high precision and lower recall also suggests that the same-city random forest identifies a selective subset of hotspot-like cells more successfully than it recovers all hotspot cells.
 
-The empirical story begins with the easier within-city held-out setting. In the verified 70/30 within-city evaluation summarized in Figure 4, random forest clearly outperforms logistic regression on class-1 hotspot precision, recall, and F1. Across the 30 cities, random forest reaches mean hotspot precision 0.7310, recall 0.3433, and F1 0.4480, compared with logistic regression means of 0.3887, 0.0727, and 0.1083. This result suggests that the six-feature contract contains real local hotspot signal and that nonlinear or interaction-like structure helps when local city examples are available during model development.
+#### 5.2 City-Held-Out Exact-Cell Transfer
 
-[Insert within-city held-out narrative detail here: add the full write-up of the verified 70/30 within-city design, including how cells were split, how thresholded hotspot classifications were produced, and how the precision, recall, and F1 results should be interpreted as same-city screening.]
+The city-held-out transfer benchmark gives a weaker and much closer model comparison. The models rank hotspots above the prevalence reference in held-out cities, but gains over imperviousness and land-cover baselines are small and concentrate mainly in selected hot arid cities. As shown in Table 3, the random-forest 5k model reaches pooled PR AUC 0.1486, above the 0.1000 prevalence reference and above the 0.1353 land-cover-only baseline. The logistic SAGA 5k model reaches 0.1421.
 
-The city-held-out transfer benchmark gives a weaker and closer result. The retained models rank hotspots above chance in held-out cities, but gains over imperviousness and land-cover baselines are small and concentrate mainly in selected hot-arid cities. As shown in Table 3 and Figure 6, the random-forest 5k model reaches pooled PR AUC 0.1486, above the 0.1000 prevalence reference and above the 0.1353 land-cover-only baseline. The logistic SAGA 5k model reaches 0.1421. These values are not large in absolute terms, which is expected for a whole-city transfer task with a 10% positive class, but they are consistently above a no-skill ranking reference on pooled PR AUC.
+The matched 5,000 rows-per-city comparison is the primary logistic-versus-random-forest comparison. On pooled PR AUC, random forest improves from 0.1421 to 0.1486. On recall at the top 10% predicted risk, random forest improves from 0.1647 to 0.1961. At the same time, logistic regression remains slightly stronger on mean city PR AUC, with 0.1803 for logistic compared with 0.1781 for random forest. The 20,000 rows-per-city logistic run reaches pooled PR AUC 0.1457 and recall at top 10% of 0.1709, which provides useful context but is not the matched comparison because it uses a larger sample than the 5k random-forest run.
 
-The cleanest transfer model comparison is the matched 5,000 rows-per-city logistic-versus-random-forest result. On pooled PR AUC, random forest improves from 0.1421 to 0.1486. On recall at the top 10% predicted risk, random forest improves from 0.1647 to 0.1961. At the same time, logistic regression remains slightly stronger on mean city PR AUC, with 0.1803 for logistic compared with 0.1781 for random forest. The 20,000 rows-per-city logistic run reaches pooled PR AUC 0.1457 and recall at top 10% of 0.1709, which provides useful context but is not the headline comparison because it uses a larger sample than the 5k random-forest run.
+Because the outcome is a top-decile label, the transfer result is best read as a ranking result rather than a cell-by-cell classification result. In the sampled transfer benchmark, random forest recovers about 19.6% of true hotspots when only the top 10% of predicted-risk cells are inspected. That is nearly double the 10% no-skill reference, but only modestly above the 18.6% recall from the impervious-only baseline. In practical screening terms, much of the transferable retrieval signal in the primary six-predictor benchmark is already captured by simple built-intensity information.
 
-The prevalence context is important. Because the hotspot label is defined as the top 10% of eligible cells within each city, a low-signal ranking model has little room to look useful by accuracy alone. PR AUC is therefore a more relevant transfer summary than overall correct classification. A PR AUC modestly above 0.10 indicates that the model is ranking true hotspots above non-hotspots better than a prevalence-level reference, but it does not imply reliable cell-by-cell classification. On recall at the top 10% predicted risk, random forest reaches 0.1961, but the impervious-only baseline already reaches 0.1858. In practical screening terms, much of the transferable retrieval signal in this six-feature contract is already captured by simple built-intensity information.
+The two validation settings lead to different model comparisons. Random forest shows a clear advantage under same-city held-out evaluation, while city-held-out transfer is weaker, closer between models, and more heterogeneous. Figure 4 should therefore be read as a validation-design contrast rather than a single metric scale: both panels matter to the research question, but they estimate different uses of the model.
 
-The main result is therefore not one universal model ranking. Within-city held-out evaluation makes random forest look clearly stronger, while city-held-out transfer is weaker, closer between models, and more heterogeneous. The side-by-side comparison in Figure 4 should be read as a validation-design result: the same broad modeling ingredients look different when the model is allowed to learn from the same cities it is tested on versus when whole cities are withheld. Within-city success should not be treated as evidence of cross-city transfer.
+#### 5.3 Transfer Heterogeneity and Signal Shift
 
-Figure 5 makes that point at the city level. The city-level correlation between within-city random-forest hotspot F1 and city-held-out random-forest PR AUC is 0.08. The correlation between within-city random-forest hotspot recall and city-held-out random-forest recall at top 10% is 0.03. These weak relationships mean that cities that look comparatively learnable under within-city testing do not reliably become the cities where whole-city transfer works best. The result separates "the model can learn local hotspot structure" from "that structure transfers cleanly from other cities."
+Figure 5 makes that point at the city level. The city-level correlation between within-city random-forest hotspot F1 and city-held-out random-forest PR AUC is 0.08. The correlation between within-city random-forest hotspot recall and city-held-out random-forest recall at top 10% is 0.03. In plain terms, cities that are easy when the model has seen that city are not necessarily easy when the model has never seen that city. Nashville is comparatively strong in both views, but the overall pattern is weak enough that same-city learnability should not be treated as a reliable proxy for transfer success.
 
-[Insert evaluation-design signal-shift analysis here: expand the Figure 5 interpretation by comparing city-level within-city random-forest F1/recall against city-held-out random-forest PR AUC/recall@top10, reporting the weak correlations from the presentation, and explaining that same-city learnability does not imply cross-city transferability.]
+Transfer heterogeneity is the main caution against overreading the pooled result. Appendix Tables A5-A7 show that random forest gains are not uniform: it improves folds 0, 3, and 4 but underperforms in folds 1 and 2, and logistic regression wins most city-level PR AUC comparisons. Appendix Figure A4 shows a visible climate-group pattern in the RF-minus-logistic deltas: RF gains are concentrated in hot arid cities, while hot humid and mild cool cities more often favor logistic regression or show weaker RF gains. This pattern is hypothesis-generating, not causal. One possible explanation is that the six predictors have more consistent hotspot relationships in the arid cities, but climate group is confounded with geography, urban morphology, fold composition, and unmeasured local factors. Appendix Figure A5 shows absolute random-forest city PR AUC.
 
-The fold-level transfer results in Table 5 show why point estimates should not be overread. Random forest improves PR AUC in folds 0, 3, and 4, but trails logistic regression in folds 1 and 2. Its recall gains are also fold-dependent: positive in folds 0, 3, and 4, negative in folds 1 and 2. Table 6 gives the city-level paired summary. Across 30 cities, the mean RF-minus-logistic PR AUC delta is -0.0023, the median delta is -0.0136, and logistic wins 21 city-level PR AUC comparisons while random forest wins 9. For recall at top 10%, the mean delta is +0.0106 but the median delta is -0.0150, again with logistic winning 21 cities. This is transfer heterogeneity rather than a uniform nonlinear improvement.
+#### 5.4 Broad Spatial-Placement Diagnostic
 
-City and climate-group summaries explain where the random-forest transfer gains appear. Table 4 shows that random forest has positive mean gains in hot-arid cities: +0.0336 in PR AUC and +0.0762 in recall at top 10% relative to the matched logistic model. In contrast, hot-humid cities average -0.0123 in PR AUC and -0.0164 in recall, while mild-cool cities average -0.0281 in PR AUC and -0.0280 in recall. Figure 7 shows the city-level RF-minus-logistic deltas behind those climate summaries. The largest random-forest gains occur in hot-arid cities such as Las Vegas, Bakersfield, Tucson, and Fresno. Several hot-humid and mild-cool cities favor logistic regression, with large random-forest losses in places such as San Jose, Chicago, Portland, and Atlanta. Figure 8 adds the absolute random-forest city PR AUC values and is important for avoiding an overreading of Figure 7: high RF-minus-logistic gain does not necessarily mean a city is easiest to predict; it can also reflect weaker logistic performance. The climate interpretation should be read as a hypothesis generated by the benchmark rather than as an established causal explanation.
+Figure 6 provides a spatial diagnostic view of one held-out city, Denver. The figure shows predicted top-decile cells, observed hotspot cells, and categorical error types for a random-forest fold in which Denver was excluded from training. The errors are not randomly scattered; missed hotspots and false positives appear in spatial bands or clusters. That pattern motivates the all-city spatial-alignment diagnostic: a single map cannot establish general spatial placement, but it shows why exact-cell errors and broad spatial structure are not identical evaluation questions.
 
-Figure 9 provides a spatial diagnostic view of one held-out city, Denver. Denver is retained as a representative hot-arid held-out example from the map outputs. The figure shows predicted top-decile risk, true hotspot cells, and categorical error types for a random-forest fold in which Denver was excluded from training. The model captures some spatial structure, but false positives and false negatives remain spatially organized. That pattern suggests the transferred model learns partial built-environment signal while missing city-specific detail. The map is useful for interpreting the transfer task spatially, not for claiming deployment readiness.
+The all-city spatial-alignment diagnostic gives a cautious answer to that follow-up question. At the 300 m medium smoothing scale, the random-forest full-city prediction surfaces have mean Spearman surface correlation of 0.2713, mean top-region overlap of 0.1353, and mean observed hotspot mass captured of 0.2114. Figure 7 summarizes this city-level variation. These values suggest partial broad-scale alignment, not strong general spatial transfer. City-to-city variation is wide: Nashville, Portland, Fresno, Chicago, and Richmond show stronger medium-scale surface alignment, while El Paso, Albuquerque, Minneapolis, San Francisco, and Columbia are among the weakest. Appendix Figure A7 provides a selected high/low map contrast. The result complicates the exact-cell transfer story without overturning it. The model often misses the exact hotspot cells; in some cities, however, its high-risk surface still falls in roughly the right parts of the city.
 
-Supplemental feature-importance evidence is shown in Appendix Figure A2 and should be treated cautiously. The random-forest permutation summaries and logistic coefficients are consistent with vegetation, imperviousness, land cover, elevation, and climate group carrying predictive signal. That does not prove that changing any one feature would cause a specific LST response. The predictors are correlated with broader urban form, land management, local climate, and sensor-observation conditions. Their value in this report is predictive and diagnostic, not causal.
+This distinction matters for planning interpretation. Exact-cell retrieval and broad spatial screening correspond to different uses: one asks which individual 30 m cells should be selected, while the other asks whether the model can flag the general neighborhoods or zones where hotspot concentration is elevated. The random forest is not ready for operational targeting in unseen cities, but the spatial diagnostic shows that transfer failure is not always pure spatial noise. Future models should therefore be evaluated at both cell and neighborhood or zone scales, with the spatial scale matched to the planning decision.
 
-These results support a plain conclusion. The project contributes a reproducible 30-city aligned dataset, an explicit comparison of within-city held-out screening and city-held-out transfer, and a transparent benchmark for comparing hotspot-screening models. Public non-thermal geospatial predictors carry real hotspot signal, but the strength and meaning of that signal depend strongly on the validation design. Random forest is clearly stronger than logistic regression under within-city held-out evaluation, while the stricter city-held-out transfer benchmark is weaker, closer between models, and more heterogeneous. The contribution is therefore not simply that one model wins; it is that the project separates learnable same-city hotspot structure from cross-city transferability.
+#### 5.5 Predictive Interpretation
 
-Validity can be organized into six parts. Leakage and internal validity are strongest for the city-held-out transfer benchmark because complete cities are held out and preprocessing and tuning are fit inside training cities. Sampling validity is bounded because the transfer benchmark uses 5,000 sampled rows per city rather than exhaustive all-row training and scoring; the sample preserves target prevalence and city balance, but not every spatial or feature-distribution detail. Spatial validity is improved by city holdout, but spatial dependence and clustered errors remain within held-out cities. Construct validity is limited by the LST-versus-exposure distinction and the 30 m analytic-grid caveat described earlier. External validity is limited because the 30 selected cities are a useful benchmark set, not a complete representation of all U.S. urban forms, climates, coastal settings, and topographies. Model-comparison validity is also bounded: within-city and transfer results use different evaluation designs and metrics, so their magnitudes should not be collapsed into one direct leaderboard.
+Appendix Figure A2 provides predictive interpretation diagnostics: random-forest permutation importance emphasizes NDVI and imperviousness, while logistic coefficients are more sensitive to categorical encoding and the omitted land-cover reference level. These summaries are predictive rather than causal because the predictors are correlated with broader urban form, land management, local climate, and sensor-observation conditions.
 
-Future work should extend both sides of the evaluation contrast. The most important next steps are to document the within-city split and thresholding procedure in full, score larger held-out samples or full held-out cities, add uncertainty summaries over cities, test whether neighborhood-context predictors improve transfer without overfitting city-specific structure, and compare the LST-based target with air-temperature, exposure, or vulnerability measures where such data are available.
+These results support the central interpretation of the report. Public non-thermal geospatial predictors contain useful hotspot-screening signal, but the apparent strength of that signal depends strongly on the validation design. Same-city screening is comparatively strong, exact-cell transfer to unseen cities is weaker and heterogeneous, and the spatial diagnostic shows partial broad placement in some cities without overturning the weak exact-cell result.
+
+### 6. Limitations and Future Work
+
+Several validity limits shape the interpretation. Leakage control is strongest for the city-held-out transfer benchmark because complete cities are held out and preprocessing and tuning are fit using training cities only. Sampling validity is bounded by the 5,000-row-per-city benchmark rather than exhaustive all-row scoring; the sample preserves target prevalence and city balance, but not every detail of each city's full spatial distribution. The spatial-alignment diagnostic uses full eligible held-out rows for random-forest spatial placement only. Spatial dependence and clustered errors can remain within held-out cities. Construct validity is limited because LST measures surface temperature rather than air temperature or direct human exposure, and because the 30 m grid is a common analytic unit rather than the native resolution of every source variable. The city-relative hotspot label also means that a positive cell is locally hot within its city, not necessarily equally hot in absolute LST or equally severe for public-health exposure across cities. External validity is limited because the 30 selected cities form a purposive benchmark set rather than a representative sample of all U.S. urban forms, climates, coastal settings, and topographies.
+
+Future work should extend both sides of the evaluation contrast. For exact-cell retrieval, the most direct next step is a full-row held-out-city benchmark to test whether the sampled AP and recall patterns hold across each city's complete spatial distribution. Raw latitude and longitude were intentionally excluded from this benchmark because they could encode location identity rather than portable surface relationships. A future location-aware benchmark should test those choices explicitly by adding centroid coordinates, distance to coast, distance to urban core, neighborhood context, and spatial or hierarchical model families. The goal would be to separate portable surface relationships from city-specific spatial effects rather than simply giving the model more ways to memorize place. For broader placement, future work should compare spatial-alignment metrics across model families, test neighborhood-context predictors such as surrounding vegetation and imperviousness, and add uncertainty summaries across cities and smoothing scales. Finally, the LST-based target should be compared with air-temperature, exposure, or vulnerability outcomes where such data are available, because surface hotspots are only one component of heat risk.
+
+### 7. Conclusion
+
+This project contributes a reproducible 30-city aligned dataset and a validation framework for urban heat hotspot screening. Same-city learning overstates what should be expected in unseen cities: the same public predictors look strong when each city contributes training examples, but transfer much more modestly under whole-city holdout. Simple public predictors do transfer some hotspot-ranking signal, yet random forest is not a universal solution; its nonlinear gains are selective, with clearer advantages in some hot arid cities than in the full benchmark panel. Broad spatial alignment adds a useful diagnostic layer because weak exact-cell retrieval is not always spatial noise, but that signal is heterogeneous and does not justify operational targeting on its own. The main contribution is the evaluation framework and the evidence that validation design changes the scientific conclusion.
 
 ### References
 
@@ -172,103 +184,71 @@ Yuan, F., & Bauer, M. E. (2007). Comparison of impervious surface area and norma
 
 ## Tables and Figures
 
-Tables and figures are organized here rather than interleaved with the main text. Appendix tables provide additional city, fold, and model-specification details.
+Tables and figures are organized here rather than interleaved with the main text. Appendix tables and figures provide additional city, fold, model-specification, and transfer-diagnostic details. Detailed heterogeneity tables are kept in the appendix so the main tables section preserves the core source, dataset, and benchmark results.
 
 ### Table 1. Data Sources and Constructed Variables
 
 \begingroup
-\small
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.14}
 
-| Source | Raw product / layer | Constructed final variable(s) | Spatial role | Used in headline model? |
-| --- | --- | --- | --- | --- |
-| U.S. Census urban areas | 2020 Census TIGERweb urban-area polygon containing each selected city center | Study-area and core-city geometry; 30 m city grid | Defines the city footprint, 2 km buffered study area, and grid alignment target | No |
-| NLCD | Annual NLCD 2021 Collection 1 land-cover class raster | `land_cover_class` | Categorical built and natural surface-cover predictor; open-water filter where class 11 is present | Yes |
-| NLCD | Annual NLCD 2021 Collection 1 impervious percentage raster | `impervious_pct` | Cell-level built-intensity predictor aligned to the 30 m grid | Yes |
-| USGS 3DEP | 3DEP 1 arc-second digital elevation model | `elevation_m` | Terrain predictor aligned to the 30 m grid | Yes |
-| NHDPlus HR | NHDPlus High Resolution hydrography water features | `dist_to_water_m` | Distance-to-nearest-water predictor derived from clipped vector water features | Yes |
-| MODIS/Terra via AppEEARS | MOD13A1.061 500 m 16-day NDVI observations, May 1-August 31, 2023 | `ndvi_median_may_aug` | Summertime vegetation predictor summarized to each grid cell | Yes |
-| ECOSTRESS via AppEEARS | ECO_L2T_LSTE.002 daytime land-surface-temperature observations, May 1-August 31, 2023 | `lst_median_may_aug`; `n_valid_ecostress_passes`; `hotspot_10pct` | Thermal outcome source, LST quality support field, and within-city top-decile target | No |
+\begin{tabular}{p{0.18\textwidth}p{0.28\textwidth}p{0.26\textwidth}p{0.18\textwidth}}
+\hline
+Source & Product/layer & Constructed variable(s) & Role \\
+\hline
+U.S. Census urban areas & 2020 TIGERweb urban-area polygon & Study-area and core-city geometry; 30 m city grid & Study region and grid target \\
+NLCD & 2021 land-cover raster & \texttt{land\_cover\_class} & Predictor; open-water filter \\
+NLCD & 2021 impervious percentage raster & \texttt{impervious\_pct} & Built-intensity predictor \\
+USGS 3DEP & 1 arc-second DEM & \texttt{elevation\_m} & Terrain predictor \\
+NHDPlus HR & High-resolution hydrography & \texttt{dist\_to\_water\_m} & Water-proximity predictor \\
+MODIS/Terra via AppEEARS & MOD13A1.061 NDVI, May-Aug. 2023 & \texttt{ndvi\_median\_may\_aug} & Vegetation predictor \\
+ECOSTRESS via AppEEARS & ECO\_L2T\_LSTE.002 LST, May-Aug. 2023 & \texttt{lst\_median\_may\_aug}; \texttt{n\_valid\_ecostress\_passes}; \texttt{hotspot\_10pct} & Outcome source and quality support \\
+\hline
+\end{tabular}
 
 \endgroup
 
-All constructed variables in Table 1 are ultimately summarized to the common 30 m analytic grid. As described in Section 3, this grid alignment should not be read as native 30 m measurement for every source layer.
+All constructed variables in Table 1 are ultimately summarized to the common 30 m analytic grid. The table lists each source's main role; Section 3 describes the spatial alignment logic and row filters in prose.
 
 ### Table 2. Final Dataset Summary by Climate Group
 
 \begingroup
-\small
+\footnotesize
+\setlength{\tabcolsep}{5.2pt}
+\renewcommand{\arraystretch}{1.12}
 
-| Climate group | City count | Total rows | Total hotspot positives | Hotspot prevalence | Min city rows | Median city rows | Max city rows | Median valid ECOSTRESS passes |
+| Climate group | City count | Total rows | Hotspot count | Hotspot prev. | Min rows | Median rows | Max rows | Median valid passes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Hot-arid | 10 | 12,814,143 | 1,281,427 | 0.1000 | 382,964 | 1,100,156 | 3,199,440 | 30.0 |
-| Hot-humid | 10 | 27,098,157 | 2,709,866 | 0.1000 | 700,063 | 1,788,622 | 7,081,699 | 21.5 |
-| Mild-cool | 10 | 31,482,594 | 3,148,295 | 0.1000 | 817,627 | 2,889,018 | 6,722,963 | 33.0 |
+| Hot arid | 10 | 12,814,143 | 1,281,427 | 0.1000 | 382,964 | 1,100,156 | 3,199,440 | 30.0 |
+| Hot humid | 10 | 27,098,157 | 2,709,866 | 0.1000 | 700,063 | 1,788,622 | 7,081,699 | 21.5 |
+| Mild cool | 10 | 31,482,594 | 3,148,295 | 0.1000 | 817,627 | 2,889,018 | 6,722,963 | 33.0 |
 
 \endgroup
+
+\newpage
 
 ### Table 3. Main City-Held-Out Benchmark Metrics
 
-Rows labeled 5,000 sampled use the same target-rate-stratified per-city sample and can be compared directly.
+Rows labeled 5k sampled use the same target-rate-stratified per-city sample and can be compared directly. With 10% positives, PR AUC values near 0.1000 indicate little useful ranking beyond prevalence.
 
 \begingroup
 \small
 
-| Model checkpoint | Rows per city | Pooled PR AUC | Mean city PR AUC | Recall at top 10% | Runtime (min) |
+| Model | Rows/city | Pooled PR AUC | Mean city PR AUC | Recall@top10 | Runtime (min) |
 | --- | --- | ---: | ---: | ---: | ---: |
-| No-skill / prevalence reference | 5,000 sampled | 0.1000 | 0.1000 | 0.1000 | n/a |
-| Global-mean baseline | 5,000 sampled | 0.0982 | 0.0997 | 0.0971 | n/a |
-| Climate-only baseline | 5,000 sampled | 0.0982 | 0.0997 | 0.0975 | n/a |
-| Impervious-only baseline | 5,000 sampled | 0.1351 | 0.1519 | 0.1858 | n/a |
-| Land-cover-only baseline | 5,000 sampled | 0.1353 | 0.1479 | 0.1672 | n/a |
-| Logistic SAGA 5k | 5,000 sampled | 0.1421 | 0.1803 | 0.1647 | 35.6 |
-| Logistic SAGA 20k context | 20,000 sampled | 0.1457 | 0.1796 | 0.1709 | 156.6 |
-| Random forest 5k | 5,000 sampled | 0.1486 | 0.1781 | 0.1961 | 97.2 |
+| No-skill ref. | 5k sampled | 0.1000 | 0.1000 | 0.1000 | n/a |
+| Global mean | 5k sampled | 0.0982 | 0.0997 | 0.0971 | n/a |
+| Climate only | 5k sampled | 0.0982 | 0.0997 | 0.0975 | n/a |
+| Impervious only | 5k sampled | 0.1351 | 0.1519 | 0.1858 | n/a |
+| Land cover only | 5k sampled | 0.1353 | 0.1479 | 0.1672 | n/a |
+| Logistic 5k | 5k sampled | 0.1421 | 0.1803 | 0.1647 | 35.6 |
+| Logistic 20k | 20k sampled | 0.1457 | 0.1796 | 0.1709 | 156.6 |
+| RF 5k | 5k sampled | 0.1486 | 0.1781 | 0.1961 | 97.2 |
 
 \endgroup
 
-Notes: the impervious-only baseline is the strongest simple baseline on recall, and the land-cover-only baseline is the strongest simple baseline on pooled PR AUC. The 5k logistic model is the matched linear comparison for the 5k random forest, while the 20k logistic row is higher-sample linear context rather than the headline comparison. The global-mean and climate-only baselines are effectively constant or near-constant ranking rules, so small deviations around the 0.1000 prevalence reference reflect tie handling rather than meaningful below-reference skill.
-
-### Table 4. RF Minus Logistic Performance by Climate Group
-
-Positive deltas mean the random forest performed better than the matched logistic model within that climate group.
-
-\begingroup
-\small
-
-| Climate group | City count | RF PR AUC wins | Logistic PR AUC wins | Mean PR AUC delta | RF recall wins | Logistic recall wins | Mean recall-at-top-10% delta |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Hot-arid | 10 | 5 | 5 | +0.0336 | 6 | 4 | +0.0762 |
-| Hot-humid | 10 | 2 | 8 | -0.0123 | 2 | 8 | -0.0164 |
-| Mild-cool | 10 | 2 | 8 | -0.0281 | 1 | 9 | -0.0280 |
-
-\endgroup
-
-### Table 5. Fold-Level RF Minus Logistic Comparison
-
-\begingroup
-\small
-
-| Outer fold | Train rows | Test rows | Test positives | Test prevalence | Logistic PR AUC | RF PR AUC | RF minus logistic PR AUC | Logistic recall@top10 | RF recall@top10 | RF minus logistic recall@top10 |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1610 | 0.1773 | +0.0163 | 0.2170 | 0.2217 | +0.0047 |
-| 1 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.2006 | 0.1598 | -0.0408 | 0.2563 | 0.2087 | -0.0477 |
-| 2 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1436 | 0.1301 | -0.0135 | 0.1777 | 0.1443 | -0.0333 |
-| 3 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1267 | 0.1606 | +0.0340 | 0.1463 | 0.2133 | +0.0670 |
-| 4 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1471 | 0.1493 | +0.0022 | 0.1640 | 0.2020 | +0.0380 |
-
-\endgroup
-
-### Table 6. City-Level Paired RF Minus Logistic Summary
-
-\begingroup
-\small
-
-| Metric | Mean delta | Median delta | SD delta | Min delta | Max delta | RF wins | Logistic wins | Ties |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| City PR AUC | -0.0023 | -0.0136 | 0.0602 | -0.0743 | 0.1945 | 9 | 21 | 0 |
-| City recall@top10 | +0.0106 | -0.0150 | 0.0901 | -0.0700 | 0.3420 | 9 | 21 | 0 |
-
-\endgroup
+Notes: `RF` = random forest. The impervious-only baseline is the strongest simple baseline on recall, and the land-cover-only baseline is the strongest simple baseline on pooled PR AUC. The 5k logistic model is the matched linear comparison for the 5k random forest; the 20k logistic row is higher-sample linear context. Small deviations around 0.1000 for near-constant baselines reflect tie handling.
 
 ### Figure 1. Study City Locations
 
@@ -286,43 +266,35 @@ Buffered Census urban-area study regions and local 30 m grids feed aligned per-c
 
 ![City-Held-Out Evaluation Design](figures/evaluation_design.png){width=0.95\textwidth}
 
-Each outer fold holds out six complete cities and trains on the remaining 24 cities. All preprocessing and tuning are fit using training-city rows only.
+Each outer fold holds out six complete cities and trains on the remaining 24 cities. All preprocessing and tuning are fit using training-city rows only, so held-out cities remain unseen until final scoring.
 
-### Figure 4. Within-City and City-Held-Out Results Side by Side
+### Figure 4. Validation Design Contrast: Same-City and City-Held-Out Results
 
 ![Within-City and City-Held-Out Results Side by Side](figures/within_city_vs_transfer_results.png){width=0.95\textwidth}
 
-The left panel summarizes the verified within-city 70/30 held-out result using hotspot precision, recall, and F1. The right panel summarizes the retained city-held-out transfer benchmark using pooled PR AUC, mean city PR AUC, and recall at top 10%. The figure compares validation designs and model-ranking patterns, not direct metric magnitudes across the two panels.
+Figure 4 compares same-city held-out screening with city-held-out transfer. Random forest has a large advantage over logistic regression in the same-city setting, while exact-cell transfer to unseen cities is closer between models and only modestly above simple baselines. The panels use different metrics, so the figure shows how the conclusion changes across validation designs rather than a direct point-for-point metric comparison.
 
-### Figure 5. City-Level Signal Shifts Across Evaluation Designs
+The right-panel AUC values are average precision (reported as PR AUC), not ROC AUC. Because the hotspot label is a top-decile outcome, the relevant no-skill reference is the approximately 0.10 positive prevalence rather than 0.50.
 
-![City-Level Signal Shifts Across Evaluation Designs](figures/city_signal_transfer_relationship.png){width=0.95\textwidth}
+### Figure 5. Same-City Success Does Not Reliably Predict Transfer Success
 
-Each point is one city. The weak city-level correlations show that within-city random-forest success does not reliably predict city-held-out random-forest success. The left panel compares within-city RF hotspot F1 with transfer PR AUC; the right panel compares within-city RF hotspot recall with transfer recall at top 10%.
+![City-Level Signal Shifts Across Evaluation Designs](figures/city_signal_transfer_relationship_labeled.png){width=0.95\textwidth}
 
-### Figure 6. City-Held-Out Benchmark Metric Comparison
+Each point is one city. The weak city-level correlations show that cities with stronger within-city random-forest performance are not necessarily the cities with stronger city-held-out random-forest performance. The left panel compares within-city RF hotspot F1 with transfer PR AUC; the right panel compares within-city RF hotspot recall with transfer recall at top 10%.
 
-![City-Held-Out Benchmark Metric Comparison](figures/benchmark_metrics.png){width=0.95\textwidth}
+\newpage
 
-Sampled city-held-out benchmark metrics compare the no-skill reference, simple baselines, matched 5k logistic and random-forest models, and the 20k logistic context run. The dashed line marks the 10% prevalence reference. The learned models show modest gains over the strongest simple baselines rather than a large separation.
+### Figure 6. Held-Out Denver Map Example
 
-### Figure 7. City-Level RF Minus Logistic Deltas
+![Held-Out Denver Map Example](figures/heldout_denver_map_focus.png){width=1.0\textwidth}
 
-![City-Level RF Minus Logistic Deltas](figures/city_metric_deltas.png){width=0.95\textwidth}
+Held-out Denver benchmark snapshot from a random-forest fold in which Denver was not included in training. The panels show top-decile predicted-risk cells, observed hotspot cells, and error categories. The point map is a spatial diagnostic, not a claim of operational targeting accuracy; missed hotspots and false positives appear in bands or clusters, motivating the all-city spatial-alignment check.
 
-Horizontal bars show random-forest minus logistic deltas for each city, sorted by PR AUC delta and colored by climate group. In the aligned report narrative, this figure is a transfer-heterogeneity diagnostic, not the whole project conclusion. Random-forest gains are concentrated in Las Vegas, Bakersfield, Tucson, and Fresno, while San Jose, Chicago, Portland, and Atlanta are among the clearest logistic-favoring cities.
+### Figure 7. Medium-Scale All-City Spatial-Alignment Summary
 
-### Figure 8. Absolute Random-Forest City PR AUC
+![Medium-Scale All-City Spatial-Alignment Summary](figures/spatial_alignment_medium_summary.png){width=1.0\textwidth}
 
-![Absolute Random-Forest City PR AUC](figures/city_rf_pr_auc.png){width=0.82\textwidth}
-
-Horizontal bars show retained random-forest PR AUC for each held-out city, sorted by absolute city PR AUC and colored by climate group. The dashed line marks the 0.10 reference implied by the sampled 10% hotspot prevalence. This absolute-performance view prevents interpreting Figure 7's RF-minus-logistic gains as a direct ranking of which cities are easiest for the random forest to predict.
-
-### Figure 9. Held-Out Denver Map Example
-
-![Held-Out Denver Map Example](figures/heldout_denver_map_focus.png){width=0.95\textwidth}
-
-Representative held-out Denver benchmark snapshot showing predicted top-decile risk, true hotspot cells, and categorical error types for the retained random-forest model. Denver is used as a representative hot-arid held-out example from the retained map outputs. False positives and false negatives remain spatially structured, suggesting partial built-environment signal but missed city-specific detail.
+Figure 7 summarizes broad spatial alignment for full-city random-forest predictions at 300 m smoothing. The x-axis is Spearman correlation between smoothed predicted and observed surfaces, and the y-axis is observed hotspot mass captured inside predicted top regions. Larger points have greater overlap between predicted and observed top smoothed regions. Cities in the upper-right show stronger broad placement; lower-left cities show weak alignment.
 
 \newpage
 
@@ -330,101 +302,175 @@ Representative held-out Denver benchmark snapshot showing predicted top-decile r
 
 ### Appendix Table A1. Final Dataset Columns
 
-\begingroup
-\small
+The final dataset has 17 columns. They are grouped here rather than shown as a dense schema table so long variable names remain readable.
 
-| Column | Definition | Role in report | Used in headline model? |
-| --- | --- | --- | --- |
-| `city_id` | Integer city identifier used for joins and grouped cross-validation. | Grouping / metadata | No |
-| `city_name` | Human-readable city name. | Metadata | No |
-| `climate_group` | Broad climate grouping label for the city. | Predictor / stratifier | Yes |
-| `cell_id` | Cell identifier within the city grid. | Cell metadata | No |
-| `centroid_lon` | Cell centroid longitude in WGS84. | Mapping metadata | No |
-| `centroid_lat` | Cell centroid latitude in WGS84. | Mapping metadata | No |
-| `impervious_pct` | NLCD impervious percentage for the cell. | Predictor | Yes |
-| `land_cover_class` | NLCD land-cover class code for the cell. | Predictor / water filter | Yes |
-| `elevation_m` | DEM-derived elevation in meters. | Predictor | Yes |
-| `dist_to_water_m` | Distance from the cell to the nearest hydro feature in meters. | Predictor | Yes |
-| `ndvi_median_may_aug` | Median May-August NDVI derived from AppEEARS MODIS/Terra MOD13A1.061 inputs. | Predictor | Yes |
-| `lst_median_may_aug` | Median May-August 2023 daytime land surface temperature derived from ECOSTRESS/AppEEARS inputs. | Outcome ingredient | No |
-| `n_valid_ecostress_passes` | Number of valid ECOSTRESS observations contributing to the cell-level LST summary. | Quality filter / support field | No |
-| `hotspot_10pct` | Binary indicator for whether the cell falls in the within-city top 10% of valid LST values. | Target | Target only |
-| `tree_cover_proxy_pct_270m` | Share of nearby 30 m cells within an approximately 270 m neighborhood in NLCD forest classes 41/42/43. | Supplemental neighborhood-context feature | No |
-| `vegetated_cover_proxy_pct_270m` | Share of nearby 30 m cells within an approximately 270 m neighborhood in selected NLCD vegetated classes. | Supplemental neighborhood-context feature | No |
-| `impervious_pct_mean_270m` | Neighborhood mean NLCD impervious percentage within an approximately 270 m window. | Supplemental neighborhood-context feature | No |
+**Metadata and evaluation grouping**
 
-\endgroup
+- `city_id`: city grouping identifier for joins and grouped cross-validation.
+- `city_name`: human-readable city name.
+- `climate_group`: broad climate-group label; used as a predictor and stratifier.
+- `cell_id`: grid-cell identifier within a city.
+- `centroid_lon`, `centroid_lat`: WGS84 cell-centroid coordinates used for mapping, not first-pass prediction.
+
+**Primary non-thermal predictors**
+
+- `impervious_pct`: NLCD impervious percentage.
+- `land_cover_class`: NLCD land-cover class; also used for the open-water filter.
+- `elevation_m`: DEM-derived elevation in meters.
+- `dist_to_water_m`: distance to nearest selected hydro feature.
+- `ndvi_median_may_aug`: median May-August NDVI from MODIS/Terra AppEEARS inputs.
+- `climate_group`: included as a broad city-level context feature.
+
+**Target and quality fields**
+
+- `lst_median_may_aug`: median May-August ECOSTRESS LST; used to define the label, not as a predictor.
+- `n_valid_ecostress_passes`: count of valid ECOSTRESS observations contributing to LST; used for quality filtering.
+- `hotspot_10pct`: city-relative top-decile LST hotspot label and model target.
+
+**Supplemental context features**
+
+- `tree_cover_proxy_pct_270m`: nearby forest-class share within an approximately 270 m neighborhood.
+- `vegetated_cover_proxy_pct_270m`: nearby vegetated-class share within an approximately 270 m neighborhood.
+- `impervious_pct_mean_270m`: neighborhood mean imperviousness within an approximately 270 m window.
 
 ### Appendix Table A2. Model Run Metadata
 
 \begingroup
 \small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.08}
 
-| Model checkpoint | Preset | Rows per city | Outer folds | Inner CV splits | Candidate settings | Estimated inner fits | Scoring |
-| --- | --- | ---: | --- | ---: | ---: | ---: | --- |
-| Logistic SAGA 5k | full | 5,000 | 0-4 | 4 | 20 | 400 | average precision |
-| Random forest 5k | targeted RF search | 5,000 | 0-4 | 3 | 8 | 120 | average precision |
+\begin{tabular}{llrlrrrl}
+\hline
+Model & Preset & Rows/city & Outer folds & Inner CV & Candidates & Inner fits & Scoring \\
+\hline
+Logistic SAGA 5k & full & 5,000 & 0-4 & 4 & 20 & 400 & AP \\
+Random forest 5k & targeted RF search & 5,000 & 0-4 & 3 & 8 & 120 & AP \\
+\hline
+\end{tabular}
 
 \endgroup
 
-Metrics: Logistic SAGA 5k reached PR AUC 0.1421, mean city PR AUC 0.1803, and recall@top10 0.1647. Random forest 5k reached PR AUC 0.1486, mean city PR AUC 0.1781, and recall@top10 0.1961.
+Note: AP = average precision.
+
+Metrics: Logistic SAGA 5k reached PR AUC 0.1421, mean city PR AUC 0.1803, and top 10% recall 0.1647. Random forest 5k reached PR AUC 0.1486, mean city PR AUC 0.1781, and top 10% recall 0.1961.
 
 The logistic run tuned regularization strength and `l1_ratio` values corresponding to L2, L1, and elastic-net variants. The random-forest run tuned tree count, maximum depth, feature subsampling, and minimum leaf size. Selected hyperparameters varied by outer fold.
 
 ### Appendix Table A3. Model and Baseline Specifications
 
-\begingroup
-\small
+R@10 denotes recall among the top 10% highest-risk held-out cells. AP denotes average precision.
 
-| Model / baseline | Predictors | Preprocessing | Tuning grid or rule | Scoring | Grouped CV? |
-| --- | --- | --- | --- | --- | --- |
-| No-skill / prevalence reference | None | None | Reference PR AUC and top-decile recall equal to the 10% target rate. | PR AUC and recall@top10 | Reference only |
-| Global-mean baseline | None | Training-city target mean | Predict the training-city hotspot prevalence for all held-out rows. | PR AUC and recall@top10 | Outer city folds only |
-| Climate-only baseline | `climate_group` | Training-city category means | Predict training-city hotspot prevalence by climate group. | PR AUC and recall@top10 | Outer city folds only |
-| Land-cover-only baseline | `land_cover_class` | Training-city category means | Predict training-city hotspot prevalence by land-cover class. | PR AUC and recall@top10 | Outer city folds only |
-| Impervious-only baseline | `impervious_pct` | Training-city decile bins | Predict training-city hotspot prevalence by imperviousness bin. | PR AUC and recall@top10 | Outer city folds only |
-| Logistic SAGA 5k | Six non-thermal predictors | Training-only imputation, numeric scaling, and categorical one-hot encoding inside sklearn Pipeline | `C` = 0.01, 0.1, 1.0, 10.0; `l1_ratio` = 0.0, 0.2, 0.5, 0.8, 1.0 | Inner-CV average precision; held-out PR AUC and recall@top10 | Yes, grouped outer folds and grouped inner CV |
-| Random forest 5k | Same six non-thermal predictors | Training-only imputation and categorical one-hot encoding inside sklearn Pipeline | `n_estimators` = 200, 300; `max_depth` = 10, 20; `max_features` = sqrt; `min_samples_leaf` = 1, 5 | Inner-CV average precision; held-out PR AUC and recall@top10 | Yes, grouped outer folds and grouped inner CV |
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.15}
+
+\begin{tabular}{p{0.20\textwidth}p{0.24\textwidth}p{0.28\textwidth}p{0.18\textwidth}}
+\hline
+Model / baseline & Predictors & Preprocessing or rule & Grouped fit \\
+\hline
+No-skill reference & None & 10\% prevalence reference & Reference only \\
+Global mean & None & Training-city target mean & Outer city folds \\
+Climate only & \texttt{climate\_group} & Training-city means by climate group & Outer city folds \\
+Land cover only & \texttt{land\_cover\_class} & Training-city means by land-cover class & Outer city folds \\
+Impervious only & \texttt{impervious\_pct} & Training-city means by imperviousness bin & Outer city folds \\
+Logistic 5k & Six non-thermal predictors & Training-only imputation, scaling, one-hot encoding, and SAGA logistic regression & Outer folds and grouped inner CV \\
+RF 5k & Same six predictors & Training-only imputation, one-hot encoding, and random forest & Outer folds and grouped inner CV \\
+\hline
+\end{tabular}
 
 \endgroup
+
+Tuning notes: the logistic run searched regularization strength and L1/L2/elastic-net mixing through `C` and `l1_ratio`. The random-forest run searched tree count, maximum depth, feature subsampling, and minimum leaf size. Both tuned models used inner-CV AP for model selection and held-out AP / R@10 for reporting.
 
 ### Appendix Table A4. City and Fold Composition
 
 \begingroup
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\renewcommand{\arraystretch}{1.06}
+
+\begin{tabular}{rl@{\hspace{10pt}}lrrrr}
+\hline
+City ID & City & Climate group & Final rows & Hotspot count & Hotspot prev. & Outer fold \\
+\hline
+1 & Phoenix & Hot arid & 3,199,440 & 319,949 & 0.1000 & 2 \\
+2 & Tucson & Hot arid & 1,779,906 & 177,991 & 0.1000 & 0 \\
+3 & Las Vegas & Hot arid & 1,718,669 & 171,867 & 0.1000 & 3 \\
+4 & Albuquerque & Hot arid & 1,336,755 & 133,676 & 0.1000 & 4 \\
+5 & El Paso & Hot arid & 738,527 & 73,853 & 0.1000 & 4 \\
+6 & Denver & Hot arid & 1,859,393 & 185,943 & 0.1000 & 1 \\
+7 & Salt Lake City & Hot arid & 863,557 & 86,356 & 0.1000 & 1 \\
+8 & Fresno & Hot arid & 459,104 & 45,912 & 0.1000 & 1 \\
+9 & Bakersfield & Hot arid & 382,964 & 38,297 & 0.1000 & 0 \\
+10 & Reno & Hot arid & 475,828 & 47,583 & 0.1000 & 2 \\
+11 & Houston & Hot humid & 5,054,661 & 505,468 & 0.1000 & 2 \\
+12 & Columbia & Hot humid & 1,055,916 & 105,626 & 0.1000 & 2 \\
+13 & Richmond & Hot humid & 1,481,846 & 148,185 & 0.1000 & 0 \\
+14 & New Orleans & Hot humid & 700,063 & 70,008 & 0.1000 & 3 \\
+15 & Tampa & Hot humid & 2,847,118 & 284,712 & 0.1000 & 0 \\
+16 & Miami & Hot humid & 3,635,068 & 363,510 & 0.1000 & 3 \\
+17 & Jacksonville & Hot humid & 1,664,542 & 166,458 & 0.1000 & 2 \\
+18 & Atlanta & Hot humid & 7,081,699 & 708,171 & 0.1000 & 0 \\
+19 & Charlotte & Hot humid & 1,896,996 & 189,703 & 0.1000 & 3 \\
+20 & Nashville & Hot humid & 1,680,248 & 168,025 & 0.1000 & 4 \\
+21 & Seattle & Mild cool & 2,831,875 & 283,189 & 0.1000 & 2 \\
+22 & Portland & Mild cool & 1,496,116 & 149,618 & 0.1000 & 1 \\
+23 & San Francisco & Mild cool & 1,466,276 & 146,628 & 0.1000 & 3 \\
+24 & San Jose & Mild cool & 817,627 & 81,764 & 0.1000 & 0 \\
+25 & Los Angeles & Mild cool & 4,736,063 & 473,607 & 0.1000 & 4 \\
+26 & San Diego & Mild cool & 1,948,679 & 194,869 & 0.1000 & 4 \\
+27 & Chicago & Mild cool & 6,722,963 & 672,306 & 0.1000 & 1 \\
+28 & Minneapolis & Mild cool & 2,946,162 & 294,619 & 0.1000 & 1 \\
+29 & Detroit & Mild cool & 3,702,849 & 370,291 & 0.1000 & 4 \\
+30 & Boston & Mild cool & 4,813,984 & 481,404 & 0.1000 & 3 \\
+\hline
+\end{tabular}
+
+\endgroup
+
+### Appendix Table A5. RF Minus Logistic Performance by Climate Group
+
+Positive deltas mean the random forest performed better than the matched logistic model within that climate group. This table supports the heterogeneity discussion but remains secondary to the main benchmark table.
+
+\begingroup
 \small
 
-| City ID | City | Climate group | Final rows | Hotspot count | Hotspot prevalence | Outer fold |
-| ---: | --- | --- | ---: | ---: | ---: | ---: |
-| 1 | Phoenix | Hot-arid | 3,199,440 | 319,949 | 0.1000 | 2 |
-| 2 | Tucson | Hot-arid | 1,779,906 | 177,991 | 0.1000 | 0 |
-| 3 | Las Vegas | Hot-arid | 1,718,669 | 171,867 | 0.1000 | 3 |
-| 4 | Albuquerque | Hot-arid | 1,336,755 | 133,676 | 0.1000 | 4 |
-| 5 | El Paso | Hot-arid | 738,527 | 73,853 | 0.1000 | 4 |
-| 6 | Denver | Hot-arid | 1,859,393 | 185,943 | 0.1000 | 1 |
-| 7 | Salt Lake City | Hot-arid | 863,557 | 86,356 | 0.1000 | 1 |
-| 8 | Fresno | Hot-arid | 459,104 | 45,912 | 0.1000 | 1 |
-| 9 | Bakersfield | Hot-arid | 382,964 | 38,297 | 0.1000 | 0 |
-| 10 | Reno | Hot-arid | 475,828 | 47,583 | 0.1000 | 2 |
-| 11 | Houston | Hot-humid | 5,054,661 | 505,468 | 0.1000 | 2 |
-| 12 | Columbia | Hot-humid | 1,055,916 | 105,626 | 0.1000 | 2 |
-| 13 | Richmond | Hot-humid | 1,481,846 | 148,185 | 0.1000 | 0 |
-| 14 | New Orleans | Hot-humid | 700,063 | 70,008 | 0.1000 | 3 |
-| 15 | Tampa | Hot-humid | 2,847,118 | 284,712 | 0.1000 | 0 |
-| 16 | Miami | Hot-humid | 3,635,068 | 363,510 | 0.1000 | 3 |
-| 17 | Jacksonville | Hot-humid | 1,664,542 | 166,458 | 0.1000 | 2 |
-| 18 | Atlanta | Hot-humid | 7,081,699 | 708,171 | 0.1000 | 0 |
-| 19 | Charlotte | Hot-humid | 1,896,996 | 189,703 | 0.1000 | 3 |
-| 20 | Nashville | Hot-humid | 1,680,248 | 168,025 | 0.1000 | 4 |
-| 21 | Seattle | Mild-cool | 2,831,875 | 283,189 | 0.1000 | 2 |
-| 22 | Portland | Mild-cool | 1,496,116 | 149,618 | 0.1000 | 1 |
-| 23 | San Francisco | Mild-cool | 1,466,276 | 146,628 | 0.1000 | 3 |
-| 24 | San Jose | Mild-cool | 817,627 | 81,764 | 0.1000 | 0 |
-| 25 | Los Angeles | Mild-cool | 4,736,063 | 473,607 | 0.1000 | 4 |
-| 26 | San Diego | Mild-cool | 1,948,679 | 194,869 | 0.1000 | 4 |
-| 27 | Chicago | Mild-cool | 6,722,963 | 672,306 | 0.1000 | 1 |
-| 28 | Minneapolis | Mild-cool | 2,946,162 | 294,619 | 0.1000 | 1 |
-| 29 | Detroit | Mild-cool | 3,702,849 | 370,291 | 0.1000 | 4 |
-| 30 | Boston | Mild-cool | 4,813,984 | 481,404 | 0.1000 | 3 |
+| Climate group | Cities | RF PR AUC wins | Logit PR AUC wins | Mean PR AUC delta | RF recall wins | Logit recall wins | Mean recall delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hot arid | 10 | 5 | 5 | +0.0336 | 6 | 4 | +0.0762 |
+| Hot humid | 10 | 2 | 8 | -0.0123 | 2 | 8 | -0.0164 |
+| Mild cool | 10 | 2 | 8 | -0.0281 | 1 | 9 | -0.0280 |
+
+\endgroup
+
+### Appendix Table A6. Fold-Level RF Minus Logistic Comparison
+
+R@10 denotes recall among the top 10% highest-risk held-out cells.
+
+\begingroup
+\scriptsize
+
+| Fold | Train rows | Test rows | Pos. | Test prev. | Logit PR AUC | RF PR AUC | RF - Logit PR AUC | Logit R@10 | RF R@10 | RF - Logit R@10 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1610 | 0.1773 | +0.0163 | 0.2170 | 0.2217 | +0.0047 |
+| 1 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.2006 | 0.1598 | -0.0408 | 0.2563 | 0.2087 | -0.0477 |
+| 2 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1436 | 0.1301 | -0.0135 | 0.1777 | 0.1443 | -0.0333 |
+| 3 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1267 | 0.1606 | +0.0340 | 0.1463 | 0.2133 | +0.0670 |
+| 4 | 120,000 | 30,000 | 3,000 | 0.1000 | 0.1471 | 0.1493 | +0.0022 | 0.1640 | 0.2020 | +0.0380 |
+
+\endgroup
+
+### Appendix Table A7. City-Level Paired RF Minus Logistic Summary
+
+\begingroup
+\small
+
+| Metric | Mean delta | Median delta | SD delta | Min delta | Max delta | RF wins | Logistic wins | Ties |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| City PR AUC | -0.0023 | -0.0136 | 0.0602 | -0.0743 | 0.1945 | 9 | 21 | 0 |
+| City R@10 | +0.0106 | -0.0150 | 0.0901 | -0.0700 | 0.3420 | 9 | 21 | 0 |
 
 \endgroup
 
@@ -440,63 +486,38 @@ Final row counts vary substantially by city because buffered study-area extents 
 
 Permutation importance and coefficient summaries are included as predictive diagnostics only. They are not causal estimates of how changing an urban feature would change LST. NLCD land-cover categories are encoded categorical levels, so logistic coefficient signs depend on the reference category.
 
-### Reproducibility Notes
+### Appendix Figure A3. City-Held-Out Benchmark Metric Comparison
 
-Report-facing tables and generated figures are regenerated with:
+![City-Held-Out Benchmark Metric Comparison](figures/benchmark_metrics.png){width=0.9\textwidth}
 
-```powershell
-C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts
-```
+Sampled city-held-out benchmark metrics compare the no-skill reference, simple baselines, matched 5k logistic and random-forest models, and the 20k logistic context run.
 
-Canonical dataset and modeling-prep artifacts:
+### Appendix Figure A4. City-Level RF Minus Logistic Deltas
 
-- `data_processed/final/final_dataset.parquet`
-- `data_processed/final/final_dataset.csv`
-- `data_processed/modeling/final_dataset_audit.md`
-- `data_processed/modeling/final_dataset_audit_summary.json`
-- `data_processed/modeling/final_dataset_city_summary.csv`
-- `data_processed/modeling/city_outer_folds.parquet`
-- `data_processed/modeling/city_outer_folds.csv`
+![City-Level RF Minus Logistic Deltas](figures/city_metric_deltas.png){width=0.9\textwidth}
 
-Report table and figure artifacts:
+This transfer-heterogeneity diagnostic shows where random forest outperforms or underperforms logistic regression under whole-city holdout.
 
-- `docs/report/tables/data_sources_variables.csv`
-- `docs/report/tables/final_dataset_by_climate_group.csv`
-- `docs/report/tables/benchmark_metrics.csv`
-- `docs/report/tables/rf_vs_logistic_by_climate.csv`
-- `docs/report/tables/rf_vs_logistic_by_fold.csv`
-- `docs/report/tables/rf_vs_logistic_city_paired_summary.csv`
-- `docs/report/tables/final_dataset_columns.csv`
-- `docs/report/tables/model_baseline_specifications.csv`
-- `docs/report/tables/city_fold_composition.csv`
-- `docs/report/tables/retained_model_run_metadata.csv`
-- `docs/report/figures/study_city_points.png`
-- `docs/report/figures/workflow_overview.svg`
-- `docs/report/figures/workflow_overview.png`
-- `docs/report/figures/evaluation_design.svg`
-- `docs/report/figures/evaluation_design.png`
-- `docs/report/figures/within_city_vs_transfer_results.png`
-- `docs/report/figures/city_signal_transfer_relationship.png`
-- `docs/report/figures/benchmark_metrics.png`
-- `docs/report/figures/city_metric_deltas.png`
-- `docs/report/figures/city_rf_pr_auc.png`
-- `docs/report/figures/heldout_denver_map_focus.png`
-- `docs/report/figures/feature_importance_ranked_summary.png`
-- `docs/report/figures/final_dataset_city_row_counts.png`
+### Appendix Figure A5. Absolute Random-Forest City PR AUC
 
-The PDF render uses PNG figure files so the report does not depend on local SVG conversion support.
+![Absolute Random-Forest City PR AUC](figures/city_rf_pr_auc.png){width=0.82\textwidth}
 
-Benchmark source artifacts:
+Absolute random-forest PR AUC by held-out city, with the dashed line marking the 0.10 reference implied by the sampled 10% hotspot prevalence.
 
-- `outputs/modeling/reporting/cross_city_benchmark_report.md`
-- `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
-- `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_by_climate.csv`
-- `outputs/modeling/reporting/tables/cross_city_benchmark_report_city_error_comparison.csv`
-- `outputs/modeling/logistic_saga/full_allfolds_s5000_sampled-full-allfolds_2026-04-07_235825/`
-- `outputs/modeling/logistic_saga/full_allfolds_s20000_samplecurve-20k_2026-04-08_021152/`
-- retained random-forest 5k run directory listed in Appendix Table A2 metadata
+### Appendix Figure A6. Supplemental Within-City Versus Cross-City Gap
 
-Supplemental interpretation and map artifacts, if used, should remain explicitly supplemental:
+![Supplemental Within-City Versus Cross-City Gap](figures/within_vs_cross_gap.png){width=0.92\textwidth}
 
-- `outputs/modeling/supplemental/feature_importance/feature_importance_summary.md`
-- `outputs/modeling/reporting/heldout_city_maps/heldout_city_maps.md`
+This supplemental diagnostic visualizes how much easier same-city held-out prediction is than strict city-held-out transfer. The within-city split allows each city to be represented during model development, so the plot supports the validation-design contrast rather than replacing the transfer benchmark.
+
+### Appendix Figure A7. Selected High/Low Spatial-Alignment Map Contrast
+
+![Selected High/Low Spatial-Alignment Map Contrast](figures/selected_spatial_alignment_map_contrast.png){width=0.95\textwidth}
+
+Nashville and San Francisco provide a selected high/low contrast for the 300 m spatial-alignment diagnostic. Nashville shows much stronger broad alignment, while San Francisco illustrates a weak-alignment case where predicted and observed smoothed hotspot regions diverge. The maps show held-out random-forest full-city prediction surfaces for spatial diagnosis, not a new model benchmark.
+
+### Data and Code Availability / Reproducibility Note
+
+The workflow used for this report is maintained in the project repository: <https://github.com/goldember12-alt/urban-heat-mapping-dataset>. The code constructs the 30-city analytic grid, aligns public geospatial and remote-sensing inputs, defines the city-relative hotspot label, runs the same-city and city-held-out evaluations, and exports report tables and figures.
+
+The repository should be read as the maintained workflow rather than as a complete bundle of every raw download and generated artifact. Public source products are listed in Table 1 and cited in the References, but regeneration may require external data acquisition, AppEEARS requests, local storage, and recomputation of generated outputs. The main city-held-out benchmark uses fixed outer city folds, target-rate-stratified sampled rows, and training-only preprocessing and tuning. The supplemental spatial-alignment diagnostic uses the same city-held-out training contract and scores full eligible held-out city rows for spatial analysis.

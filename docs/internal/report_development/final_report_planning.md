@@ -1,6 +1,6 @@
 # Final Report Planning Handoff
 
-This file is the continuity map for writing the STAT 5630 final report from `docs/report/`. A new chat should be able to read this file, `final_report_outline.md`, and the existing retained artifacts, then continue the writing pass without rediscovering the project.
+This file is the continuity map for writing the STAT 5630 final report from `docs/report/`. A new chat should be able to read this file and the existing retained artifacts, then continue the writing pass without rediscovering the project. The older outline scaffold has been archived at `docs/report/archive/final_report_outline.md`.
 
 ## Current Report State
 
@@ -19,8 +19,8 @@ Existing report-facing files:
   - Requires title page, main text, tables/figures section, and appendix.
   - Main text limit: 15 pages for two-person project.
   - Tables and figures should be organized separately from main text.
-- `docs/report/final_report_outline.md`
-  - New course-format outline and writing scaffold.
+- `docs/report/archive/final_report_outline.md`
+  - Archived course-format outline and writing scaffold.
 
 Important context:
 
@@ -30,11 +30,11 @@ Important context:
 - The active report narrative should follow the authoritative presentation PDFs in `docs/presentation_2026/`: `Urban Heat Transfer Prediction Presentation.pdf` and `Notes Readoff for Presentation.pdf`.
 - Latest rendered PDF check:
   - `docs/report/stat5630_final_report_draft.pdf` renders successfully with title page, embedded figures, Tables and Figures section, and Appendix.
-  - The latest rendered draft is 26 pages after adding stricter results framing, variability tables, and appendix support.
+  - The latest rendered draft reflects the 2026-05-03 critique-guided revision pass: the all-city medium-scale spatial-alignment summary is now main Figure 7, and the selected Nashville/San Francisco spatial-alignment contrast is a single appendix figure.
   - The assignment's 15-page limit applies to **Main Text** only.
-  - Current Main Text spans roughly pages 2-10, and Tables/Figures begin after references, so the Main Text remains under the 15-page cap.
+  - Current Main Text spans roughly pages 2-11, and Tables/Figures begin on page 12 after references, so the Main Text remains under the 15-page cap.
   - Render command currently uses 12 pt font and 1 inch margins; the PDF appears single-spaced under the Pandoc/XeLaTeX render path.
-  - Do not treat the 18-page total PDF as a violation unless the Main Text itself exceeds 15 pages.
+  - Do not treat the full-PDF page count as a violation unless the Main Text itself exceeds 15 pages.
 
 ## Presentation Narrative Anchor
 
@@ -369,12 +369,13 @@ These files already exist under `docs/report/figures/` and can be referenced fro
 - Use in report: Analysis and Results.
 - Message: Slide 4 comparison: RF dominates within-city precision/recall/F1, while city-held-out transfer is weaker and closer.
 - Status: Ready.
-- Caption direction: Compare validation-design patterns, not raw metric magnitudes across panels.
+- Caption direction: Compare validation-design patterns, not raw metric magnitudes across panels. State that the right-panel AUC values are PR AUC / average precision, not ROC AUC; the no-skill reference is the `0.10` hotspot prevalence, not `0.50`.
+- Label/score sanity check: `docs/report/tables/label_score_sanity_check.csv` recomputes original-score and inverted-score metrics from retained held-out predictions. Original RF AP is `0.1486` versus `0.0752` with inverted scores, and original RF ROC AUC is `0.6214` versus `0.3786` inverted, so the saved transfer scores are not behaving like flipped labels or flipped predicted probabilities.
 
 ### Figure: City-Level Signal Shifts Across Evaluation Designs
 
-- File: `docs/report/figures/city_signal_transfer_relationship.png`
-- Source/provenance: copied from `figures/presentation/city_signal_transfer_relationship.png`.
+- File: `docs/report/figures/city_signal_transfer_relationship_labeled.png`
+- Source/provenance: labeled report copy derived from the city signal transfer relationship figure.
 - Use in report: Analysis and Results.
 - Message: Slide 5 diagnostic: within-city RF F1 has about 0.08 correlation with transfer RF PR AUC, and within-city RF recall has about 0.03 correlation with transfer RF recall@top10.
 - Status: Ready.
@@ -424,6 +425,117 @@ These files already exist under `docs/report/figures/` and can be referenced fro
 - Message: Within-city splits are much easier and would overstate transfer performance.
 - Status: Ready.
 - Caption direction: Label as supplemental/easier diagnostic, not canonical benchmark.
+
+## Visual, Table, And Appendix Improvement Audit
+
+2026-05-03 audit scope:
+
+- Current draft uses 6 main figures, 6 main tables, 4 appendix tables, and 5 appendix figures.
+- The available visual inventory is much larger than the report currently uses: `figures/` contains 168 PNGs and 18 SVGs.
+- The strongest underused visual families are:
+  - all-city spatial-alignment maps and metrics under `figures/modeling/supplemental/spatial_alignment_all_cities/` and `outputs/modeling/supplemental/spatial_alignment_all_cities/`;
+  - all-city within-city versus cross-city diagnostics under `figures/modeling/supplemental/within_city_all_cities/`;
+  - 29 completed city-level data-processing map/summary figure sets under `figures/data_processing/city_summaries/` plus one empty/error Boston report folder noted in the batch summary;
+  - presentation-grade result schematics under `figures/presentation/`.
+- Current main Tables 4-6 are useful for exact values, but they visually slow down the Results section. Prefer moving detailed heterogeneity tables to the appendix and using one clearer figure in the main tables/figures section.
+
+2026-05-03 first-pass implementation decisions:
+
+- Generated `docs/report/figures/spatial_alignment_medium_summary.png` from the all-city spatial-alignment metrics table using medium-scale (`300 m`) rows only.
+- Kept Tables 1-3 as the core tables in the Tables and Figures section.
+- Moved the former main Tables 4-6 to Appendix Tables A5-A7 so detailed heterogeneity values remain available without slowing the main figure/table flow.
+- Integrated the existing within-city versus cross-city gap figure as Appendix Figure A6, with language that it is supplemental and easier than the canonical city-held-out transfer benchmark.
+- Integrated the all-city medium-scale spatial-alignment summary as Appendix Figure A7 and kept interpretation cautious: partial broad spatial alignment, wide city-level variation, and no climate-group pattern claim.
+- Copied the Nashville and San Francisco medium-scale spatial-alignment maps into `docs/report/figures/` and used them as Appendix Figure A8, a selected high/low contrast rather than a main narrative replacement.
+- Updated `src.report_artifacts` so `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts` regenerates the new summary figure and report-facing copied map/diagnostic figures.
+
+2026-05-03 critique-guided revision decisions:
+
+- Tightened the active report draft using `docs/internal/report_development/stat5630_draft_critical_review.md` as an actionable checklist rather than a broad rewrite request.
+- Defined same-city screening, exact-cell transfer, and broad spatial placement earlier in the Background.
+- Clarified AP/PR AUC wording in Methods and moved the defensive flipped-score sanity-check language out of the Figure 4 caption.
+- Promoted former Appendix Figure A7 to main Figure 7 because it is central to the spatial-alignment result.
+- Replaced the former split Appendix Figure A8 with `docs/report/figures/selected_spatial_alignment_map_contrast.png`, generated reproducibly by `src.run_report_artifacts`.
+- Added `docs/internal/report_development/stat5630_revision_pass_notes.md` as the focused revision-pass record.
+
+### Highest-Value Visual Additions
+
+1. Add an all-city spatial-alignment summary figure.
+
+- Proposed file: `docs/report/figures/spatial_alignment_medium_summary.png`.
+- Source data: `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/spatial_alignment_metrics_all_cities.csv`.
+- Suggested design: medium-scale (`300 m`) scatter or lollipop figure with `spearman_surface_corr` on one axis and `observed_mass_captured` or `top_region_overlap_fraction` on the other, colored by climate group and labeled only for the strongest/weakest cities.
+- Why it helps: the current text discusses all-city spatial alignment, but the report only visualizes Denver. This figure would make the supplemental spatial-placement claim concrete while keeping the sampled PR AUC / recall benchmark primary.
+- Values to preserve: medium-scale means are Spearman `0.2713`, top-region overlap `0.1353`, and observed hotspot mass captured `0.2114`; all reconstruction statuses are `ok`.
+- Interpretation guardrail: show variation and partial alignment, not "strong transfer." Do not claim climate-group transfer patterns from this figure.
+- Priority: Very high.
+
+2. Add a high-versus-low spatial-alignment map contrast.
+
+- Existing candidate files:
+  - `figures/modeling/supplemental/spatial_alignment_all_cities/nashville_city20_random_forest_medium_surface_alignment.png`
+  - `figures/modeling/supplemental/spatial_alignment_all_cities/san_francisco_city23_random_forest_medium_surface_alignment.png`
+  - optional additional contrasts: `portland_city22...` and `las_vegas_city03...`.
+- Suggested use: appendix figure, or main Figure 7 only if the Results section adds one short paragraph on spatial-placement heterogeneity.
+- Why it helps: this is visually compelling and supports the new distinction between exact-cell retrieval and broader spatial placement.
+- Interpretation guardrail: describe as supplemental full-city spatial diagnostic maps generated from retained RF held-out folds, not a new benchmark and not operational deployment evidence.
+- Priority: High.
+
+3. Use the existing within-city versus cross-city gap figure.
+
+- Existing file: `docs/report/figures/within_vs_cross_gap.png`.
+- Source data: `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_cross_city_gap_by_city.csv`.
+- Suggested use: replace or augment one current heterogeneity table in the main tables/figures section, or add as Appendix Figure A6.
+- Why it helps: this single figure visualizes the project thesis directly: within-city evaluation is much easier than city-held-out transfer. It is a stronger visual than another table of metric deltas.
+- Values to preserve: for random forest, mean within-city PR AUC is `0.4213`, mean cross-city PR AUC is `0.1781`, and mean PR AUC gap is `0.2432`; mean recall gap is `0.2202`.
+- Interpretation guardrail: these within-city random-split results are supplemental and easier than the canonical city-held-out benchmark.
+- Priority: High.
+
+4. Build a city hotspot-map montage.
+
+- Candidate source files: `figures/data_processing/city_summaries/*/*_hotspot_map.png`.
+- Suggested design: 2 x 3 or 3 x 3 montage of representative city hotspot maps, for example Denver, Nashville, San Francisco, Las Vegas, Portland, and El Paso.
+- Why it helps: it shows that the target is spatially structured and city-specific before any model is introduced. This would make the dataset contribution more vivid than row-count tables alone.
+- Suggested placement: appendix, or a compact Figure 2 companion if the Dataset Construction section needs visual lift.
+- Caveat: Boston's city data-processing report failed in the batch summary, so use known completed city maps and avoid implying all 30 city-summary maps rendered successfully.
+- Priority: Medium high.
+
+5. Replace result table density with one compact heterogeneity figure.
+
+- Existing candidate: `docs/report/figures/city_metric_deltas.png`.
+- Possible new figure: a cleaner "RF-minus-logistic by city and metric" dot/lollipop chart that combines climate grouping with PR AUC and recall deltas, then move Tables 4-6 to appendix.
+- Why it helps: the paper currently repeats the heterogeneity story across Tables 4-6 plus Appendix Figures A4-A5. A polished figure can carry the story while tables retain exact audit values.
+- Priority: Medium.
+
+### Lower-Priority Or Appendix-Only Visuals
+
+- `figures/modeling/reporting/cross_city_benchmark_report_runtime_vs_pr_auc.png`: useful for computational tradeoff, but not central to the final course-report story. Keep appendix-only if used.
+- `figures/presentation/evaluation_metric_comparison_table.png`: visually attractive, but the current Figure 4 already carries the validation-design contrast and the draft now has exact metric tables.
+- `figures/modeling/heldout_city_maps/atlanta_heldout_map_triptych.png` and `detroit_heldout_map_triptych.png`: useful as additional appendix examples, but Denver is enough for the main narrative unless a multi-city map comparison replaces the single Denver figure.
+- City-level `key_correlations`, `key_distributions`, and `land_cover_composition` figures: useful for QA and appendix exploration, but too city-specific for the main report unless turned into a synthesized multi-city figure.
+
+### Recommended Table And Appendix Rebalance
+
+- Keep Table 1 and Table 2 in the main tables/figures section because they define data sources and dataset scale.
+- Keep Table 3 as the main benchmark table because exact metric values matter.
+- Move Tables 4-6 to appendix if adding the spatial-alignment summary figure and within-vs-cross gap figure. Their claims can be summarized in prose and supported visually.
+- Keep Appendix Table A1 and A2 for reproducibility.
+- Consider compressing Appendix Table A3 into prose if the appendix gets visually crowded; the model specification is useful but less visually important than spatial diagnostics.
+- Add new appendix entries only if they have a direct narrative job:
+  - A6: within-city versus cross-city gap;
+  - A7: spatial-alignment medium-scale summary;
+  - A8: selected high/low spatial-alignment maps or hotspot-map montage.
+
+### Implementation Notes For A Future Visual Pass
+
+- Copy any reused existing figure into `docs/report/figures/` before referencing it from the draft.
+- Generate new report-specific figures from source tables rather than editing existing PNGs by hand.
+- Use the standard interpreter:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m ...`
+- Good targets for generation code:
+  - add report-only plot helpers to `src/report_artifacts.py` if the figure should be reproducible with `src.run_report_artifacts`;
+  - add a separate small report-visual CLI only if the spatial-alignment figure depends on supplemental outputs outside the existing report-artifact path.
+- After adding figures, rerender `docs/report/stat5630_final_report_draft.pdf` and inspect the figure pages for label readability.
 
 ## New Tables/Figures To Generate
 
@@ -545,7 +657,7 @@ These should be generated before or during the first writing pass so the dataset
 Retained benchmark table:
 
 - Source: `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`
-- Use as main Table 3, simplified to the five rows listed in `final_report_outline.md`.
+- Use as main Table 3, simplified to the five rows listed in `docs/report/archive/final_report_outline.md`.
 - Report-facing generated file: `docs/report/tables/benchmark_metrics.csv`.
 
 Climate delta table:
@@ -614,8 +726,8 @@ Tone target:
 
 Minimum read set:
 
-- `docs/report/final_report_outline.md`
-- `docs/report/final_report_planning.md`
+- `docs/report/archive/final_report_outline.md`
+- `docs/internal/report_development/final_report_planning.md`
 - `docs/report/cross_city_urban_heat_report.md`
 - `docs/data_dictionary.md`
 - `docs/workflow.md`

@@ -1,5 +1,949 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-05-03 - Checkpoint: Remove Unpushed Parquet Artifacts From Git History
+
+- Date / checkpoint:
+  - 2026-05-03 cleanup after push attempts showed the unpushed local history included large spatial-alignment parquet prediction artifacts.
+- Change made:
+  - Removed the three newly added full-city spatial-alignment parquet prediction files from the unpushed commits before pushing.
+  - Kept the global `.gitignore` `*.parquet` rule so newly generated parquet artifacts remain local by default.
+  - Added `.githooks/pre-push`, a Python pre-push guard that blocks pushes whose ref update adds or modifies `.parquet` paths.
+  - Configured the local checkout to use `.githooks` via `core.hooksPath`.
+- Files touched in this pass:
+  - `.githooks/pre-push`
+  - `docs/chat_handoff.md`
+- Verification status:
+  - Clean replacement commit has no `.parquet` paths in `git show --name-only --format=%H HEAD`.
+  - `git diff --name-only --diff-filter=AMR 3db0e0334df1969a7393b8baa3936056ab4be3ac HEAD -- '*.parquet'` returned no paths for the cleaned range.
+  - `.githooks/pre-push` blocks the old parquet-adding range from `3db0e0334df1969a7393b8baa3936056ab4be3ac` to `6ee53647d908e3c185e3d78ab55d74b365228053` and reports the three full-city prediction parquet paths.
+- Immediate Next Step:
+  - Push the cleaned `main` branch from the writable temporary clone because the OneDrive-backed checkout currently cannot create `.git/index.lock`.
+
+### 2026-05-03 - Checkpoint: Git Hygiene For Line Endings And Parquet Exclusion
+
+- Date / checkpoint:
+  - 2026-05-03 repository hygiene pass after git status review showed LF/CRLF warnings and untracked large parquet outputs.
+- Change made:
+  - Added `.gitattributes` with LF-normalized text handling for source/docs/config files and binary handling for generated artifacts including PNG, PDF, DOCX, GPKG, GeoTIFF, Joblib, and Parquet files.
+  - Updated `.gitignore` with a global `*.parquet` rule so newly generated parquet artifacts stay local by default.
+  - Confirmed the rule ignores untracked full-city spatial-alignment parquet prediction files under `outputs/modeling/supplemental/spatial_alignment_all_cities/full_city_predictions/`.
+- Files touched in this pass:
+  - `.gitattributes`
+  - `.gitignore`
+  - `docs/chat_handoff.md`
+- Verification status:
+  - `git check-ignore -v outputs/modeling/supplemental/spatial_alignment_all_cities/full_city_predictions/atlanta_city18_random_forest_full_city_predictions.parquet` reports the new `.gitignore` `*.parquet` rule.
+  - `git ls-files "*.parquet"` found existing tracked parquet artifacts. Attempting to remove them from the index with `git rm --cached --pathspec-from-file=- --pathspec-file-nul` failed because Git could not create `.git/index.lock` in the OneDrive-backed repository metadata directory (`Permission denied`). No commit was made.
+- Immediate Next Step:
+  - When Git index writes are available, run the cached-removal step for the tracked parquet files so the ignore policy and repository index agree.
+
+### 2026-05-03 - Checkpoint: Main-Body Editable DOCX Export
+
+- Date / checkpoint:
+  - 2026-05-03 generated an editable main-body-only report document for manual revisions.
+- Change made:
+  - Created `docs/report/stat5630_final_report_main_body_text.docx` from `docs/report/stat5630_final_report_draft.md`.
+  - Included only Sections 1-7 of the final report body, starting at `1. Background Information` and ending at `7. Conclusion`.
+  - Excluded the title page, references, tables, figures, appendix, QA notes, and local artifact details.
+- Files touched in this pass:
+  - `docs/report/stat5630_final_report_main_body_text.docx`
+  - `docs/chat_handoff.md`
+- Verification status:
+  - Rendered the DOCX with the Documents artifact-tool renderer to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\docx_render_main_body_20260503_final`.
+  - Visual check of the rendered page contact sheet found no clipping, overlap, or broken formatting.
+  - DOCX inspection confirmed `66` nonempty paragraphs, first paragraph `1. Background Information`, final paragraph from `7. Conclusion`, and no `References` or `Tables and Figures` section headings.
+- Immediate Next Step:
+  - Use the DOCX for manual edits; apply accepted manual text changes back into the report markdown before the final PDF render.
+
+### 2026-05-03 - Checkpoint: Harsh Final Report Reader-Facing Revision Pass
+
+- Date / checkpoint:
+  - 2026-05-03 final blind-reader polish pass on the STAT 5630 report.
+- Change made:
+  - Revised `docs/report/stat5630_final_report_draft.md` so the contribution lands on page 1, the report title includes spatial alignment, Section 5 has reader-facing subheadings, and the conclusion states the validation-design implication more directly.
+  - Reworked defensive scope language into more confident benchmark-scope statements while preserving limitations around LST, sampling, city selection, coordinates, weak transfer, and spatial alignment.
+  - Clarified the same-city 70/30 validation text so same-city screening and city-held-out transfer are both central to the project comparison, while Figure 4 is not framed as a symmetric comparison of identical rerunnable experiments.
+  - Added an interpretive bridge explaining why exact-cell retrieval and broad spatial placement support different planning/evaluation uses.
+  - Updated the Data and Code Availability note to make the GitHub link appropriately modest about raw downloads and generated artifacts.
+  - Updated `src/report_artifacts.py` so Figure 3 is a clearer city-held-out schematic, Figure 7 is larger/more legible, the Denver map points are slightly larger, and benchmark table row labels are shorter.
+  - Regenerated report-facing artifacts and rerendered `docs/report/stat5630_final_report_draft.pdf`.
+  - Added `docs/report/stat5630_final_report_final_qa.md` with prose/layout edits, blind-reader checks, remaining imperfections, and PDF clipping/overlap status.
+- Files touched in this pass:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/stat5630_final_report_final_qa.md`
+  - `docs/report/figures/evaluation_design.png`
+  - `docs/report/figures/heldout_denver_map_focus.png`
+  - `docs/report/figures/spatial_alignment_medium_summary.png`
+  - `docs/report/tables/benchmark_metrics.csv`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py tests\test_report_artifacts.py` - passed.
+  - With `MPLBACKEND=Agg`: `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py -q` - passed, `3 passed`.
+  - With `MPLBACKEND=Agg`: `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts` - passed.
+  - From `docs/report/`: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf` - passed.
+- Verification status:
+  - Rendered PDF has `29` pages.
+  - Markdown image-reference check found `14` image references and `0` missing local image files.
+  - Rendered the PDF to page PNGs and visually inspected the full contact sheet under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\pdf_visual_audit\final_revision\`.
+  - After the Table 3 label shortening, targeted rendered-page checks covered Tables 1 and 3, Figures 3, 6, and 7, Appendix Figure A4, Appendix Figure A7, and the Data and Code Availability note.
+  - No visible clipping, off-page text, figure-panel overlap, or awkward table splitting was found in the checked final PDF.
+- Immediate Next Step:
+  - Treat `docs/report/stat5630_final_report_draft.md` and `.pdf` as final-submission ready unless a human reviewer requests preference-level wording changes.
+
+### 2026-05-03 - Checkpoint: Public Documentation Second-Layer Cleanup
+
+- Date / checkpoint:
+  - 2026-05-03 forward-facing documentation cleanup after the README/docs navigation pass.
+- Change made:
+  - Created `docs/internal/report_development/` and moved internal report-development notes out of `docs/report/`:
+    - `docs/internal/report_development/final_report_planning.md`
+    - `docs/internal/report_development/stat5630_draft_critical_review.md`
+    - `docs/internal/report_development/stat5630_revision_pass_notes.md`
+    - `docs/internal/report_development/stat5630_visual_qa_notes.md`
+  - Rewrote `docs/spatial_alignment_design.md` as a public supplemental smoothed spatial-alignment method note. The note now emphasizes that full eligible held-out-city scoring, 150/300/600 m smoothing, Spearman surface correlation, top-region overlap, observed mass captured, centroid distance, and nearest-region distance are supplemental broad spatial-placement diagnostics, not replacements for exact-cell city-held-out transfer.
+  - Updated `docs/README.md` so public readers start with the report, workflow, data dictionary, modeling plan, and cleaned spatial-alignment method note. Internal report-development notes are linked only under the internal/development section.
+  - Updated `docs/internal_docs_triage.md` to mark the four report-development moves and spatial-alignment rewrite as done.
+  - Updated `docs/publication_safety_scan.md` with the rerun scan outcome and remaining internal-only / false-positive match categories.
+  - Updated the archived report outline's pointer to the moved report-planning file.
+- Commands run:
+  - `rg -n "final_report_planning|stat5630_draft_critical_review|stat5630_revision_pass_notes|stat5630_visual_qa_notes" README.md docs src tests .gitignore`
+  - `rg -n "C:\\\\Users|OneDrive|\\.venvs|\\.tmp|\\.pip-cache|password|token|secret|api_key|apikey" README.md docs src tests .gitignore`
+  - `git ls-files .env .env.local`
+  - Focused post-edit scans of public docs and spatial-alignment text.
+- Verification status:
+  - `git ls-files .env .env.local` returned no tracked env files.
+  - `docs/report/final_report_planning.md` and `docs/report/stat5630_draft_critical_review.md` no longer exist at the public report-root paths; their moved internal copies exist under `docs/internal/report_development/`.
+  - `docs/spatial_alignment_design.md` has no remaining local Windows paths, user virtual-environment references, PowerShell command examples, or `First Implementation Prompt` text.
+  - Focused public-doc scan across `README.md`, `docs/README.md`, `docs/spatial_alignment_design.md`, `docs/workflow.md`, `docs/data_dictionary.md`, `docs/modeling_plan.md`, and `docs/report/stat5630_final_report_draft.md` found no remaining local-path or credential-like matches except benign `.gitignore` scratch-directory patterns when `.gitignore` is included.
+  - No tests or report renders were run because this pass changed documentation organization and method-note prose only.
+- Remaining public-facing risks / next cleanup:
+  - `docs/report/projectproposal.pdf` and the course assignment PDF remain in `docs/report/`; decide later whether to move them to internal/course or archive locations.
+  - `docs/presentation_2026/` still contains presentation-development notes/scripts with local build details.
+  - `outputs/` still contains many tracked generated artifacts; a later pass should inventory which are intentional public artifacts before any cleanup.
+  - Do not claim full one-command reproducibility; keep the current limited reproducibility framing.
+- Recommended next repo-polish prompt:
+  - "Audit tracked generated artifacts and historical/course materials for public GitHub. Produce a keep/move/remove-later action table for `outputs/`, `docs/report/*.pdf`, `docs/presentation_2026/`, and `src/_vendor_pptx/` without deleting files, changing scientific claims, adding a license, or running broad git cleanup."
+
+### 2026-05-03 - Checkpoint: Public Entry-Layer Repo Polish Pass
+
+- Date / checkpoint:
+  - 2026-05-03 focused forward-facing repository polish for first public reader entry points.
+- Change made:
+  - Rewrote `README.md` as a concise public-facing project README aligned with the final report framing: same-city screening is stronger than exact-cell city-held-out transfer, and broad spatial alignment is partial and heterogeneous.
+  - Added `docs/README.md` as documentation navigation that starts public readers with the report, workflow, data dictionary, and modeling plan while labeling handoff/planning/QA documents as internal or development notes.
+  - Added `docs/internal_docs_triage.md` with a minimal triage table for obvious internal documents and a quick `.gitignore` audit.
+  - Added `docs/publication_safety_scan.md` with local-path / credential scan results, fixed items, remaining internal-only matches, and artifact-policy notes.
+  - Sanitized `docs/report/tables/retained_model_run_metadata.csv` so run directories are repository-relative instead of absolute local paths.
+- Files touched in this pass:
+  - `README.md`
+  - `docs/README.md`
+  - `docs/internal_docs_triage.md`
+  - `docs/publication_safety_scan.md`
+  - `docs/report/tables/retained_model_run_metadata.csv`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `rg -n "C:\\\\Users|OneDrive|\\.venvs|\\.tmp|\\.pip-cache|password|token|secret|api_key|apikey" README.md docs src tests .gitignore`
+  - `git ls-files .env .env.local`
+  - `git ls-files outputs`
+  - `git ls-files docs/report/*.pdf`
+  - targeted post-edit scans of `README.md`, `docs/README.md`, and `docs/report/tables/retained_model_run_metadata.csv`
+- Verification status:
+  - Public README no longer contains local Windows paths, user-level virtual-environment commands, Codex handoff navigation, or full-reproducibility overclaims.
+  - `docs/README.md` separates public reading paths from internal/development notes and does not present `docs/chat_handoff.md` as a public starting point.
+  - `docs/report/tables/retained_model_run_metadata.csv` has no remaining `C:\Users`, `OneDrive`, `.venvs`, `.tmp`, or `.pip-cache` matches.
+  - `git ls-files .env .env.local` returned no tracked env files.
+  - No Python tests were run because this pass changed documentation and one report metadata CSV only.
+- Immediate Next Step:
+  - Recommended next repo-polish prompt: sanitize or move internal report-development notes (`docs/report/*planning*`, `*notes*`, `*critical_review*`) and rewrite `docs/spatial_alignment_design.md` as a public method note with implementation prompts moved to internal documentation.
+
+### 2026-05-03 - Checkpoint: Report Reproducibility Note And Repo Polish Plan
+
+- Date / checkpoint:
+  - 2026-05-03 focused reader-facing reproducibility-note cleanup plus forward-facing repository polish planning.
+- Change made:
+  - Replaced the long internal `docs/report/stat5630_final_report_draft.md` reproducibility section with a short `Data and Code Availability / Reproducibility Note` that links to `https://github.com/goldember12-alt/urban-heat-mapping-dataset`.
+  - Removed the report note's local virtual-environment command block, local paths, artifact directory lists, benchmark source dumps, and supplemental-output directory details.
+  - Added `docs/repo_forward_facing_polish_plan.md` as an internal prioritized audit/plan for making the GitHub repository public-reader-facing and aligned with the final report.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched in this pass:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/repo_forward_facing_polish_plan.md`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - From `docs/report/`: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf` - passed.
+  - Bundled-runtime `pypdf` text inspection found the new reproducibility note on rendered PDF page `29`.
+  - `rg` scan of the report markdown found the new note heading and no remaining report-note instances of the removed local command/path block.
+- Verification status:
+  - The previous command/path overflow source is gone from the report note: no local OneDrive path, project virtual-environment path, PowerShell command block, or artifact dump remains in that section.
+  - The rendered PDF now has `29` pages by bundled `pypdf` inspection.
+  - Pandoc/XeLaTeX render passed. Verbose render output still reports unrelated pre-existing overfull/underfull hbox warnings in dense table/appendix layout, so this pass verifies removal of the command/path overflow problem rather than claiming the entire PDF is warning-free.
+- Immediate Next Step:
+  - Use `docs/repo_forward_facing_polish_plan.md` to do a public README and artifact-policy cleanup pass, starting with removing local paths from `README.md` and sanitizing `docs/report/tables/retained_model_run_metadata.csv`.
+
+### 2026-05-03 - Checkpoint: Final Report Presentation-Quality Visual QA Repair Pass
+
+- Date / checkpoint:
+  - 2026-05-03 focused report-PDF layout and visual-QA repair pass.
+- Change made:
+  - Revised `docs/report/stat5630_final_report_draft.md` for table density, caption clarity, reproducibility-note wrapping, and the two requested interpretation gaps without changing the core city-held-out benchmark claims.
+  - Simplified Table 1 to `Source`, `Product/layer`, `Constructed variable(s)`, and `Role`, with long spatial-role prose moved to surrounding text.
+  - Cleaned Table 2 spacing, moved Table 3 to its own page with shorter model labels, replaced Appendix Table A1 with grouped bullet lists, and compacted Appendix Table A3 with tuning details moved into notes.
+  - Added cautious main-text interpretation of Appendix Figure A4: RF gains concentrate in hot arid cities, while hot humid and mild cool cities more often favor logistic or show weaker RF gains; this is hypothesis-generating and confounded, not causal.
+  - Strengthened Future Work around intentionally excluded raw latitude/longitude and future location-aware models for separating portable surface relationships from city-specific spatial effects.
+  - Updated `src/report_artifacts.py` so report artifact generation emits the shorter Table 1 data-source table, shorter benchmark labels, matching benchmark-metric plot labels, and a clearer selected high/low spatial-alignment map contrast.
+  - Regenerated report-facing artifacts including `docs/report/tables/data_sources_variables.csv`, `docs/report/tables/benchmark_metrics.csv`, `docs/report/figures/benchmark_metrics.png`, and `docs/report/figures/selected_spatial_alignment_map_contrast.png`.
+  - Added `docs/report/stat5630_visual_qa_notes.md` with the requested fixed-issue and visual-audit summary.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched in this pass:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/stat5630_visual_qa_notes.md`
+  - `docs/report/tables/data_sources_variables.csv`
+  - `docs/report/tables/benchmark_metrics.csv`
+  - `docs/report/figures/benchmark_metrics.png`
+  - `docs/report/figures/selected_spatial_alignment_map_contrast.png`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py tests\test_report_artifacts.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py -q` - passed, `3 passed`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts` - passed.
+  - From `docs/report/`: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf` - passed.
+- Verification status:
+  - Final report source has `14` Markdown image references and `0` missing local image files.
+  - Rendered the final PDF to 30 page PNG previews and visually inspected all final-page contact sheets under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\pdf_visual_audit\final\`.
+  - After the last reproducibility-note cleanup, re-rendered and visually rechecked pages `13`, `14`, `20`, `21`, `29`, and `30` under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\pdf_visual_audit\final_post_patch\pages\`.
+  - Visual QA found no remaining visible table-text overlap, clipped text, off-page command/path text, or awkward table splitting in the final rendered PDF.
+- Immediate Next Step:
+  - Treat the report as ready for final submission polish review. Any later pass should be limited to reviewer-preference wording or selective appendix figure resizing, not new modeling claims.
+
+### 2026-05-03 - Checkpoint: Final Report Critique-Guided Revision Pass
+
+- Date / checkpoint:
+  - 2026-05-03 focused final-report revision using `docs/report/stat5630_draft_critical_review.md`.
+- Change made:
+  - Revised `docs/report/stat5630_final_report_draft.md` to reduce repetitive framing, define same-city screening / exact-cell transfer / broad spatial placement earlier, clarify AP/PR AUC wording, tighten the 70/30 within-city diagnostic caveat, and split the old combined results/conclusion/limitations section into clearer `Results and Discussion`, `Limitations and Future Work`, and `Conclusion` sections.
+  - Promoted the all-city medium-scale spatial-alignment summary from appendix status to main Figure 7.
+  - Replaced the separate Nashville and San Francisco appendix map images with a single combined selected high/low spatial-alignment contrast figure.
+  - Added `docs/report/stat5630_revision_pass_notes.md` with the requested change summary, addressed critique items, intentionally unchanged items, and remaining later-pass items.
+  - Added reproducible report-artifact support for `docs/report/figures/selected_spatial_alignment_map_contrast.png` in `src/report_artifacts.py`.
+  - Added focused test coverage in `tests/test_report_artifacts.py`.
+- Files touched in this pass:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/stat5630_revision_pass_notes.md`
+  - `docs/report/figures/selected_spatial_alignment_map_contrast.png`
+  - `src/report_artifacts.py`
+  - `tests/test_report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py tests\test_report_artifacts.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py -q` - passed, `3 passed`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts` - passed.
+  - From `docs/report/`: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf` - passed.
+- Verification status:
+  - Markdown image-reference check found `14` image references and no missing image files.
+  - Visually inspected `docs/report/figures/selected_spatial_alignment_map_contrast.png` after generation.
+  - PDF rendered successfully, but a page-level PDF text/layout inspection was not available because `pypdf` / `PyPDF2` were not installed in the standard environment.
+- Immediate Next Step:
+  - If time permits, do a rendered-PDF visual QA pass focused on Figure 7 and Appendix Figure A7, then optionally simplify Table 1 or rebuild Figure 4 as a report-native visual with an explicit 0.10 transfer reference.
+
+### 2026-05-03 - Checkpoint: Final Report Visual Improvement First Pass Implemented
+
+- Date / checkpoint:
+  - 2026-05-03 report visual-improvement implementation pass.
+- Change made:
+  - Added a reproducible report-artifact plot for the all-city medium-scale (`300 m`) spatial-alignment summary in `src/report_artifacts.py`.
+  - Generated `docs/report/figures/spatial_alignment_medium_summary.png` from `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/spatial_alignment_metrics_all_cities.csv`.
+  - Refreshed `src.run_report_artifacts` outputs and copied report-facing supplemental figures into `docs/report/figures/`:
+    - `within_vs_cross_gap.png`;
+    - `nashville_city20_random_forest_medium_surface_alignment.png`;
+    - `san_francisco_city23_random_forest_medium_surface_alignment.png`.
+  - Updated `docs/report/stat5630_final_report_draft.md`:
+    - kept Tables 1-3 as the core tables;
+    - moved former main Tables 4-6 to Appendix Tables A5-A7;
+    - added Appendix Figure A6 for the within-city versus cross-city gap diagnostic;
+    - added Appendix Figure A7 for the all-city medium-scale spatial-alignment summary;
+    - added Appendix Figure A8 for the selected Nashville/San Francisco high-low spatial-alignment map contrast;
+    - kept language cautious: spatial alignment is supplemental, partial broad spatial placement, not strong transfer and not a climate-group claim.
+  - Updated `docs/report/final_report_planning.md` with the implementation decisions and refreshed latest rendered-PDF status.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched in this pass:
+  - `src/report_artifacts.py`
+  - `tests/test_report_artifacts.py`
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/final_report_planning.md`
+  - `docs/report/figures/spatial_alignment_medium_summary.png`
+  - `docs/report/figures/within_vs_cross_gap.png`
+  - `docs/report/figures/nashville_city20_random_forest_medium_surface_alignment.png`
+  - `docs/report/figures/san_francisco_city23_random_forest_medium_surface_alignment.png`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\run_report_artifacts.py tests\test_report_artifacts.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py -q` - passed, `2 passed`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts` - passed.
+  - From `docs/report/`: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf` - passed.
+- Verification status:
+  - Confirmed all `15` Markdown image references resolve to existing files.
+  - Source image dimensions checked with PIL:
+    - spatial-alignment summary `2155 x 1581`;
+    - within-vs-cross gap `2023 x 1263`;
+    - Nashville map `3111 x 848`;
+    - San Francisco map `3108 x 848`.
+  - Visually inspected the generated spatial-alignment summary, within-vs-cross gap figure, and Nashville map source PNGs for readability.
+  - Bundled `pypdf` inspection reported `32` rendered PDF pages, `15` embedded page-image placements, Appendix Figure A6 on page `29`, and Appendix Figures A7-A8 on page `30`.
+  - Rendered-PDF text inspection found exact-cell retrieval language on pages `2`, `3`, `4`, and `11`; spatial-alignment diagnostic language on pages `8`, `10`, and `31`; and sampled PR AUC language on pages `9` and `11`, confirming the PDF still distinguishes exact-cell retrieval from supplemental spatial alignment.
+  - Attempted browser/PDF page screenshot verification through Playwright, but the bundled browser executable was unavailable and launching local Chrome was blocked with `spawn EPERM`; no browser screenshot artifacts were produced.
+- Immediate Next Step:
+  - Only do final submission polish from here unless new content changes are requested. If more visual polish is desired, the next highest-value step is a compact city hotspot-map montage or a cleaner RF-minus-logistic heterogeneity figure, but neither is necessary for the first-pass improvement.
+
+### 2026-05-03 - Checkpoint: Final Report Visual Improvement Plan
+
+- Date / checkpoint:
+  - 2026-05-03 audit-and-planning pass for figure, table, and appendix improvement.
+- Change made:
+  - Audited the current canonical draft's visual/table structure: 6 main figures, 6 main tables, 4 appendix tables, and 5 appendix figures.
+  - Inventoried available visual material under `figures/` and report-relevant metrics under `outputs/`; `figures/` currently has 168 PNGs and 18 SVGs.
+  - Added a new `Visual, Table, And Appendix Improvement Audit` section to `docs/report/final_report_planning.md`.
+  - Ranked the highest-value next visual additions:
+    - all-city medium-scale spatial-alignment summary figure from `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/spatial_alignment_metrics_all_cities.csv`;
+    - high-versus-low spatial-alignment map contrast using existing Nashville and San Francisco medium-scale maps;
+    - existing within-city versus cross-city gap figure at `docs/report/figures/within_vs_cross_gap.png`;
+    - hotspot-map montage from completed city data-processing maps;
+    - cleaner heterogeneity figure to reduce main-results table density.
+  - Recorded a table/appendix rebalance recommendation: keep Tables 1-3 as core tables, consider moving Tables 4-6 to the appendix if the spatial-alignment summary and within-vs-cross gap figures are added.
+- Files touched:
+  - `docs/report/final_report_planning.md`
+  - `docs/chat_handoff.md`
+- Manual audit notes:
+  - Existing spatial-alignment all-city metrics have `90` rows: `30` cities times `3` smoothing scales.
+  - Medium-scale (`300 m`) spatial-alignment means are Spearman surface correlation `0.2713`, top-region overlap `0.1353`, and observed hotspot mass captured `0.2114`.
+  - Strongest medium-scale spatial-alignment cities include Nashville, Portland, Fresno, Chicago, Richmond, and Seattle; weakest include El Paso, Albuquerque, Minneapolis, San Francisco, Columbia, and San Jose.
+  - Existing within-city all-city diagnostic reports random-forest mean within-city PR AUC `0.4213`, mean cross-city PR AUC `0.1781`, and mean PR AUC gap `0.2432`; this supports the transfer-gap story but remains supplemental/easier than the canonical city-held-out benchmark.
+  - Data-processing city-summary figures exist for completed city reports, but the batch summary records a Boston report error, so any hotspot-map montage should avoid claiming all 30 city-summary maps rendered successfully.
+- Verification status:
+  - No PDF render, model run, or Python test suite was run; this was a planning/audit pass.
+  - Manual contact-sheet visual inspection was done from temporary previews under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\visual_audit\`.
+- Immediate Next Step:
+  - Implement the visual pass in this order if requested: generate `spatial_alignment_medium_summary.png`, copy/use the existing `within_vs_cross_gap.png`, decide whether the Nashville/San Francisco spatial-map contrast belongs in main text or appendix, then rerender and inspect the figure pages.
+
+### 2026-05-03 - Checkpoint: Final Report Figure 5 PDF Cleanup
+
+- Date / checkpoint:
+  - 2026-05-03 focused final-report cleanup pass.
+- Change made:
+  - Swapped Figure 5 in `docs/report/stat5630_final_report_draft.md` from `docs/report/figures/city_signal_transfer_relationship.png` to `docs/report/figures/city_signal_transfer_relationship_labeled.png`.
+  - Tightened the Figure 5 caption language only enough to say that labels identify city-level heterogeneity while weak correlations still mean within-city RF success does not reliably predict city-held-out RF success.
+  - Updated `docs/report/final_report_planning.md` so the active figure reference uses the labeled Figure 5 PNG and archived-outline references point to `docs/report/archive/final_report_outline.md`.
+  - Created `docs/report/archive/` and moved present writing-process/reference files there:
+    - `docs/report/archive/critique.md`
+    - `docs/report/archive/final_report_outline.md`
+    - `docs/report/archive/stat5630_final_report_merge_audit.md`
+    - `docs/report/archive/stat5630_final_report_revision_pass_01.md`
+  - `docs/report/Report Draft Text Only.md` and `docs/report/codex_paper_writing_plan.md` were listed as archive candidates but were not present in `docs/report/` during this pass.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/final_report_planning.md`
+  - `docs/report/archive/`
+  - `docs/chat_handoff.md`
+- Render command:
+  - From `docs/report/`: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf` - passed.
+- Verification status:
+  - Confirmed the stale PDF was replaced: `docs/report/stat5630_final_report_draft.pdf` timestamp updated from `2026-04-27 00:07:36` to `2026-05-03 01:29:19`, with file size changing from `2,894,857` bytes to `3,033,104` bytes.
+  - Confirmed all 11 Markdown image references in the canonical draft resolve to existing files.
+  - Bundled `pypdf` inspection reported `29` PDF pages and image XObjects on the expected figure pages, with `11` total embedded page-image placements.
+  - Bundled `pypdf` text inspection located Figure 5 and the revised labeled-point caption on page `18`.
+  - Ghostscript raster check rendered page `18` to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\report_pdf_checks\figure5_labeled_20260503\figure5_page18.png`; manual visual inspection confirmed the city labels in Figure 5 are legible enough to use.
+  - Rendered-PDF text inspection confirmed the report still distinguishes exact-cell hotspot retrieval from supplemental spatial-alignment diagnostics, and the sampled city-held-out PR AUC / recall benchmark remains primary.
+  - No Python/model test suite was run; this was a report markdown, PDF render, and filesystem archive cleanup pass.
+- Immediate Next Step:
+  - Do only submission-polish checks from here unless new content changes are requested; the active draft/PDF, figures, tables, proposal PDF, assignment PDF, and render planning file remain in `docs/report/`.
+
+### 2026-05-03 - Checkpoint: Final Report Spatial Alignment Revision Pass 01
+
+- Date / checkpoint:
+  - 2026-05-03 first substantive revision pass after canonical merge/audit.
+- Change made:
+  - Integrated the supplemental all-city random-forest spatial-alignment diagnostic throughout `docs/report/stat5630_final_report_draft.md` rather than appending it as a detached final section.
+  - Added exact-cell hotspot retrieval versus broader spatial placement as a controlled recurring distinction in the introduction, research questions, contributions, methods, results, limitations, future work, conclusion, Figure 6 caption, and reproducibility notes.
+  - Replaced the three remaining bracketed placeholders:
+    - related-work bridge now connects urban heat predictor literature with spatial validation / transfer evaluation;
+    - within-city methods now describe the support-checked 70/30 diagnostic and explicitly caveat that the original split script/random seed are not in repo artifacts;
+    - Figure 5 signal-shift discussion now interprets weak city-level correlations without overclaiming climate-group transfer.
+  - Added `docs/report/stat5630_final_report_revision_pass_01.md` with the requested pre-edit integration map, edit summary, remaining verification needs, and recommended next prompt.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_revision_pass_01.md`
+  - `docs/chat_handoff.md`
+- Verification status:
+  - Manual markdown inspection confirmed spatial alignment appears in multiple appropriate locations, remains supplemental, and is distinguished from the sampled city-held-out PR AUC / recall benchmark.
+  - Manual scan confirmed no bracketed `[Insert ...]` placeholders remain in the canonical draft.
+  - No PDF render or Python test suite was run; this was a report markdown revision pass with no code or model-output changes.
+- Immediate Next Step:
+  - Render the revised report PDF and inspect layout/flow around Sections 1, 4, 5, Figure 6, and the reproducibility notes before doing a second structural/prose pass.
+
+### 2026-05-03 - Checkpoint: Final Report Draft Canonicalized And Audited
+
+- Date / checkpoint:
+  - 2026-05-03 controlled report-writing pass using `docs/report/Report Draft Text Only.md`, `docs/report/codex_paper_writing_plan.md`, and the completed all-city spatial-alignment outputs as references.
+- Change made:
+  - Compared the text-only edited draft against `docs/report/stat5630_final_report_draft.md` and merged only targeted evidence-aligned additions into the in-repo draft, without a broad prose rewrite.
+  - Preserved all three visible bracketed placeholders because they still mark real missing work.
+  - Added `docs/report/stat5630_final_report_merge_audit.md` with the requested merge report, structural audit table, claims ledger, figure/table audit, and spatial-alignment role recommendation.
+  - The spatial-alignment recommendation is supplemental diagnostic, not a major reframing and not a replacement for the retained sampled city-held-out PR AUC / recall benchmark.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_merge_audit.md`
+  - `docs/chat_handoff.md`
+- Verification status:
+  - Manually inspected the merged draft for incorporated text and remaining placeholders.
+  - Manually summarized `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/spatial_alignment_metrics_all_cities.csv`: `90` metric rows, `30` cities, `3` scales, all reconstruction statuses `ok`.
+  - No PDF render or Python test suite was run; this was a controlled markdown merge/audit pass with no code or model-output changes.
+- Immediate Next Step:
+  - Fill the three explicit report placeholders before any broad line edit: related-work bridge, within-city 70/30 methods detail, and Figure 5 signal-shift interpretation.
+
+### 2026-05-03 - Checkpoint: Selected All-City RF Spatial Alignment Maps Generated
+
+- Date / checkpoint:
+  - 2026-05-03 output pass for optional medium-scale (`300 m`) supplemental RF spatial-alignment maps from the completed all-city full-city prediction root.
+- Change made:
+  - Generated selected all-city expansion maps under `figures/modeling/supplemental/spatial_alignment_all_cities/` using existing full-city prediction parquet files from `outputs/modeling/supplemental/spatial_alignment_all_cities/`.
+  - Added/updated `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/spatial_alignment_map_manifest.csv`.
+  - Refreshed `outputs/modeling/supplemental/spatial_alignment_all_cities/spatial_alignment_summary.md` and `spatial_alignment_metadata.json` so the map prose is explicitly labeled as supplemental full-city spatial placement diagnostics, not a new canonical benchmark and not a replacement for the retained sampled held-out-city PR AUC / recall benchmark.
+  - Updated `src/modeling_spatial_alignment.py`, `docs/data_dictionary.md`, and `docs/workflow.md` so future generated summaries keep the same supplemental/not-benchmark language.
+- Selected map set:
+  - Nashville (`city_id=20`) as high alignment.
+  - San Francisco (`city_id=23`) as low alignment.
+  - Portland (`city_id=22`) as scale-sensitive.
+  - Las Vegas (`city_id=3`) as the hot-arid representative.
+- Generated figure files:
+  - `figures/modeling/supplemental/spatial_alignment_all_cities/nashville_city20_random_forest_medium_surface_alignment.png`
+  - `figures/modeling/supplemental/spatial_alignment_all_cities/san_francisco_city23_random_forest_medium_surface_alignment.png`
+  - `figures/modeling/supplemental/spatial_alignment_all_cities/portland_city22_random_forest_medium_surface_alignment.png`
+  - `figures/modeling/supplemental/spatial_alignment_all_cities/las_vegas_city03_random_forest_medium_surface_alignment.png`
+- Command run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_alignment --city-selection all --output-dir outputs\modeling\supplemental\spatial_alignment_all_cities --figures-dir figures\modeling\supplemental\spatial_alignment_all_cities --skip-existing-predictions --make-maps --map-scale-label medium --map-city-ids 20,23,22,3 --grid-search-n-jobs 1 --model-n-jobs 1` - passed; reused existing full-city predictions for all five outer folds and skipped model fitting.
+- Output verification:
+  - Map manifest has `4` rows, all with `scale_label=medium`, `smoothing_radius_m=300.0`, `grid_reconstruction_status=ok`, and `grid_cell_size_m=30.0`.
+  - PIL opened all four PNGs successfully; image sizes are Portland `3260 x 895`, Las Vegas `3260 x 895`, San Francisco `3108 x 848`, and Nashville `3111 x 848`.
+  - No new benchmark run was created; the retained sampled held-out-city PR AUC / recall benchmark remains unchanged.
+- Testing status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_spatial_alignment.py src\run_modeling_spatial_alignment.py tests\test_modeling_spatial_alignment.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_alignment.py -q` - passed, `9 passed in 4.90s`.
+  - Moved test-created non-vendor `src\__pycache__` and `tests\__pycache__` directories to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\repo-moved-cache\selected-spatial-maps-20260503\`.
+- Immediate Next Step:
+  - Visually review the four maps before using them in report prose or slides.
+
+### 2026-05-03 - Checkpoint: All-City RF Spatial Alignment Metrics Inspected
+
+- Date / checkpoint:
+  - 2026-05-03 inspection and interpretation pass for the completed RF-first all-city spatial-alignment metric expansion.
+- Files inspected:
+  - `docs/spatial_alignment_design.md`
+  - `docs/data_dictionary.md`
+  - `docs/workflow.md`
+  - `outputs/modeling/supplemental/spatial_alignment_all_cities/spatial_alignment_metadata.json`
+  - `outputs/modeling/supplemental/spatial_alignment_all_cities/spatial_alignment_summary.md`
+  - `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/all_city_selection.csv`
+  - `outputs/modeling/supplemental/spatial_alignment_all_cities/tables/spatial_alignment_metrics_all_cities.csv`
+  - `data_processed/modeling/city_outer_folds.csv`
+- Output-structure verification:
+  - `spatial_alignment_metrics_all_cities.csv` has `90` rows: `30` cities times `3` smoothing radii.
+  - The fold table, selection table, and metric table all represent the same `30` city IDs.
+  - All `5` outer folds are present, with exactly `6` held-out cities per fold.
+  - Every city has metrics at `150 m`, `300 m`, and `600 m`.
+  - Metadata and metric rows confirm `model_name=random_forest`, `city_selection=all`, `prediction_scope=full_city`, `sample_rows_per_city=5000`, and `make_maps=false`.
+  - The `30` full-city prediction parquet files contain `71,394,894` scored held-out rows in total, each file contains one city, all use `model_name=random_forest`, all use `prediction_scope=full_city`, and their row counts match the metric-table `row_count` values.
+  - This is the all-city expansion of the validated representative-city spatial-alignment workflow, not a new canonical benchmark and not a replacement for the retained sampled city-held-out PR AUC / recall evaluation.
+- Grid reconstruction status:
+  - All `90` metric rows have `grid_reconstruction_status=ok`.
+  - All rows report `grid_cell_size_m=30.0`.
+  - No missing projected CRS values were found.
+  - No grid-reconstruction warnings were flagged in the inspected metric table.
+- Key metric findings:
+  - Overall Spearman smoothed-surface correlation ranges from `-0.1433` to `0.7808`, with median `0.2470`.
+  - Overall top-region overlap ranges from `0.0111` to `0.4504`, with median `0.1120`.
+  - Overall observed mass captured ranges from `0.0210` to `0.5262`, with median `0.1908`.
+  - Overall centroid distance ranges from `1,569 m` to `35,708 m`, with median `8,754 m`.
+  - Overall median nearest-region distance ranges from `0 m` to `5,860 m`, with median `560 m`.
+  - By scale, median Spearman is similar across `150 m`, `300 m`, and `600 m` (`0.2457`, `0.2481`, `0.2470`), median top-region overlap is also similar (`0.1133`, `0.1139`, `0.1079`), and median observed mass captured decreases slightly with broader smoothing (`0.1967`, `0.1915`, `0.1838`).
+  - Distance metrics generally get worse at broader smoothing: median centroid distance increases from about `8,117 m` at `150 m` to `9,384 m` at `600 m`, and median nearest-region distance increases from about `328 m` to `1,017 m`.
+  - By climate group, median Spearman is highest for `hot_humid` (`0.3594`) and similar for `hot_arid` (`0.2307`) and `mild_cool` (`0.2493`); median top-region overlap is modest for all groups (`0.1086`, `0.1200`, `0.1019` respectively).
+  - Strongest all-around alignment candidates are Nashville, Las Vegas, Bakersfield, Portland, Chicago, Fresno, Seattle, and Richmond, depending on whether the emphasis is surface correlation, overlap/mass capture, or distance.
+  - Weakest alignment candidates include San Francisco, El Paso, Los Angeles, Minneapolis, Albuquerque, San Jose, Houston, and Phoenix.
+  - Scale response is mixed rather than uniformly improving: from `150 m` to `600 m`, Spearman improves in `17` cities and declines in `13`; top-region overlap improves in `15` and declines in `15`; observed mass captured declines in `20`; centroid distance increases in `24`; median nearest-region distance increases in `27`.
+- Cautious interpretation:
+  - These metrics suggest the RF model sometimes places elevated risk in broadly plausible parts of held-out cities, especially in Nashville, Portland, Chicago, Seattle, Richmond, Fresno, Bakersfield, and Las Vegas.
+  - The diagnostic is about smoothed broad-zone spatial placement, not exact 30 m cell recovery and not policy-zone boundary precision.
+  - Broader smoothing can raise gradient-style agreement in some cities, but the top-region and distance diagnostics show that broadening does not automatically mean better placement.
+  - The canonical retained held-out-city benchmark remains the sampled city-held-out PR AUC / recall evaluation; this all-city spatial-alignment output should be described only as supplemental full-city spatial placement diagnostics.
+- Recommended map candidates:
+  - High-alignment example: Nashville, with Portland or Chicago as additional strong alternatives.
+  - Low-alignment example: San Francisco, with El Paso or Minneapolis as useful contrast options.
+  - Scale-sensitive example: Portland or Fresno for improving Spearman with scale; Los Angeles or El Paso for degrading Spearman with scale.
+  - Climate-group representative set if one per group is desired: Las Vegas or Bakersfield for `hot_arid`, Nashville for `hot_humid`, and Portland or Chicago for `mild_cool`.
+  - Keep `300 m` medium scale as the first map scale because it remains the intended neighborhood-scale diagnostic and avoids over-centering either very local clusters or broad district-scale smoothing.
+- Testing / manual verification status:
+  - Manual verification only; no code logic changed and no maps were generated.
+  - The inspection used the user-level Python interpreter and read the completed CSV/JSON/parquet outputs directly.
+- Immediate Next Step:
+  - Generate optional medium-scale (`300 m`) maps only after selecting a small report set, suggested first pass: Nashville, San Francisco, Portland, and either Las Vegas or Bakersfield. Keep any report prose clearly labeled as supplemental RF-only full-city spatial placement diagnostics.
+
+### 2026-05-03 - Checkpoint: All-City RF Spatial Alignment Plan Documented
+
+- Date / checkpoint:
+  - 2026-05-03 preparation pass for expanding the validated RF-first representative-city spatial-alignment workflow to all 30 cities.
+- What was confirmed:
+  - `data_processed/modeling/city_outer_folds.csv` contains `30` cities split into `5` outer folds with `6` held-out cities per fold.
+  - `src.modeling_spatial_alignment.run_spatial_alignment_workflow` already groups selected cities by `outer_fold`, fits/tunes once per selected fold on sampled training-city rows, and then scores each selected held-out city in that fold.
+  - The proposed `--city-selection all` run is appropriate for all-city metrics, but should remain supplemental full-city spatial placement diagnostics rather than a new canonical benchmark.
+- Change made:
+  - Updated `docs/spatial_alignment_design.md` with an "All-City Expansion" section documenting the five-fold/six-held-out-city plan, all-city metric roots, optional map timing, and the exact recommended metrics command.
+  - Updated `docs/data_dictionary.md` and `docs/workflow.md` to separate representative-city outputs from all-city spatial-alignment outputs and preserve leakage-safe/supplemental-not-benchmark language.
+  - Updated `src.modeling_spatial_alignment` so `city_selection=all` writes generic all-city table names:
+    - `tables/all_city_selection.csv`
+    - `tables/spatial_alignment_metrics_all_cities.csv`
+  - Updated `src.run_modeling_spatial_alignment --help` description to mention representative or all held-out cities.
+  - Updated `tests/test_modeling_spatial_alignment.py` to cover the all-city output naming on the skip-existing fold path.
+- Recommended all-city metrics command:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_alignment --city-selection all --output-dir outputs\modeling\supplemental\spatial_alignment_all_cities --figures-dir figures\modeling\supplemental\spatial_alignment_all_cities --grid-search-n-jobs 1 --model-n-jobs 1 --skip-existing-predictions`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_spatial_alignment.py src\run_modeling_spatial_alignment.py tests\test_modeling_spatial_alignment.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_alignment.py -q` - passed, `9 passed in 4.88s`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_alignment --help` - passed.
+- Manual verification status:
+  - Confirmed the fold table has exactly `5` folds and `6` cities per fold.
+  - Moved test-created non-vendor `src\__pycache__` and `tests\__pycache__` directories to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\repo-moved-cache\spatial-alignment-all-cities-20260502\`.
+- Immediate Next Step:
+  - Run the recommended all-city metrics command when explicitly requested. Do not include `--make-maps` in the first all-city run; review `tables/spatial_alignment_metrics_all_cities.csv` first, then choose report cities for later map generation.
+
+### 2026-05-02 - Checkpoint: Slide 4 PR AUC Label-Flip Sanity Check
+
+- Date / checkpoint:
+  - 2026-05-02 focused response to presentation feedback asking why Slide 4 AUC values are below `0.5` and whether predicted labels or true labels were flipped.
+- What was verified:
+  - Located the side-by-side results figure at `figures/presentation/within_city_vs_transfer_results.png` and the report copy at `docs/report/figures/within_city_vs_transfer_results.png`; their SHA-256 hashes match.
+  - Confirmed the report draft already references the figure as Figure 4, immediately before the city-level signal-shift figure.
+  - Confirmed retained city-held-out runs use `scoring="average_precision"` and `src.modeling_metrics.safe_average_precision`, so the plotted "PR AUC" values are average precision values with a `0.10` prevalence reference, not ROC AUC values with a `0.50` reference.
+  - Recomputed original-score versus inverted-score metrics from retained held-out predictions. Logistic 5k original AP/ROC AUC are `0.1421`/`0.6294`, versus inverted `0.0731`/`0.3706`. RF frontier original AP/ROC AUC are `0.1486`/`0.6214`, versus inverted `0.0752`/`0.3786`.
+  - Confirmed top-10% selected positive rates are higher under original scores (`0.1647` logistic, `0.1961` RF) than inverted scores (`0.0356` logistic, `0.0497` RF).
+- Change made:
+  - Added `docs/report/tables/label_score_sanity_check.csv` with the recomputed original-versus-inverted metrics.
+  - Updated `docs/report/final_report_planning.md` Figure 4 notes so the figure is findable and the PR AUC versus ROC AUC interpretation is explicit.
+  - Updated `docs/report/stat5630_final_report_draft.md` Figure 4 text with the concise explanation and label-flip sanity-check result.
+- Testing status:
+  - Manual verification only; no code logic changed.
+- Immediate Next Step:
+  - If the report figure is redesigned, add a small `0.10 prevalence reference` cue or caption note to prevent readers from interpreting PR AUC values against the ROC AUC `0.50` convention.
+
+### 2026-04-28 - Checkpoint: Medium Spatial Alignment Maps Added
+
+- Date / checkpoint:
+  - 2026-04-28 implementation and output pass for optional RF-first spatial-alignment map generation.
+- Change made:
+  - Added optional map generation to `src.modeling_spatial_alignment` using the same grid reconstruction, Gaussian smoothing, and top-fraction selection logic as the spatial-alignment metric workflow.
+  - Added `--make-maps`, `--map-scale-label medium`, optional `--map-city-ids`, and `--figures-dir` to `src.run_modeling_spatial_alignment`.
+  - Added deterministic map-path resolution plus a map manifest table at `outputs/modeling/supplemental/spatial_alignment/tables/spatial_alignment_map_manifest.csv`.
+  - Updated `outputs/modeling/supplemental/spatial_alignment/spatial_alignment_summary.md` so generated map files are listed under a map-file section.
+  - Updated `docs/data_dictionary.md` for the new map manifest and figure outputs.
+- Files touched:
+  - `src/modeling_spatial_alignment.py`
+  - `src/run_modeling_spatial_alignment.py`
+  - `tests/test_modeling_spatial_alignment.py`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+  - `outputs/modeling/supplemental/spatial_alignment/spatial_alignment_summary.md`
+  - `outputs/modeling/supplemental/spatial_alignment/spatial_alignment_metadata.json`
+  - `outputs/modeling/supplemental/spatial_alignment/tables/spatial_alignment_map_manifest.csv`
+  - `figures/modeling/supplemental/spatial_alignment/denver_city06_random_forest_medium_surface_alignment.png`
+  - `figures/modeling/supplemental/spatial_alignment/new_orleans_city14_random_forest_medium_surface_alignment.png`
+  - `figures/modeling/supplemental/spatial_alignment/detroit_city29_random_forest_medium_surface_alignment.png`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_spatial_alignment.py src\run_modeling_spatial_alignment.py tests\test_modeling_spatial_alignment.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_alignment.py -q` - passed, `9 passed`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_alignment --city-selection representative_with_denver --skip-existing-predictions --make-maps --map-scale-label medium --grid-search-n-jobs 1 --model-n-jobs 1` - passed and reused existing full-city predictions for folds 1, 3, and 4 without RF refits.
+- Output status:
+  - Generated medium-scale (`300 m`) five-panel maps for Denver, New Orleans, and Detroit under `figures/modeling/supplemental/spatial_alignment/`.
+  - Map manifest has `3` rows with `scale_label=medium`, `smoothing_radius_m=300.0`, `smoothing_sigma_m=150.0`, `threshold_fraction=0.1`, `grid_cell_size_m=30.0`, and `grid_reconstruction_status=ok` for all three cities.
+- Testing status:
+  - Focused map tests cover deterministic path resolution and tiny-grid manifest/PNG creation with schema checks.
+- Manual verification status:
+  - Inspected the real map manifest, confirmed the three PNG files exist, confirmed PIL can open the generated PNGs, and confirmed the refreshed spatial-alignment summary lists the generated map files.
+- Immediate Next Step:
+  - Review the generated maps visually before deciding whether to add report prose, logistic comparison, additional map scales, or polygonization.
+
+### 2026-04-28 - Checkpoint: Three-City Spatial Alignment Outputs Inspected
+
+- Date / checkpoint:
+  - 2026-04-28 inspection of the completed RF-first representative-city full-city spatial-alignment workflow outputs.
+- Output status:
+  - `outputs/modeling/supplemental/spatial_alignment/` has been materialized by `src.run_modeling_spatial_alignment`.
+  - The completed run used `city_selection=representative_with_denver`, `sample_rows_per_city=5000`, `smoothing_radii_m=[150, 300, 600]`, and `threshold_fraction=0.10`.
+  - Selected cities are Denver (`city_id=6`, hot arid, fold 1), New Orleans (`city_id=14`, hot humid, fold 3), and Detroit (`city_id=29`, mild cool, fold 4).
+  - Metadata records `wall_clock_seconds=1060.3217961`, so the representative run completed in about `17.7` minutes.
+- Files inspected:
+  - `outputs/modeling/supplemental/spatial_alignment/spatial_alignment_summary.md`
+  - `outputs/modeling/supplemental/spatial_alignment/spatial_alignment_metadata.json`
+  - `outputs/modeling/supplemental/spatial_alignment/tables/representative_city_selection.csv`
+  - `outputs/modeling/supplemental/spatial_alignment/tables/spatial_alignment_metrics_representative_cities.csv`
+  - `outputs/modeling/supplemental/spatial_alignment/full_city_predictions/denver_city06_random_forest_full_city_predictions.parquet`
+  - `outputs/modeling/supplemental/spatial_alignment/full_city_predictions/new_orleans_city14_random_forest_full_city_predictions.parquet`
+  - `outputs/modeling/supplemental/spatial_alignment/full_city_predictions/detroit_city29_random_forest_full_city_predictions.parquet`
+- Verification status:
+  - Full-city prediction row counts are Denver `1,859,393`, New Orleans `700,063`, and Detroit `3,702,849`.
+  - Each prediction parquet contains one city, `prediction_scope=full_city`, `model_name=random_forest`, and `training_sample_rows_per_city=5000`.
+  - Metric table has `9` rows: three selected cities times three smoothing scales.
+  - All metric rows have `grid_reconstruction_status=ok`, `grid_cell_size_m=30.0`, and expected projected CRSs (`EPSG:32613`, `EPSG:32615`, `EPSG:32617`).
+  - Top-region selected cell counts are consistent with `ceil(valid_cell_count * 0.10)` for each city.
+  - Spearman smoothed-surface correlations range from about `0.234` to `0.393`; top-region overlap ranges from about `0.102` to `0.128`; observed mass captured ranges from about `0.168` to `0.205`.
+- Immediate Next Step:
+  - Generate optional medium-scale spatial-alignment maps for the three representative cities, then inspect whether the maps support a concise supplemental/report interpretation before considering polygonization or logistic-vs-RF comparison.
+
+### 2026-04-28 - Checkpoint: Spatial Alignment Review Findings Addressed
+
+- Date / checkpoint:
+  - 2026-04-28 targeted review-fix pass before any representative-city spatial-alignment workflow run.
+- Change made:
+  - Optimized `reconstruct_city_grid` in `src.modeling_spatial_alignment` so the normal no-duplicate reconstructed-grid path uses direct NumPy assignment into `observed`, `predicted`, and `valid_mask` arrays.
+  - Kept a duplicate-cell fallback in `reconstruct_city_grid`, now using vectorized row/column aggregation by reconstructed cell rather than per-cell DataFrame groupby iteration.
+  - Updated `run_spatial_alignment_workflow` so `--skip-existing-predictions` checks the selected city prediction files for each fold before loading sampled training rows or fitting/tuning. If all selected prediction files for a fold exist, it loads them and computes metrics directly; if any are missing, it fits the fold model and writes missing predictions as before.
+  - Reworded `docs/data_dictionary.md` so spatial-alignment artifacts are described as outputs produced by `src.run_modeling_spatial_alignment`, not artifacts that already exist before the CLI has been run. The note remains explicit that this is supplemental representative-city full-city scoring, not a full 30-city benchmark.
+  - Added focused tests for the no-duplicate reconstruction fast path, duplicate aggregation fallback, and fold-level skip-existing fit bypass.
+- Files changed:
+  - `src/modeling_spatial_alignment.py`
+  - `tests/test_modeling_spatial_alignment.py`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_spatial_alignment.py src\run_modeling_spatial_alignment.py tests\test_modeling_spatial_alignment.py` - passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_alignment.py -q` - passed, `7 passed in 2.48s`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_alignment --help` - passed; CLI help renders the expected spatial-alignment options.
+  - Denver real-data reconstruction probe using only `city_id`, `city_name`, `cell_id`, `centroid_lon`, `centroid_lat`, and `hotspot_10pct` from `data_processed/final/final_dataset.parquet`, then `predicted_probability = hotspot_10pct`.
+  - Moved test-created `src\__pycache__` and `tests\__pycache__` into `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\repo-moved-cache\spatial-alignment-review-20260427_232157\`.
+- Denver reconstruction probe result:
+  - Denver rows: `1,859,393`.
+  - Load time for selected columns: `31.615s`.
+  - `reconstruct_city_grid` runtime: `0.894s`.
+  - Reconstruction status: `ok`.
+  - Inferred grid cell size: `30.000 m`.
+  - Grid shape: `2052 x 1679`.
+  - Valid cells: `1,859,393`.
+  - Projected CRS: `EPSG:32613`.
+- Testing status:
+  - Focused spatial-alignment pytest suite passes.
+  - Python compile check passes for the spatial-alignment module, CLI, and test file.
+- Manual verification status:
+  - CLI help renders successfully.
+  - Denver reconstruction probe confirms the optimized no-duplicate path is fast on real Denver rows and preserves the expected 30 m grid.
+- Immediate Next Step:
+  - The code is ready for a `denver_only` end-to-end `src.run_modeling_spatial_alignment` CLI run. That run has not been started, and the expensive three-city representative workflow has not been run.
+
+### 2026-04-27 - Checkpoint: RF Full-City Spatial Alignment Diagnostic Implemented
+
+- Date / checkpoint:
+  - 2026-04-27 implementation pass for the first report-grade spatial-alignment diagnostic described in `docs/spatial_alignment_design.md`.
+- Change made:
+  - Added `src.modeling_spatial_alignment` with representative-city selection from retained RF city metrics, leakage-safe sampled training-city refits, full-city held-out prediction export, projected centroid grid reconstruction, Gaussian smoothed-surface generation, and alignment metric calculation.
+  - Added `src.run_modeling_spatial_alignment` as the CLI entrypoint for the RF-first supplemental diagnostic.
+  - The retained frontier selector currently resolves to Denver (`city_id=6`, hot arid, fold 1), New Orleans (`city_id=14`, hot humid, fold 3), and Detroit (`city_id=29`, mild cool, fold 4); Denver is selected by the climate-group median rule, so it is not duplicated.
+  - Added focused synthetic tests for representative-city selection, deterministic top-fraction region ranking, tiny-grid metric calculations, output schema stability, and tiny projected-grid reconstruction.
+  - Updated `docs/workflow.md` and `docs/data_dictionary.md` for the new supplemental output root and CLI behavior.
+- Files touched:
+  - `src/modeling_spatial_alignment.py`
+  - `src/run_modeling_spatial_alignment.py`
+  - `tests/test_modeling_spatial_alignment.py`
+  - `docs/workflow.md`
+  - `docs/data_dictionary.md`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_spatial_alignment.py src\run_modeling_spatial_alignment.py tests\test_modeling_spatial_alignment.py`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_modeling_spatial_alignment.py -q`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_modeling_spatial_alignment --help`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -c "import pandas as pd; from src.modeling_spatial_alignment import select_representative_cities, DEFAULT_REFERENCE_RUN_DIR; df=pd.read_csv(DEFAULT_REFERENCE_RUN_DIR/'metrics_by_city.csv'); print(select_representative_cities(df)[['city_id','city_name','climate_group','outer_fold','pr_auc','selection_reason']].to_string(index=False))"`
+  - Moved test-created `src\__pycache__` and `tests\__pycache__` into `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\repo-moved-cache\`.
+- Test status:
+  - Focused spatial-alignment tests pass: `4 passed`.
+  - Python compile check succeeded for the new module, CLI, and test file.
+- Manual verification status:
+  - CLI help renders successfully with the intended reference-run, dataset, fold, selection, smoothing-radius, threshold, job-count, batch-size, and skip-existing options.
+  - Representative selection was manually checked against the retained RF city metrics and returns the expected three representative cities without duplicating Denver.
+  - Checked that no new non-vendor `src` or `tests` `__pycache__` directories remain in the repository after the test run.
+- Immediate Next Step:
+  - Run the CLI when compute time is available to materialize `outputs/modeling/supplemental/spatial_alignment/` full-city predictions and metric tables; do not describe those outputs as a full 30-city benchmark.
+
+### 2026-04-27 - Checkpoint: Spatial Alignment Design Converted To Implementation Plan
+
+- Date / checkpoint:
+  - 2026-04-27 documentation-only update to turn the smoothed hotspot surface alignment sketch into a concrete implementation plan.
+- Change made:
+  - Replaced the exploratory `docs/spatial_alignment_design.md` draft with a report-grade design centered on sampled training/tuning plus full-city held-out scoring for representative cities.
+  - Recorded the initial RF-first scope, representative-city rule (one per climate group plus Denver if needed), multi-scale smoothing radii (`150 m`, `300 m`, `600 m`), first metric table contract, optional map deliverables, and later polygonization path.
+  - Cleaned earlier doc inconsistencies and mojibake, including the stale `docs/report/spatial_alignment_design.md` prompt path and malformed smart quotes.
+  - Added a first implementation prompt to the design doc for the next Codex coding pass.
+- Files touched:
+  - `docs/spatial_alignment_design.md`
+  - `docs/chat_handoff.md`
+- Test status:
+  - No tests were run; this was a documentation/design update only.
+- Manual verification status:
+  - Reviewed the revised design text for alignment with the current modeling contract: city-held-out leakage safety remains intact, training remains sampled for feasibility, and full-city predictions are scoped as supplemental spatial-diagnostic artifacts rather than a new full benchmark.
+- Immediate Next Step:
+  - Implement `src.modeling_spatial_alignment` and `src.run_modeling_spatial_alignment` following the new design, starting with the retained random forest frontier checkpoint and representative-city full-city scoring.
+
+### 2026-04-27 - Checkpoint: Final Report Visual Table/Figure Polish
+
+- Date / checkpoint:
+  - 2026-04-27 narrow visual-polish pass on report tables/figures and report artifact generation only; no substantive report interpretation, metric values, row counts, model results, or city assignments changed.
+- Change made:
+  - Reworked Appendix Table A4 in `docs/report/stat5630_final_report_draft.md` as a compact fixed-width LaTeX-rendered table with explicit City-to-climate spacing; the rendered PDF no longer shows joined city/climate fragments such as `AlbuquerqueHot` or `JacksonvilleHot`.
+  - Reworked Appendix Table A2 to use `AP`, `Rows/city`, `Candidates`, and `Inner fits`, with the note `AP = average precision.`; mirrored those display labels in `docs/report/tables/retained_model_run_metadata.csv` via `src.report_artifacts`.
+  - Updated report-generated climate labels to use the space-separated display style (`Hot arid`, `Hot humid`, `Mild cool`) and regenerated `docs/report/figures/city_signal_transfer_relationship.png` and `docs/report/figures/evaluation_design.png` without hyphenated climate legend text.
+  - Changed Table 3 note wording from below-reference skill to `apparent below-reference performance`.
+  - Removed the forced page break after Figure 6 so the Appendix starts on the same PDF page, reducing the previously blank lower half while preserving the three-panel Figure 6 map and caption interpretation.
+  - Preserved all three Nicholas insertion placeholders.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/tables/retained_model_run_metadata.csv`
+  - refreshed generated report tables/figures under `docs/report/tables/` and `docs/report/figures/`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+raw_tex+pipe_tables+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py`
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, table/figure locations, Nicholas placeholder count, raw-LaTeX leakage, AP note, joined city/climate fragments, and hyphenated climate labels.
+  - TinyTeX Ghostscript page renders to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\report_pdf_checks\` for visual inspection of Tables 3-6, Figure 6, Appendix Table A2, Appendix Table A4, and climate-label figure pages.
+- Test status:
+  - No model/data test suite was run; this was a report visual-rendering pass.
+  - Report artifact generation and Pandoc/XeLaTeX PDF rebuild both completed successfully.
+- Manual verification status:
+  - Rendered PDF inspection reported 28 pages.
+  - Source/PDF still contain exactly 3 intentional `[Insert ...]` Nicholas notes.
+  - Appendix Table A4 spacing is visually fixed in the rendered page image; City and Climate group are separated and all rows are readable.
+  - Appendix Table A2 uses `AP` with the explanatory note and no longer shows `average precision` inside the table body.
+  - Figure 6 now shares the page with the Appendix heading/table start, reducing unused space; the map panels, legend categories, and spatial-error interpretation were preserved.
+  - PDF text checks found zero instances of raw LaTeX leakage (`\begin{`, `\endgroup`), image width literals, `AlbuquerqueHot`, `JacksonvilleHot`, `Hot-arid`, `Hot-humid`, or `Mild-cool`.
+- Remaining caveats:
+  - Some non-target appendix table wrapping remains where the overall PDF table layout is narrow, but the requested A2/A4 and climate-label artifacts were addressed.
+  - Nicholas still needs to fill the 3 substantive insertion notes before final submission.
+
+### 2026-04-27 - Checkpoint: Final Report Non-Nicholas Blind-Reader Polish
+
+- Date / checkpoint:
+  - 2026-04-27 focused final-polish pass on `docs/report/stat5630_final_report_draft.md` and report artifact generation, explicitly excluding Nicholas placeholder content.
+- Change made:
+  - Standardized the report's fixed-feature framing around the primary six-predictor benchmark and the primary matched 5,000 rows-per-city logistic-versus-random-forest comparison.
+  - Added a practical screening interpretation of transfer recall: sampled random forest recovers about 19.6% of true hotspots when only the top 10% predicted-risk cells are inspected, nearly double the 10% reference but only modestly above the impervious-only baseline.
+  - Strengthened the Figure 6 text and caption, moved Figure 6 onto its own page, and regenerated `docs/report/figures/heldout_denver_map_focus.png` from retained held-out map points with larger/darker points, tighter map padding, clearer panel titles, and the same three-panel predicted / observed / error structure.
+  - Shortened report table headers and labels to reduce mechanical wrapping, including `Primary predictor?`, `Hotspot prev.`, `Recall@top10`, `R@10`, `Logit`, and space-separated climate labels in tables.
+  - Added R@10 explanatory notes for Table 5 and Appendix Table A3.
+  - Made the targeted sentence-level edits for reproducibility notes, unit/grouping language, and grouped inner CV.
+  - Preserved all three bracketed Nicholas insertion notes exactly as report placeholders.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/report/figures/heldout_denver_map_focus.png`
+  - other refreshed report-generated PNGs under `docs/report/figures/` from `src.run_report_artifacts`
+  - `docs/report/tables/*.csv`
+  - `src/report_artifacts.py`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts`
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py`
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, table/figure page locations, insertion-note count, terminology checks, practical-screening sentence, Figure 6 caption text, and known awkward wrap fragments.
+  - Removed the repo-local `src\__pycache__` created by the one-file compile check.
+- Test status:
+  - No model/data Python tests were run; this was report prose/layout and report-artifact generation only.
+  - Report artifact generation and Pandoc/XeLaTeX PDF render succeeded after rerunning artifact generation from the repository root.
+- Manual verification status:
+  - Rendered PDF inspection reported 29 pages.
+  - Source and rendered PDF contain exactly 3 intentional `[Insert ...]` Nicholas notes.
+  - Rendered PDF contains Figure 6 on PDF page 18 with the full strengthened caption on that page.
+  - Rendered PDF checks found zero instances of the targeted broken fragments `preva- lence`, `Hot- humid`, `Hot- arid`, `logis- tic`, `re- call`, `posi- tives`, and `recall-at- top-10%`.
+  - Rendered PDF checks found zero instances of stale `headline model`, `primary model`, or `six-feature contract` language.
+- Remaining caveats:
+  - Some table headers still wrap across lines because the report uses narrow PDF table columns, but the worst hyphenated/mechanical fragments in Tables 3-5 and appendix checks were removed.
+  - Nicholas still needs to fill the 3 substantive insertion notes before final submission.
+
+### 2026-04-27 - Checkpoint: Final Report Critique-Driven Submission Polish
+
+- Date / checkpoint:
+  - 2026-04-27 targeted revision of `docs/report/stat5630_final_report_draft.md` using `docs/report/critique.md` as the checklist.
+- Change made:
+  - Tightened the Background, Research Questions, Dataset Construction, Methods, Results, validity, and future-work prose without changing the report structure, model results, tables, or figure files.
+  - Added clearer reader orientation around the four-step report roadmap, target population, city-relative top-10% label, AppEEARS, sampled transfer benchmark, PR AUC interpretation, ranking-versus-calibration interpretation, climate group as a broad predictor, and full held-out-city scoring as the next direct extension.
+  - Replaced internal-sounding report language such as feature-contract/headline phrasing with outward-facing academic wording.
+  - Strengthened Figure 4 and Table 3 explanatory text so the within-city and city-held-out panels are read as a validation-design contrast rather than a direct metric-magnitude comparison.
+  - Left all three bracketed insertion notes intact.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, section boundary, insertion-note count, internal-language checks, figure/table headings, and image references.
+  - Before/after Markdown table-data-row comparison against the pre-edit snapshot stored under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\report_revision\`.
+- Test status:
+  - No Python test suite was run; this was a report prose/PDF-render pass with no code, data, or model-output changes.
+  - Pandoc/XeLaTeX render succeeded.
+- Manual verification status:
+  - Rendered PDF inspection reported 29 total pages.
+  - Main Text begins on PDF page 2 and Tables and Figures begins on PDF page 11, so the main text before Tables and Figures is 9 pages.
+  - Source and rendered PDF contain exactly 3 bracketed insertion notes.
+  - Source and rendered PDF contain zero instances of `TODO`, `partner`, `Nick`, `course-scale`, `aligned report narrative`, or `deployment-ready`.
+  - Before/after comparison found 74 table data rows before and after, with zero removed or added rows; model-result table values were unchanged.
+  - Source and rendered PDF contain the expected Table 1-6, Figure 1-6, Appendix Table A1-A4, and Appendix Figure A1-A5 headings, and all 11 Markdown image references resolve to existing files.
+- Remaining caveats:
+  - The three bracketed insertion notes still need final author-supplied material before submission.
+  - Full held-out-city scoring remains a future-work item; the report continues to describe the current 5,000-row-per-city sampled transfer benchmark.
+
+### 2026-04-27 - Checkpoint: Move Repo-Local Temp/Cache Folders To User Temp
+
+- Date / checkpoint:
+  - 2026-04-27 cleanup responding to repo-local temp/cache folders being created in the OneDrive-backed project root.
+- Change made:
+  - Moved repo-local scratch folders out of the repository:
+    - `.codex_tmp` to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\.codex_tmp`
+    - `.tmp` to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\.tmp`
+    - `.tmp_report_pages` to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\.tmp_report_pages`
+  - Moved generated Python bytecode cache folders out of the repository:
+    - `src\__pycache__` to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\repo-moved-cache\src____pycache__`
+    - `tests\__pycache__` to `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\repo-moved-cache\tests____pycache__`
+  - Updated `AGENTS.md` so future work uses the user-level virtual environment at `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\`, uses `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\` for scratch/temp, uses `C:\Users\golde\.pip-cache\` for pip/cache, and explicitly avoids repo-local `.venv`, `.tmp`, `.codex_tmp`, or cache folders.
+  - Updated `README.md` Python environment guidance and command examples from repo-local `.venv` to the user-level project environment.
+  - Added README guidance to set `TEMP`, `TMP`, and `PIP_CACHE_DIR` to user-level roots before temp-heavy or install commands.
+  - Expanded `.gitignore` coverage for repo-local scratch/cache folders as a fallback guard.
+- Files touched:
+  - `AGENTS.md`
+  - `README.md`
+  - `.gitignore`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - Moved the listed directories with validated PowerShell `Move-Item` operations after confirming destination paths were under `C:\Users\golde\.tmp\`.
+  - Scanned for remaining top-level/repo-local `.codex_tmp`, `.tmp`, `.tmp_report_pages`, `.pytest_cache`, `.venv`, `node_modules`, `pip-cache`, `__pycache__`, and `.cache` directories.
+  - Scanned `AGENTS.md`, `README.md`, and `.gitignore` for remaining repo-local environment guidance.
+- Test status:
+  - No test suite was run; this was filesystem cleanup and documentation alignment only.
+- Manual verification status:
+  - Repo root no longer contains `.codex_tmp`, `.tmp`, or `.tmp_report_pages`.
+  - Recursive depth-2 scan found no remaining repo-local `.codex_tmp`, `.tmp`, `.tmp_report_pages`, `.pytest_cache`, `.venv`, `node_modules`, `pip-cache`, `__pycache__`, or `.cache` directories.
+  - Destination root now contains `.codex_tmp`, `.tmp`, `.tmp_report_pages`, `modeling-cache`, and `repo-moved-cache` under `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\`.
+- Remaining caveats:
+  - Historical entries in `docs/chat_handoff.md` still mention older repo-local `.venv` commands because they are records of prior work, not current guidance.
+  - Existing unrelated working-tree items remain from prior report work, including report draft/PDF modifications and untracked/deleted report critique files.
+
+### 2026-04-27 - Checkpoint: Final Report Small Prose And Caption Polish
+
+- Date / checkpoint:
+  - 2026-04-27 small non-Nicholas-dependent polish pass on `docs/report/stat5630_final_report_draft.md`.
+- Change made:
+  - Replaced informal Results wording ("The empirical story begins...") with "The analysis first considers the within-city held-out setting."
+  - Replaced "contains real local hotspot signal" with "contains useful local hotspot-screening signal."
+  - Tightened the simple-baseline paragraph so it says the baselines show transfer performance from single-feature or prevalence-style rules.
+  - Rewrote the validation-design result paragraph to avoid a didactic "single universal model ranking" frame and to describe Figure 4 as a validation-design comparison rather than a leaderboard.
+  - Strengthened the Figure 6 caption to state that Denver was excluded from training in the displayed random-forest fold.
+  - Left table/figure ordering unchanged to avoid unnecessary layout and numbering churn.
+  - Left the absolute Reproducibility Notes Python path unchanged because it remains valid on this machine and the repo-local `.venv` is absent.
+  - Left all three bracketed Nicholas-dependent insertion notes unchanged.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - Source scans for the targeted old phrases, insertion notes, internal-facing terms, retained metric values, and report/code artifact diffs.
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, section boundary, insertion-note count, internal-language checks, and figure/table references.
+- Test status:
+  - No Python test suite was run; this was a report prose/caption pass only.
+  - Pandoc/XeLaTeX render succeeded.
+- Manual verification status:
+  - Rendered PDF inspection reported 28 total PDF pages.
+  - Main Text begins on PDF page 2 and Tables and Figures begins on PDF page 10, so the main text before Tables and Figures remains 8 pages.
+  - Rendered text contains the expected Table 1-6, Figure 1-6, Appendix Figure A2, Appendix Figure A4, and Appendix Figure A5 references.
+  - Source/PDF checks found zero instances of `TODO`, `partner`, `Nick`, `course-scale`, `aligned report narrative`, or `deployment-ready`.
+  - Source/PDF checks found exactly 3 intentional `[Insert ...]` notes.
+  - No diffs were detected under `data_processed`, `outputs`, `src`, or `tests`.
+- Remaining caveats:
+  - Nicholas still needs to fill the 3 substantive insertion notes before final submission.
+  - The Reproducibility Notes section still uses an absolute Windows Python path; it is valid on this machine, but a repo-relative command would be cleaner if a repo-local virtual environment is restored.
+  - Existing unrelated working-tree items remain: deleted `docs/report/new_critique.md` and untracked `docs/report/report_compression_notes.md`.
+
+### 2026-04-27 - Checkpoint: Final Report Targeted Non-Nicholas Cleanup
+
+- Date / checkpoint:
+  - 2026-04-27 targeted cleanup pass on `docs/report/stat5630_final_report_draft.md`, limited to non-Nicholas-dependent prose around the existing insertion notes.
+- Change made:
+  - Replaced the future-work paragraph with extension-focused language and removed wording that treated missing report documentation as future research.
+  - Clarified the validation antecedent from vague "that gap" wording to "the transfer question."
+  - Replaced several self-referential "The report..." constructions with direct analysis language.
+  - Tightened the Background ending around Table 1 and the thermal-variable exclusion, shortened the 30 m analytic-grid caveat, and removed duplicated ECOSTRESS pass-count filtering language from final assembly.
+  - Replaced "above chance" PR AUC wording with "above the prevalence reference."
+  - Strengthened transfer-heterogeneity support references to Tables 4-6, Appendix Figure A4, and Appendix Figure A5.
+  - Compressed the Appendix Figure A2 feature-importance paragraph, smoothed the validity paragraph, and sharpened the conclusion without changing claims or metrics.
+  - Left the three Nicholas-dependent insertion notes intact: related-work context, within-city methods detail, and signal-shift analysis.
+  - Left the absolute Windows reproducibility command in place because the referenced external venv exists and repo-local `.venv\Scripts\python.exe` is not present in the working tree.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - Source scans for insertion notes, stale internal-facing terms, result values, and image references.
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, section boundary, figure/table headings, insertion-note count, and internal-language checks.
+- Test status:
+  - No Python test suite was run; this was a report-writing/PDF-render pass with no code, data, or model-output changes.
+  - Pandoc/XeLaTeX render succeeded.
+- Manual verification status:
+  - Rendered PDF inspection reported 28 total PDF pages.
+  - Main Text begins on PDF page 2 and Tables and Figures begins on PDF page 10, so the main text before Tables and Figures is 8 pages.
+  - Rendered text contains the expected Table 1-6, Figure 1-6, Appendix Figure A2, Appendix Figure A4, and Appendix Figure A5 references.
+  - Source/PDF checks found zero instances of `TODO`, `partner`, `Nick`, `course-scale`, `aligned report narrative`, `deployment-ready`, or `above chance`.
+  - Source/PDF checks found exactly 3 intentional `[Insert ...]` notes.
+- Remaining caveats:
+  - Nicholas still needs to fill the 3 substantive insertion notes before final submission.
+  - The Reproducibility Notes section still uses an absolute Windows Python path; it is valid on this machine, but a repo-relative command would be cleaner if a repo-local virtual environment is restored.
+  - Existing unrelated working-tree items remain: deleted `docs/report/new_critique.md` and untracked `docs/report/report_compression_notes.md`.
+
+### 2026-04-27 - Checkpoint: Final Report Compression and De-Internalization Pass
+
+- Date / checkpoint:
+  - 2026-04-27 compression pass on `docs/report/stat5630_final_report_draft.md` to preserve the presentation-aligned two-design story while reducing internal-facing language, repetition, and main-text length.
+- Change made:
+  - Compressed Background, Research Questions, Dataset Construction, Methods, and Results so the report centers the 30-city dataset, within-city held-out learnability, city-held-out transfer difficulty, weak within-city/transfer correlation, and Denver spatial diagnostic.
+  - Removed duplicate within-city result placeholder from Results and kept only 3 outward-facing insertion notes: related work, within-city methods detail, and signal-shift analysis.
+  - Replaced internal-facing language including `course-scale benchmark`, `first benchmark stays interpretable`, and the Figure 7 `aligned report narrative` caption.
+  - Reduced repeated caveats around LST versus air temperature, the 30 m analytic grid, city-held-out validation, sampling, and random-forest heterogeneity.
+  - Kept Figures 1-5 and the Denver map in the main Tables and Figures section; renumbered the Denver map to Figure 6.
+  - Moved the benchmark metric comparison, city-level RF-minus-logistic deltas, and absolute RF city PR AUC figures to Appendix Figures A3-A5.
+  - Rerendered `docs/report/stat5630_final_report_draft.pdf`.
+- Files touched:
+  - `docs/report/stat5630_final_report_draft.md`
+  - `docs/report/stat5630_final_report_draft.pdf`
+  - `docs/chat_handoff.md`
+- Commands run:
+  - `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe stat5630_final_report_draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o stat5630_final_report_draft.pdf`
+  - Bundled `pypdf` inspection of the regenerated PDF for page count, section boundaries, figure/table headings, and internal-language checks.
+  - `rg -n "course-scale|first benchmark|aligned report narrative|not the whole project conclusion|partner|Nick|TODO|PARTNER|deployment-ready|In course terms|\[Insert" docs\report\stat5630_final_report_draft.md`
+- Test status:
+  - No Python test suite was run; this was a report-writing and PDF-render pass with no code/model-result changes.
+  - Pandoc/XeLaTeX render succeeded.
+- Manual verification status:
+  - Bundled `pypdf` inspection reported 28 total PDF pages.
+  - Main Text begins on page 2 and Tables and Figures begins on page 10, so the main text before Tables and Figures is 8 pages, leaving clear budget under the 15-page main-text limit.
+  - Rendered figure headings are Figure 1 through Figure 6 plus Appendix Figures A1-A5; table headings are Table 1 through Table 6 plus Appendix Tables A1-A4.
+  - Source scan found zero instances of `course-scale`, `first benchmark`, `aligned report narrative`, `not the whole project conclusion`, `partner`, `Nick`, `TODO`, `PARTNER`, `deployment-ready`, or `In course terms`; it found only the 3 intentional outward-facing `[Insert ...]` notes.
+- Remaining caveats:
+  - Nicholas still needs to fill the 3 substantive insertion notes before final submission.
+  - No model outputs or reported metric values were changed.
+  - Working tree still includes pre-existing changes outside this pass: deleted `docs/report/new_critique.md` and untracked `docs/report/report_compression_notes.md`.
+
 ### 2026-04-26 - Checkpoint: Final Report Two-Design Narrative Alignment
 
 - Date / checkpoint:

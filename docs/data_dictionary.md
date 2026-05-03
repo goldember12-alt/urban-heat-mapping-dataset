@@ -455,6 +455,37 @@ Honest status note:
   - `within_city_spatial_predictions.parquet`
 - the spatial sensitivity keeps the same six-feature contract and the same `Reno` / `Charlotte` / `Detroit` city trio, but uses deterministic centroid quadrants and remains explicitly supplemental rather than equivalent to the canonical cross-city city-held-out benchmark
 - `figures/modeling/supplemental/within_city_spatial/` stores the bounded spatial-sensitivity figure set, currently including `within_city_spatial_pr_auc_contrast.png`
+- `outputs/modeling/supplemental/spatial_alignment/` is the output root produced by `src.run_modeling_spatial_alignment` for the RF-first representative-city full-city held-out spatial-alignment diagnostic. The CLI starts from the retained random-forest frontier run, keeps training and tuning on sampled training-city rows, scores full eligible rows in selected held-out cities, and remains a supplemental diagnostic rather than a full 30-city benchmark. Representative-city expected artifacts include:
+  - `spatial_alignment_summary.md`
+  - `spatial_alignment_metadata.json`
+  - `tables/representative_city_selection.csv`
+  - `tables/spatial_alignment_metrics_representative_cities.csv`
+  - `tables/spatial_alignment_map_manifest.csv` when optional maps are generated
+  - `full_city_predictions/*_random_forest_full_city_predictions.parquet`
+- `outputs/modeling/supplemental/spatial_alignment_all_cities/` is the separate output root for the all-city expansion of the same RF-first spatial-alignment diagnostic. It uses `--city-selection all`, the existing five city-held-out outer folds, six held-out cities per fold, one train/tune pass per fold on sampled training-city rows, and full eligible scoring for all held-out cities in the fold. It is supplemental full-city spatial placement diagnostics, not a new canonical benchmark, and not a replacement for the retained sampled held-out-city PR AUC / recall benchmark. All-city expected artifacts include:
+  - `spatial_alignment_summary.md`
+  - `spatial_alignment_metadata.json`
+  - `tables/all_city_selection.csv`
+  - `tables/spatial_alignment_metrics_all_cities.csv`
+  - `tables/spatial_alignment_map_manifest.csv` only when optional maps are generated after metric review
+  - `full_city_predictions/*_random_forest_full_city_predictions.parquet`
+- produced full-city spatial-alignment prediction tables include:
+  - `city_id`
+  - `city_name`
+  - `climate_group`
+  - `outer_fold`
+  - `cell_id`
+  - `centroid_lon`
+  - `centroid_lat`
+  - `hotspot_10pct`
+  - `model_name`
+  - `predicted_probability`
+  - `prediction_scope`
+  - `training_sample_rows_per_city`
+  - `source_reference_run_dir`
+- produced full-city spatial-alignment metric tables include one row per selected city, model, smoothing scale, and threshold, with Spearman surface correlation, top-region overlap, observed mass captured, centroid distance, median nearest-region distance, grid-cell-size diagnostics, projected CRS, and grid reconstruction status
+- `figures/modeling/supplemental/spatial_alignment/` stores optional representative-city five-panel spatial-alignment maps generated from the full-city prediction files, starting with medium-scale (`300 m`) maps named like `<city_slug>_city<id>_random_forest_medium_surface_alignment.png`
+- `figures/modeling/supplemental/spatial_alignment_all_cities/` stores optional selected all-city expansion maps generated after reviewing `tables/spatial_alignment_metrics_all_cities.csv`; the current medium-scale (`300 m`) supplemental set covers Nashville, San Francisco, Portland, and Las Vegas
 - `outputs/modeling/supplemental/feature_importance/` stores retained-run interpretation markdown plus tables such as:
   - `feature_importance_summary.md`
   - `tables/logistic_post_preprocessing_feature_names.csv`

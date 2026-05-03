@@ -8,6 +8,16 @@ __pycache__/
 env/
 venv/
 
+# Repo-local scratch/cache folders should stay outside the repo.
+.tmp/
+.tmp_report_pages/
+.cache/
+.codex_tmp/
+.cleanup_pending_manual_delete/
+.t/
+node_modules/
+pip-cache/
+
 # Jupyter
 .ipynb_checkpoints/
 notebooks/.ipynb_checkpoints/
@@ -27,6 +37,9 @@ figures/
 !docs/report/figures/
 !docs/report/figures/**
 
+# Large columnar artifacts are generated locally, not versioned.
+*.parquet
+
 # Local diagnostics and oversized transfer-inference export
 gcm-diagnose.log
 outputs/modeling/transfer_inference/*/predictions.csv
@@ -44,8 +57,5 @@ docs/presentation_2026/slides_quarto_files/
 
 src/__pycache__/
 tests/__pycache__/
-.codex_tmp/
-.cleanup_pending_manual_delete/
-.t/
 *.pyc
 *.bak.codex
