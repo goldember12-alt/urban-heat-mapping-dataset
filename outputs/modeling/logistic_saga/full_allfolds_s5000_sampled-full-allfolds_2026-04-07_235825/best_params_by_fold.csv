@@ -1,6 +1,0 @@
-model_name,outer_fold,inner_cv_splits,best_inner_cv_average_precision,best_params_json
-logistic_saga,0,4,0.15036677886586147,"{""model__C"": 0.01, ""model__l1_ratio"": 1.0}"
-logistic_saga,1,4,0.152058633424418,"{""model__C"": 0.01, ""model__l1_ratio"": 0.0}"
-logistic_saga,2,4,0.1524499223061572,"{""model__C"": 10.0, ""model__l1_ratio"": 0.0}"
-logistic_saga,3,4,0.152204382246237,"{""model__C"": 1.0, ""model__l1_ratio"": 1.0}"
-logistic_saga,4,4,0.15795703523556565,"{""model__C"": 1.0, ""model__l1_ratio"": 0.2}"

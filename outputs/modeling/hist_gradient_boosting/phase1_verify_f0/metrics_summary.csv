@@ -1,2 +1,0 @@
-model_name,outer_fold_count,heldout_city_count,heldout_row_count,heldout_positive_count,heldout_prevalence,pooled_pr_auc,mean_fold_pr_auc,mean_city_pr_auc,pooled_recall_at_top_10pct,mean_fold_recall_at_top_10pct
-hist_gradient_boosting,1,6,30000,3000,0.1,0.16007626423418575,0.16007626423418575,0.1917984382548119,0.20233333333333334,0.20233333333333334

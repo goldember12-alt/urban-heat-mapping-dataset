@@ -37,7 +37,7 @@ Interpretation guardrail:
 | mild_cool | logistic_saga | 10 | 0.2694 | 0.1929 | 0.0765 | 0.3075 | 0.2130 | 0.0945 |
 | mild_cool | random_forest | 10 | 0.4246 | 0.1647 | 0.2599 | 0.4236 | 0.1850 | 0.2386 |
 
-## Largest Positive Within-vs-Cross PR AUC Gaps
+## Largest Positive Same City Versus Held Out City AP Gaps
 
 | city_name | climate_group | model_name | within_city_pr_auc_mean | cross_city_pr_auc | pr_auc_gap | within_city_recall_at_top_10pct_mean | cross_city_recall_at_top_10pct | recall_gap |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

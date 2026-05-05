@@ -1,7 +1,0 @@
-{
-  "model_name": "logistic_saga",
-  "outer_fold": 0,
-  "inner_cv_splits": 4,
-  "best_inner_cv_average_precision": 0.1510019943527481,
-  "best_params_json": "{\"model__C\": 0.01, \"model__l1_ratio\": 1.0}"
-}

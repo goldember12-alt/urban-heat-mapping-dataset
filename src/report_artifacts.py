@@ -85,7 +85,7 @@ FINAL_DATASET_COLUMNS = [
     },
     {
         "Column": "dist_to_water_m",
-        "Definition": "Distance from the cell to the nearest hydro feature in meters.",
+        "Definition": "Distance from the cell to the nearest selected water feature in meters.",
         "Role in report": "Predictor",
         "Primary predictor?": "Yes",
     },
@@ -98,13 +98,13 @@ FINAL_DATASET_COLUMNS = [
     {
         "Column": "lst_median_may_aug",
         "Definition": "Median May-August 2023 daytime land surface temperature derived from ECOSTRESS/AppEEARS inputs.",
-        "Role in report": "Outcome ingredient",
+        "Role in report": "Outcome source",
         "Primary predictor?": "No",
     },
     {
         "Column": "n_valid_ecostress_passes",
         "Definition": "Number of valid ECOSTRESS observations contributing to the cell-level LST summary.",
-        "Role in report": "Quality filter / support field",
+        "Role in report": "Observation-count filter",
         "Primary predictor?": "No",
     },
     {
@@ -392,10 +392,10 @@ def build_benchmark_report_table(
     }
     rows: list[dict[str, object]] = [
         {
-            "Model checkpoint": "No-skill / prevalence reference",
+            "Model checkpoint": "No skill reference",
             "Rows per city": "5k sampled",
-            "Pooled PR AUC": 0.1000,
-            "Mean city PR AUC": 0.1000,
+            "Pooled AP": 0.1000,
+            "Mean city AP": 0.1000,
             "Recall at top 10%": 0.1000,
             "Runtime (min)": pd.NA,
             "Report note": "Random ranking reference for a 10% hotspot target.",
@@ -407,8 +407,8 @@ def build_benchmark_report_table(
             {
                 "Model checkpoint": label,
                 "Rows per city": "5k sampled",
-                "Pooled PR AUC": round(float(baseline_row["pooled_pr_auc"]), 4),
-                "Mean city PR AUC": round(float(baseline_row["mean_city_pr_auc"]), 4),
+                "Pooled AP": round(float(baseline_row["pooled_pr_auc"]), 4),
+                "Mean city AP": round(float(baseline_row["mean_city_pr_auc"]), 4),
                 "Recall at top 10%": round(float(baseline_row["pooled_recall_at_top_10pct"]), 4),
                 "Runtime (min)": pd.NA,
                 "Report note": baseline_notes[model_name],
@@ -420,8 +420,8 @@ def build_benchmark_report_table(
             {
                 "Model checkpoint": label,
                 "Rows per city": _sample_label(int(tuned_row["rows_per_city"])),
-                "Pooled PR AUC": round(float(tuned_row["pooled_pr_auc"]), 4),
-                "Mean city PR AUC": round(float(tuned_row["mean_city_pr_auc"]), 4),
+                "Pooled AP": round(float(tuned_row["pooled_pr_auc"]), 4),
+                "Mean city AP": round(float(tuned_row["mean_city_pr_auc"]), 4),
                 "Recall at top 10%": round(float(tuned_row["pooled_recall_at_top_10pct"]), 4),
                 "Runtime (min)": round(float(tuned_row["runtime_minutes"]), 1),
                 "Report note": tuned_notes[run_label],
@@ -435,9 +435,9 @@ def build_climate_delta_report_table(climate_delta: pd.DataFrame) -> pd.DataFram
 
     table = climate_delta.copy()
     table["Climate group"] = table["climate_group"].map(_format_climate_group)
-    table["Mean PR AUC delta"] = table["mean_pr_auc_delta"].round(4)
+    table["Mean AP delta"] = table["mean_pr_auc_delta"].round(4)
     table["Mean recall delta"] = table["mean_recall_delta"].round(4)
-    table["Median PR AUC delta"] = table["median_pr_auc_delta"].round(4)
+    table["Median AP delta"] = table["median_pr_auc_delta"].round(4)
     table["Median recall delta"] = table["median_recall_delta"].round(4)
     return table[
         [
@@ -445,7 +445,7 @@ def build_climate_delta_report_table(climate_delta: pd.DataFrame) -> pd.DataFram
             "city_count",
             "rf_pr_auc_wins",
             "logistic_pr_auc_wins",
-            "Mean PR AUC delta",
+            "Mean AP delta",
             "rf_recall_wins",
             "logistic_recall_wins",
             "Mean recall delta",
@@ -453,8 +453,8 @@ def build_climate_delta_report_table(climate_delta: pd.DataFrame) -> pd.DataFram
     ].rename(
         columns={
             "city_count": "City count",
-            "rf_pr_auc_wins": "RF PR AUC wins",
-            "logistic_pr_auc_wins": "Logit PR AUC wins",
+            "rf_pr_auc_wins": "RF AP wins",
+            "logistic_pr_auc_wins": "Logit AP wins",
             "rf_recall_wins": "RF recall wins",
             "logistic_recall_wins": "Logit recall wins",
         }
@@ -462,7 +462,7 @@ def build_climate_delta_report_table(climate_delta: pd.DataFrame) -> pd.DataFram
 
 
 def build_fold_level_comparison_table(logistic_run_dir: Path, rf_run_dir: Path) -> pd.DataFrame:
-    """Return RF-minus-logistic metrics by outer city-held-out fold."""
+    """Return RF-minus-logistic metrics by outer held-out-city fold."""
 
     logistic = pd.read_csv(logistic_run_dir / "metrics_by_fold.csv")
     rf = pd.read_csv(rf_run_dir / "metrics_by_fold.csv")
@@ -480,7 +480,7 @@ def build_fold_level_comparison_table(logistic_run_dir: Path, rf_run_dir: Path) 
         suffixes=("_logistic", "_rf"),
         validate="one_to_one",
     )
-    merged["RF - Logit PR AUC"] = merged["pr_auc_rf"] - merged["pr_auc_logistic"]
+    merged["RF - Logit AP"] = merged["pr_auc_rf"] - merged["pr_auc_logistic"]
     merged["RF - Logit R@10"] = (
         merged["recall_at_top_10pct_rf"] - merged["recall_at_top_10pct_logistic"]
     )
@@ -493,7 +493,7 @@ def build_fold_level_comparison_table(logistic_run_dir: Path, rf_run_dir: Path) 
             "test_prevalence",
             "pr_auc_logistic",
             "pr_auc_rf",
-            "RF - Logit PR AUC",
+            "RF - Logit AP",
             "recall_at_top_10pct_logistic",
             "recall_at_top_10pct_rf",
             "RF - Logit R@10",
@@ -505,17 +505,17 @@ def build_fold_level_comparison_table(logistic_run_dir: Path, rf_run_dir: Path) 
             "test_row_count": "Test rows",
             "test_positive_count": "Pos.",
             "test_prevalence": "Test prev.",
-            "pr_auc_logistic": "Logit PR AUC",
-            "pr_auc_rf": "RF PR AUC",
+            "pr_auc_logistic": "Logit AP",
+            "pr_auc_rf": "RF AP",
             "recall_at_top_10pct_logistic": "Logit R@10",
             "recall_at_top_10pct_rf": "RF R@10",
         }
     )
     numeric_columns = [
         "Test prev.",
-        "Logit PR AUC",
-        "RF PR AUC",
-        "RF - Logit PR AUC",
+        "Logit AP",
+        "RF AP",
+        "RF - Logit AP",
         "Logit R@10",
         "RF R@10",
         "RF - Logit R@10",
@@ -542,7 +542,7 @@ def build_city_paired_summary_table(city_error: pd.DataFrame) -> pd.DataFrame:
 
     rows = []
     for label, column in [
-        ("City PR AUC", "pr_auc_delta_rf_minus_logistic"),
+        ("City AP", "pr_auc_delta_rf_minus_logistic"),
         ("City R@10", "recall_delta_rf_minus_logistic"),
     ]:
         summary = _paired_metric_summary(city_error[column])
@@ -595,11 +595,11 @@ def build_model_specification_table() -> pd.DataFrame:
 
     rows = [
         {
-            "Model / baseline": "No-skill / prevalence reference",
+            "Model / baseline": "No skill reference",
             "Predictors": "None",
             "Preprocessing": "None",
-            "Tuning grid or rule": "Reference PR AUC and top-decile recall equal to the 10% target rate.",
-            "Scoring": "PR AUC; R@10",
+            "Tuning grid or rule": "Reference AP and top-decile recall equal to the 10% target rate.",
+            "Scoring": "AP; R@10",
             "Grouped CV?": "Reference only",
         },
         {
@@ -607,7 +607,7 @@ def build_model_specification_table() -> pd.DataFrame:
             "Predictors": "None",
             "Preprocessing": "Training-city target mean",
             "Tuning grid or rule": "Predict the training-city hotspot prevalence for all held-out rows.",
-            "Scoring": "PR AUC; R@10",
+            "Scoring": "AP; R@10",
             "Grouped CV?": "Outer city folds only",
         },
         {
@@ -615,7 +615,7 @@ def build_model_specification_table() -> pd.DataFrame:
             "Predictors": "climate_group",
             "Preprocessing": "Training-city category means",
             "Tuning grid or rule": "Predict training-city hotspot prevalence by climate group.",
-            "Scoring": "PR AUC; R@10",
+            "Scoring": "AP; R@10",
             "Grouped CV?": "Outer city folds only",
         },
         {
@@ -623,7 +623,7 @@ def build_model_specification_table() -> pd.DataFrame:
             "Predictors": "land_cover_class",
             "Preprocessing": "Training-city category means",
             "Tuning grid or rule": "Predict training-city hotspot prevalence by land-cover class.",
-            "Scoring": "PR AUC; R@10",
+            "Scoring": "AP; R@10",
             "Grouped CV?": "Outer city folds only",
         },
         {
@@ -631,7 +631,7 @@ def build_model_specification_table() -> pd.DataFrame:
             "Predictors": "impervious_pct",
             "Preprocessing": "Training-city decile bins",
             "Tuning grid or rule": "Predict training-city hotspot prevalence by imperviousness bin.",
-            "Scoring": "PR AUC; R@10",
+            "Scoring": "AP; R@10",
             "Grouped CV?": "Outer city folds only",
         },
         {
@@ -639,7 +639,7 @@ def build_model_specification_table() -> pd.DataFrame:
             "Predictors": "impervious_pct, land_cover_class, elevation_m, dist_to_water_m, ndvi_median_may_aug, climate_group",
             "Preprocessing": "Training-only imputation, numeric scaling, and categorical one-hot encoding inside sklearn Pipeline",
             "Tuning grid or rule": "C = 0.01, 0.1, 1.0, 10.0; l1_ratio = 0.0, 0.2, 0.5, 0.8, 1.0",
-            "Scoring": "Inner-CV AP; held-out PR AUC; R@10",
+            "Scoring": "Inner-CV AP; held-out AP; R@10",
             "Grouped CV?": "Yes, grouped outer folds and grouped inner CV",
         },
         {
@@ -647,7 +647,7 @@ def build_model_specification_table() -> pd.DataFrame:
             "Predictors": "Same six non-thermal predictors as logistic SAGA",
             "Preprocessing": "Training-only imputation and categorical one-hot encoding inside sklearn Pipeline",
             "Tuning grid or rule": "n_estimators = 200, 300; max_depth = 10, 20; max_features = sqrt; min_samples_leaf = 1, 5",
-            "Scoring": "Inner-CV AP; held-out PR AUC; R@10",
+            "Scoring": "Inner-CV AP; held-out AP; R@10",
             "Grouped CV?": "Yes, grouped outer folds and grouped inner CV",
         },
     ]
@@ -716,8 +716,8 @@ def build_retained_model_metadata_table(
                 "Scoring": "AP" if metadata["scoring"] == "average_precision" else metadata["scoring"],
                 "Candidates": metadata["search_space"]["param_candidate_count"],
                 "Inner fits": metadata["search_space"]["estimated_total_inner_fits"],
-                "Pooled PR AUC": round(metrics_row["pooled_pr_auc"], 4),
-                "Mean city PR AUC": round(metrics_row["mean_city_pr_auc"], 4),
+                "Pooled AP": round(metrics_row["pooled_pr_auc"], 4),
+                "Mean city AP": round(metrics_row["mean_city_pr_auc"], 4),
                 "Recall@top10": round(metrics_row["pooled_recall_at_top_10pct"], 4),
                 "Grid summary": _summarize_param_grid(metadata["param_grid"]),
                 "Selected parameters": _summarize_best_params(best_params),
@@ -852,12 +852,12 @@ def plot_study_city_locations(output_path: Path) -> None:
 
 
 def plot_benchmark_metric_comparison(benchmark_report: pd.DataFrame, output_path: Path) -> None:
-    """Write the report benchmark figure with a no-skill reference line."""
+    """Write the report benchmark figure with a no skill reference line."""
 
     plot_df = benchmark_report.loc[
         benchmark_report["Model checkpoint"].isin(
             [
-                "No-skill / prevalence reference",
+                "No skill reference",
                 "Impervious only",
                 "Land cover only",
                 "Logistic 5k",
@@ -867,12 +867,12 @@ def plot_benchmark_metric_comparison(benchmark_report: pd.DataFrame, output_path
         )
     ].copy()
     metric_specs = [
-        ("Pooled PR AUC", "Pooled PR AUC"),
-        ("Mean city PR AUC", "Mean City PR AUC"),
+        ("Pooled AP", "Pooled AP"),
+        ("Mean city AP", "Mean City AP"),
         ("Recall at top 10%", "Recall At Top 10%"),
     ]
     color_map = {
-        "No-skill / prevalence reference": "#999999",
+        "No skill reference": "#999999",
         "Impervious only": "#8f6f4f",
         "Land cover only": "#8f6f4f",
         "Logistic 5k": "#2f6c8f",
@@ -892,7 +892,7 @@ def plot_benchmark_metric_comparison(benchmark_report: pd.DataFrame, output_path
         axis.set_ylim(0.0, 0.22)
         axis.grid(axis="y", alpha=0.25)
         axis.set_axisbelow(True)
-    fig.suptitle("City-Held-Out Benchmark Metrics", fontsize=13)
+    fig.suptitle("Held Out City Model Metrics", fontsize=13)
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -966,10 +966,10 @@ def plot_workflow_overview(output_path: Path) -> None:
             "DEM and hydrography",
         ],
     )
-    _diagram_box(ax, 1010, 300, 300, 150, "Per-City Features", ["Aligned to the master grid", "Cell-level feature table", "per city"], fill="#eef4f7")
+    _diagram_box(ax, 1010, 300, 300, 150, "Per City Features", ["Aligned to the master grid", "30 m cell feature table", "per city"], fill="#eef4f7")
     _diagram_box(ax, 170, 50, 320, 150, "Final Dataset", ["71,394,894 rows", "17 columns", "one row per 30 m grid cell"])
-    _diagram_box(ax, 540, 50, 360, 150, "Audit And Split Contract", ["Required columns and missingness audit", "Binary target validation", "Deterministic city-held-out folds"], fill="#eef4f7")
-    _diagram_box(ax, 970, 50, 380, 150, "Modeling And Delivery", ["Leakage-safe cross-city benchmarking", "Held-out prediction tables and maps", "Transfer-oriented model package"])
+    _diagram_box(ax, 540, 50, 360, 150, "Audit and Fold Assignment", ["Column and missingness checks", "Hotspot label validation", "Deterministic held out city folds"], fill="#eef4f7")
+    _diagram_box(ax, 970, 50, 380, 150, "Model Evaluation", ["Training city preprocessing", "Held out city metrics", "Predictions and maps"])
 
     _diagram_arrow(ax, (270, 375), (310, 375))
     _diagram_arrow(ax, (570, 375), (620, 375))
@@ -981,7 +981,7 @@ def plot_workflow_overview(output_path: Path) -> None:
     ax.text(
         700,
         22,
-        "Canonical benchmark story: data construction leads to a city-held-out transfer test, not a same-city interpolation exercise.",
+        "Data construction leads to held out city transfer evaluation, not only same city interpolation.",
         ha="center",
         va="center",
         fontsize=10,
@@ -992,7 +992,7 @@ def plot_workflow_overview(output_path: Path) -> None:
 
 
 def plot_evaluation_design(output_path: Path) -> None:
-    """Write the report city-held-out evaluation diagram as a PNG."""
+    """Write the report held out city evaluation diagram as a PNG."""
 
     fig, ax = plt.subplots(figsize=(12.6, 5.0))
     ax.set_xlim(0, 1200)
@@ -1004,7 +1004,7 @@ def plot_evaluation_design(output_path: Path) -> None:
     ax.text(
         42,
         455,
-        "City-held-out transfer design",
+        "Held out city transfer design",
         ha="left",
         va="center",
         fontsize=18,
@@ -1027,16 +1027,16 @@ def plot_evaluation_design(output_path: Path) -> None:
         250,
         250,
         130,
-        "30-City Panel",
-        ["Balanced climate groups", "One grid-cell table"],
+        "30 City Panel",
+        ["Balanced climate groups", "One grid cell table"],
         fill="#eef4f7",
     )
     _diagram_box(
         ax,
         360,
-        250,
+        235,
         500,
-        130,
+        165,
         "One Outer Fold",
         [],
     )
@@ -1047,12 +1047,12 @@ def plot_evaluation_design(output_path: Path) -> None:
         230,
         130,
         "Final Scoring",
-        ["Predict held-out cities", "Report PR AUC and R@10"],
+        ["Predict held out cities", "Report AP and R@10"],
         fill="#eef4f7",
     )
 
     square_size = 22
-    x0, y0 = 405, 304
+    x0, y0 = 405, 325
     for index in range(30):
         row = index // 15
         col = index % 15
@@ -1072,8 +1072,8 @@ def plot_evaluation_design(output_path: Path) -> None:
         )
     ax.text(
         610,
-        266,
-        "24 training cities; 6 held-out cities",
+        262,
+        "24 training cities; 6 held out cities",
         ha="center",
         va="center",
         fontsize=10.0,
@@ -1082,7 +1082,7 @@ def plot_evaluation_design(output_path: Path) -> None:
     ax.add_patch(FancyBboxPatch((432, 214), 18, 18, boxstyle="round,pad=0,rounding_size=3", facecolor="#7aa0b8", edgecolor="none"))
     ax.text(457, 223, "Training cities", ha="left", va="center", fontsize=10.5, color="#304b5a")
     ax.add_patch(FancyBboxPatch((610, 214), 18, 18, boxstyle="round,pad=0,rounding_size=3", facecolor="#b34a33", edgecolor="none"))
-    ax.text(635, 223, "Held-out cities", ha="left", va="center", fontsize=10.5, color="#304b5a")
+    ax.text(635, 223, "Held out cities", ha="left", va="center", fontsize=10.5, color="#304b5a")
 
     _diagram_arrow(ax, (290, 315), (360, 315))
     _diagram_arrow(ax, (860, 315), (930, 315))
@@ -1097,13 +1097,13 @@ def plot_evaluation_design(output_path: Path) -> None:
         [
             "Imputation, scaling, encoding, feature processing, and tuning",
             "are fit on training cities only.",
-            "Held-out cities are used once, for final evaluation.",
+            "Held out cities are used once, for final evaluation.",
         ],
     )
     ax.text(
         600,
         24,
-        "Primary metric: PR AUC. Supporting metric: recall among the top 10% highest-risk held-out cells.",
+        "Primary metric: AP. Supporting metric: recall among the top 10% highest risk held out cells.",
         ha="center",
         va="center",
         fontsize=10,
@@ -1126,8 +1126,8 @@ def plot_city_metric_deltas(city_error: pd.DataFrame, output_path: Path) -> None
         (
             axes[0],
             "pr_auc_delta_rf_minus_logistic",
-            "RF - Logistic PR AUC by City",
-            "Delta in PR AUC",
+            "RF - Logistic AP by City",
+            "Delta in AP",
         ),
         (
             axes[1],
@@ -1172,7 +1172,7 @@ def plot_city_metric_deltas(city_error: pd.DataFrame, output_path: Path) -> None
 
 
 def plot_city_rf_pr_auc(city_error: pd.DataFrame, output_path: Path) -> None:
-    """Write absolute retained random-forest PR AUC by held-out city."""
+    """Write absolute retained random-forest average precision by held-out city."""
 
     plot_df = city_error.copy()
     plot_df["Climate group"] = plot_df["climate_group"].map(_format_climate_group)
@@ -1186,7 +1186,7 @@ def plot_city_rf_pr_auc(city_error: pd.DataFrame, output_path: Path) -> None:
     ax.text(0.103, len(plot_df) - 1.0, "10% reference", ha="left", va="center", fontsize=8.5)
     ax.set_yticks(y_positions)
     ax.set_yticklabels(plot_df["city_name"], fontsize=9)
-    ax.set_xlabel("Random-forest city PR AUC")
+    ax.set_xlabel("Random-forest city AP")
     ax.set_ylabel("")
     ax.set_title("Absolute Random-Forest Performance by Held-Out City")
     ax.set_xlim(0.06, max(0.48, float(plot_df["pr_auc_rf"].max()) + 0.03))
@@ -1230,11 +1230,10 @@ def plot_spatial_alignment_medium_summary(metrics: pd.DataFrame, output_path: Pa
 
     plot_df["Climate group"] = plot_df["climate_group"].map(_format_climate_group)
     plot_df = plot_df.sort_values("spearman_surface_corr").reset_index(drop=True)
-    label_cities = _select_spatial_alignment_labels(plot_df)
     size_values = plot_df["top_region_overlap_fraction"].astype(float)
     marker_sizes = 115 + (size_values - size_values.min()) / max(float(size_values.max() - size_values.min()), 1e-9) * 265
 
-    fig, ax = plt.subplots(figsize=(10.4, 7.4), dpi=240)
+    fig, ax = plt.subplots(figsize=(11.8, 8.2), dpi=240)
     for climate_label, climate_df in plot_df.groupby("Climate group", sort=False):
         row_indices = climate_df.index.to_numpy()
         ax.scatter(
@@ -1267,24 +1266,33 @@ def plot_spatial_alignment_medium_summary(metrics: pd.DataFrame, output_path: Pa
         color="#333333",
     )
 
-    label_offsets = [
-        (7, 6),
-        (7, -7),
-        (-7, 6),
-        (-7, -7),
-        (10, 0),
-        (-10, 0),
-        (0, 10),
-        (0, -10),
-    ]
-    for label_index, row in enumerate(plot_df.loc[plot_df["city_name"].isin(label_cities)].itertuples(index=False)):
-        dx, dy = label_offsets[label_index % len(label_offsets)]
+    label_offsets = {
+        "Atlanta": (-9, -11),
+        "Charlotte": (8, -10),
+        "Denver": (-10, 10),
+        "Detroit": (-8, -12),
+        "Miami": (9, -8),
+        "New Orleans": (9, 8),
+        "Salt Lake City": (-10, -7),
+        "San Diego": (7, 10),
+        "Seattle": (7, 4),
+    }
+    label_jitter = [-4, 0, 4]
+    for label_index, row in enumerate(plot_df.itertuples(index=False)):
+        x = float(row.spearman_surface_corr)
+        y = float(row.observed_mass_captured)
+        if str(row.city_name) in label_offsets:
+            dx, dy = label_offsets[str(row.city_name)]
+        else:
+            dx = 6 if x <= mean_spearman else -6
+            dy = 6 if y <= mean_mass else -6
+            dy += label_jitter[label_index % len(label_jitter)]
         ax.annotate(
             str(row.city_name),
-            (float(row.spearman_surface_corr), float(row.observed_mass_captured)),
+            (x, y),
             xytext=(dx, dy),
             textcoords="offset points",
-            fontsize=8.8,
+            fontsize=7.1,
             ha="left" if dx >= 0 else "right",
             va="bottom" if dy >= 0 else "top",
             color="#252525",
@@ -1292,7 +1300,7 @@ def plot_spatial_alignment_medium_summary(metrics: pd.DataFrame, output_path: Pa
                 "boxstyle": "round,pad=0.16",
                 "facecolor": "white",
                 "edgecolor": "none",
-                "alpha": 0.82,
+                "alpha": 0.72,
             },
         )
 
@@ -1338,7 +1346,7 @@ def plot_spatial_alignment_medium_summary(metrics: pd.DataFrame, output_path: Pa
     fig.text(
         0.02,
         0.01,
-        "Supplemental RF full-city diagnostic at 300 m smoothing. Points summarize broad spatial placement, not exact-cell retrieval.",
+        "All row RF spatial analysis at 300 m smoothing. Points summarize broad alignment, not retrieval at the 30 m cell scale.",
         fontsize=9.0,
         color="#4a4a4a",
     )
@@ -1367,19 +1375,19 @@ def plot_selected_spatial_alignment_map_contrast(
     ]
 
     crop_specs = [
-        ("Observed smoothed hotspot surface", (0.015, 0.180)),
-        ("Predicted smoothed risk surface", (0.205, 0.375)),
-        ("Top-region overlap", (0.800, 0.985)),
+        ("Observed smoothed hotspot surface", (0.005, 0.185)),
+        ("Predicted smoothed risk surface", (0.200, 0.380)),
+        ("Top-region overlap", (0.795, 0.995)),
     ]
 
-    fig, axes = plt.subplots(2, 3, figsize=(11.2, 6.4), dpi=240)
+    fig, axes = plt.subplots(2, 3, figsize=(13.8, 10.8), dpi=240)
     for row_index, (city_name, image_path, metric_row) in enumerate(rows):
         if not image_path.exists():
             raise FileNotFoundError(image_path)
         image = plt.imread(image_path)
         height, width = image.shape[:2]
-        y0 = int(height * 0.115)
-        y1 = int(height * 0.705)
+        y0 = int(height * 0.105)
+        y1 = int(height * 0.815)
         if width < 1000:
             crop_specs = [
                 ("Observed smoothed hotspot surface", (0.00, 0.333)),
@@ -1391,13 +1399,14 @@ def plot_selected_spatial_alignment_map_contrast(
             axis = axes[row_index, col_index]
             x0 = int(width * x0_frac)
             x1 = int(width * x1_frac)
-            axis.imshow(image[y0:y1, x0:x1])
+            axis.imshow(image[y0:y1, x0:x1], aspect="equal")
+            axis.set_anchor("C")
             axis.set_xticks([])
             axis.set_yticks([])
             for spine in axis.spines.values():
                 spine.set_visible(False)
             if row_index == 0:
-                axis.set_title(panel_title, fontsize=8.8, fontweight="bold", pad=4)
+                axis.set_title(panel_title, fontsize=9.6, fontweight="bold", pad=4)
 
         row_y = 0.925 if row_index == 0 else 0.485
         fig.text(
@@ -1408,7 +1417,7 @@ def plot_selected_spatial_alignment_map_contrast(
                 f"mass {float(metric_row.observed_mass_captured):.2f}, "
                 f"overlap {float(metric_row.top_region_overlap_fraction):.2f}"
             ),
-            fontsize=9.0,
+            fontsize=9.4,
             fontweight="bold",
             ha="left",
             va="top",
@@ -1418,13 +1427,13 @@ def plot_selected_spatial_alignment_map_contrast(
         0.01,
         0.018,
         (
-            "Selected 300 m smoothing contrast from held-out random-forest full-city spatial diagnostics. "
-            "Overlap colors: gray = neither, orange = observed only, blue = predicted only, green = overlap."
+            "Selected 300 m smoothing contrast. Nashville shows high alignment; San Francisco has coherent predicted "
+            "risk with weak observed overlap. Colors: gray = neither, orange = observed only, blue = predicted only, green = overlap."
         ),
-        fontsize=7.7,
+        fontsize=7.6,
         color="#4a4a4a",
     )
-    fig.subplots_adjust(left=0.015, right=0.995, top=0.88, bottom=0.075, hspace=0.18, wspace=0.02)
+    fig.subplots_adjust(left=0.012, right=0.998, top=0.90, bottom=0.065, hspace=0.12, wspace=0.006)
     fig.savefig(output_path, dpi=240, bbox_inches="tight", pad_inches=0.03)
     plt.close(fig)
 
@@ -1440,7 +1449,7 @@ def _plot_signal_panel(
     *,
     annotate_points: bool = False,
 ) -> None:
-    """Draw one within-city versus city-held-out signal panel."""
+    """Draw one same city versus held out city signal panel."""
 
     for climate_key, climate_df in data.groupby("climate_group", sort=False):
         label = _format_climate_group(str(climate_key))
@@ -1658,7 +1667,7 @@ def plot_city_signal_transfer_relationship(comparison: pd.DataFrame, output_path
         "pr_auc_rf",
         "RF City Ranking Shifts",
         "Within-City RF Hotspot F1",
-        "City-Held-Out RF PR AUC",
+        "Held Out City RF AP",
     )
     _plot_signal_panel(
         axes[1],
@@ -1667,7 +1676,7 @@ def plot_city_signal_transfer_relationship(comparison: pd.DataFrame, output_path
         "recall_at_top_10pct_rf",
         "Retrieval Signal Shifts",
         "Within-City Hotspot Recall",
-        "City-Held-Out RF Recall @ Top 10%",
+        "Held Out City RF Recall @ Top 10%",
     )
     handles = [
         Line2D(
@@ -1694,7 +1703,7 @@ def plot_city_signal_transfer_relationship_labeled(
 ) -> None:
     """Write a labeled Figure 5 variant with city names on both panels."""
 
-    fig, axes = plt.subplots(1, 2, figsize=(13.6, 6.7), dpi=240)
+    fig, axes = plt.subplots(1, 2, figsize=(14.4, 7.3), dpi=240)
     _plot_signal_panel(
         axes[0],
         comparison,
@@ -1702,7 +1711,7 @@ def plot_city_signal_transfer_relationship_labeled(
         "pr_auc_rf",
         "RF City Ranking Shifts",
         "Within-City RF Hotspot F1",
-        "City-Held-Out RF PR AUC",
+        "Held Out City RF AP",
         annotate_points=True,
     )
     _plot_signal_panel(
@@ -1712,7 +1721,7 @@ def plot_city_signal_transfer_relationship_labeled(
         "recall_at_top_10pct_rf",
         "Retrieval Signal Shifts",
         "Within-City Hotspot Recall",
-        "City-Held-Out RF Recall @ Top 10%",
+        "Held Out City RF Recall @ Top 10%",
         annotate_points=True,
     )
     handles = [
@@ -1729,7 +1738,7 @@ def plot_city_signal_transfer_relationship_labeled(
         for label, color in CLIMATE_COLORS.items()
     ]
     fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=10.5)
-    fig.subplots_adjust(left=0.075, right=0.992, top=0.92, bottom=0.13, wspace=0.23)
+    fig.subplots_adjust(left=0.072, right=0.992, top=0.92, bottom=0.125, wspace=0.23)
     fig.savefig(output_path, dpi=240, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
 
@@ -1781,7 +1790,13 @@ def plot_denver_heldout_map_focus(map_points: pd.DataFrame, output_path: Path) -
     city_df["map_y"] = city_df["centroid_lat"]
     marker_size = float(min(12.0, max(5.0, 42000.0 / max(1, len(city_df)))))
 
-    fig, axes = plt.subplots(1, 3, figsize=(14.5, 6.1), dpi=260)
+    fig = plt.figure(figsize=(11.2, 8.3), dpi=260)
+    grid = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.04])
+    axes = [
+        fig.add_subplot(grid[0, 0]),
+        fig.add_subplot(grid[0, 1]),
+        fig.add_subplot(grid[1, :]),
+    ]
     neutral = "#cfcfcf"
     predicted_color = "#c64a32"
     observed_color = "#6f1d1b"
@@ -1862,8 +1877,8 @@ def plot_denver_heldout_map_focus(map_points: pd.DataFrame, output_path: Path) -
             label="Other cells",
         ),
     ]
-    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=10.5)
-    fig.subplots_adjust(left=0.01, right=0.995, top=0.91, bottom=0.14, wspace=0.035)
+    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=10.0)
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.94, bottom=0.105, hspace=0.19, wspace=0.04)
     fig.savefig(output_path, dpi=260, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
 

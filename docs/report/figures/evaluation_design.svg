@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
-  <title id="title">City-held-out evaluation design</title>
+  <title id="title">Held-out-city evaluation design</title>
   <desc id="desc">Diagram showing 30 cities partitioned into 5 folds, with 24 training cities and 6 held-out cities per fold, and training-only preprocessing and tuning.</desc>
   <defs>
     <style>
@@ -21,7 +21,7 @@
   <rect class="bg" x="0" y="0" width="1200" height="480" />
 
   <rect class="accent" x="40" y="50" width="280" height="170" />
-  <text class="stage" x="180" y="92" text-anchor="middle">Benchmark Population</text>
+  <text class="stage" x="180" y="92" text-anchor="middle">Study Panel</text>
   <text class="body" x="180" y="128" text-anchor="middle">30 cities total</text>
   <text class="body" x="180" y="156" text-anchor="middle">10 hot_arid</text>
   <text class="body" x="180" y="184" text-anchor="middle">10 hot_humid</text>
@@ -71,5 +71,5 @@
   <path class="arrow" d="M740 135 L790 135" />
   <path class="arrow" d="M600 230 L600 285" />
 
-  <text class="small" x="600" y="450" text-anchor="middle">Primary metric: PR AUC. Supporting metric: recall among the top 10% highest-risk held-out cells.</text>
+  <text class="small" x="600" y="450" text-anchor="middle">Primary metric: AP. Supporting metric: recall among the top 10% highest-risk held-out cells.</text>
 </svg>

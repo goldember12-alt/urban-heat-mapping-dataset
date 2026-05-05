@@ -1,4 +1,0 @@
-model_name,outer_fold,city_id,city_name,climate_group,row_count,positive_count,prevalence,pr_auc,recall_at_top_10pct,climate_group_median_pr_auc,abs_delta_from_climate_median_pr_auc,selection_reason,selection_rule,fold_table_outer_fold
-random_forest,1,6,Denver,hot_arid,5000,500,0.1,0.1508082663439688,0.2,0.14588872432413186,0.004919542019836937,climate_group_median_nearest;denver_already_selected,representative_with_denver,1
-random_forest,3,14,New Orleans,hot_humid,5000,500,0.1,0.178069988699618,0.184,0.17990300080302454,0.001833012103406556,climate_group_median_nearest,representative_with_denver,3
-random_forest,4,29,Detroit,mild_cool,5000,500,0.1,0.1667845786540674,0.19,0.15976503647726586,0.007019542176801535,climate_group_median_nearest,representative_with_denver,4

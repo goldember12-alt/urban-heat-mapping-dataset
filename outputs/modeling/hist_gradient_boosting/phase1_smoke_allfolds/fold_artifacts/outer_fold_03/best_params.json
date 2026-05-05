@@ -1,7 +1,0 @@
-{
-  "model_name": "hist_gradient_boosting",
-  "outer_fold": 3,
-  "inner_cv_splits": 3,
-  "best_inner_cv_average_precision": 0.14362903515051206,
-  "best_params_json": "{\"model__l2_regularization\": 0.0, \"model__learning_rate\": 0.05, \"model__max_leaf_nodes\": 15, \"model__min_samples_leaf\": 20}"
-}

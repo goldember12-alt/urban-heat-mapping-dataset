@@ -1,4 +1,0 @@
-city_id,city_name,sampling_strategy,full_row_count,full_positive_count,sampled_row_count,sampled_positive_count,full_positive_rate,sampled_positive_rate
-10,Reno,target_rate_stratified,475828,47583,20000,2000,0.10000042031994755,0.1
-19,Charlotte,target_rate_stratified,1896996,189703,20000,2000,0.10000179230741657,0.1
-29,Detroit,target_rate_stratified,3702849,370291,20000,2000,0.10000164738016593,0.1

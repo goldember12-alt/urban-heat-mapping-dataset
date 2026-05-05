@@ -1,8 +1,8 @@
 Model / baseline,Predictors,Preprocessing,Tuning grid or rule,Scoring,Grouped CV?
-No-skill / prevalence reference,None,None,Reference PR AUC and top-decile recall equal to the 10% target rate.,PR AUC; R@10,Reference only
-Global-mean baseline,None,Training-city target mean,Predict the training-city hotspot prevalence for all held-out rows.,PR AUC; R@10,Outer city folds only
-Climate-only baseline,climate_group,Training-city category means,Predict training-city hotspot prevalence by climate group.,PR AUC; R@10,Outer city folds only
-Land-cover-only baseline,land_cover_class,Training-city category means,Predict training-city hotspot prevalence by land-cover class.,PR AUC; R@10,Outer city folds only
-Impervious-only baseline,impervious_pct,Training-city decile bins,Predict training-city hotspot prevalence by imperviousness bin.,PR AUC; R@10,Outer city folds only
-Logistic SAGA 5k,"impervious_pct, land_cover_class, elevation_m, dist_to_water_m, ndvi_median_may_aug, climate_group","Training-only imputation, numeric scaling, and categorical one-hot encoding inside sklearn Pipeline","C = 0.01, 0.1, 1.0, 10.0; l1_ratio = 0.0, 0.2, 0.5, 0.8, 1.0",Inner-CV AP; held-out PR AUC; R@10,"Yes, grouped outer folds and grouped inner CV"
-Random forest 5k,Same six non-thermal predictors as logistic SAGA,Training-only imputation and categorical one-hot encoding inside sklearn Pipeline,"n_estimators = 200, 300; max_depth = 10, 20; max_features = sqrt; min_samples_leaf = 1, 5",Inner-CV AP; held-out PR AUC; R@10,"Yes, grouped outer folds and grouped inner CV"
+No skill reference,None,None,Reference AP and top-decile recall equal to the 10% target rate.,AP; R@10,Reference only
+Global-mean baseline,None,Training-city target mean,Predict the training-city hotspot prevalence for all held-out rows.,AP; R@10,Outer city folds only
+Climate-only baseline,climate_group,Training-city category means,Predict training-city hotspot prevalence by climate group.,AP; R@10,Outer city folds only
+Land-cover-only baseline,land_cover_class,Training-city category means,Predict training-city hotspot prevalence by land-cover class.,AP; R@10,Outer city folds only
+Impervious-only baseline,impervious_pct,Training-city decile bins,Predict training-city hotspot prevalence by imperviousness bin.,AP; R@10,Outer city folds only
+Logistic SAGA 5k,"impervious_pct, land_cover_class, elevation_m, dist_to_water_m, ndvi_median_may_aug, climate_group","Training-only imputation, numeric scaling, and categorical one-hot encoding inside sklearn Pipeline","C = 0.01, 0.1, 1.0, 10.0; l1_ratio = 0.0, 0.2, 0.5, 0.8, 1.0",Inner-CV AP; held-out AP; R@10,"Yes, grouped outer folds and grouped inner CV"
+Random forest 5k,Same six non-thermal predictors as logistic SAGA,Training-only imputation and categorical one-hot encoding inside sklearn Pipeline,"n_estimators = 200, 300; max_depth = 10, 20; max_features = sqrt; min_samples_leaf = 1, 5",Inner-CV AP; held-out AP; R@10,"Yes, grouped outer folds and grouped inner CV"

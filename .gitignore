@@ -30,6 +30,10 @@ notebooks/.ipynb_checkpoints/
 .DS_Store
 Thumbs.db
 
+# Local-only repo helper files
+AGENTS.md
+bootstrap.ps1
+
 # Project outputs
 data_raw/
 data_processed/
@@ -59,3 +63,7 @@ src/__pycache__/
 tests/__pycache__/
 *.pyc
 *.bak.codex
+
+# Generated modeling outputs
+outputs/modeling/
+

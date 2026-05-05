@@ -871,6 +871,11 @@ def plot_within_city_all_cities_gap_patterns(gap_by_city_df: pd.DataFrame, outpu
         "hot_humid": "#2f6c8f",
         "mild_cool": "#6b7a3a",
     }
+    climate_labels = {
+        "hot_arid": "Hot arid",
+        "hot_humid": "Hot humid",
+        "mild_cool": "Mild cool",
+    }
     model_markers = {
         "logistic_saga": "o",
         "random_forest": "s",
@@ -894,11 +899,95 @@ def plot_within_city_all_cities_gap_patterns(gap_by_city_df: pd.DataFrame, outpu
             label=model_labels.get(str(model_name), str(model_name)),
         )
 
+    trend_df = ordered.loc[
+        ordered["model_name"].isin(model_markers)
+        & ordered["pr_auc_gap"].notna()
+        & ordered["recall_gap"].notna()
+    ].copy()
+    if len(trend_df) >= 2:
+        x_values = trend_df["pr_auc_gap"].astype(float).to_numpy()
+        y_values = trend_df["recall_gap"].astype(float).to_numpy()
+        slope, intercept = np.polyfit(x_values, y_values, deg=1)
+        x_line = np.linspace(float(x_values.min()), float(x_values.max()), 100)
+        y_line = slope * x_line + intercept
+        ax.plot(
+            x_line,
+            y_line,
+            color="#4a4a4a",
+            linewidth=1.4,
+            alpha=0.55,
+            zorder=2,
+        )
+
+    labeled = ordered.loc[ordered["model_name"].isin(model_markers)].copy()
+    if not labeled.empty:
+        labeled["_gap_label_score"] = labeled["pr_auc_gap"].astype(float) + labeled["recall_gap"].astype(float)
+        labeled["_model_short"] = labeled["model_name"].map(
+            {"logistic_saga": "logit", "random_forest": "RF"}
+        )
+        top_gap_rows = labeled.sort_values(
+            ["_gap_label_score", "pr_auc_gap", "recall_gap", "city_name", "model_name"],
+            ascending=[False, False, False, True, True],
+            kind="mergesort",
+        ).head(5)
+        named_rows = labeled.loc[
+            (
+                labeled["city_name"].eq("Nashville")
+                & labeled["model_name"].eq("random_forest")
+            )
+            | (
+                labeled["city_name"].eq("San Francisco")
+                & labeled["model_name"].eq("random_forest")
+            )
+            | (
+                labeled["city_name"].isin(["Portland", "Detroit"])
+                & labeled["model_name"].eq("logistic_saga")
+            )
+        ]
+        label_rows = (
+            pd.concat([top_gap_rows, named_rows], ignore_index=True)
+            .drop_duplicates(["city_name", "model_name"], keep="first")
+            .reset_index(drop=True)
+        )
+        label_offsets_by_key = {
+            ("Reno", "random_forest"): (7, 7),
+            ("El Paso", "random_forest"): (-8, 8),
+            ("San Jose", "random_forest"): (7, 13),
+            ("Los Angeles", "random_forest"): (10, -13),
+            ("Las Vegas", "logistic_saga"): (-8, -8),
+            ("Nashville", "random_forest"): (7, 10),
+            ("San Francisco", "random_forest"): (7, -12),
+            ("Portland", "logistic_saga"): (-10, 10),
+            ("Detroit", "logistic_saga"): (8, 9),
+        }
+        for row in label_rows.to_dict("records"):
+            key = (str(row["city_name"]), str(row["model_name"]))
+            dx, dy = label_offsets_by_key.get(key, (7, 7))
+            ax.annotate(
+                f"{row['city_name']} {row['_model_short']}",
+                (float(row["pr_auc_gap"]), float(row["recall_gap"])),
+                xytext=(dx, dy),
+                textcoords="offset points",
+                fontsize=7.5,
+                ha="left" if dx >= 0 else "right",
+                va="bottom" if dy >= 0 else "top",
+                color="#2f2618",
+                bbox={
+                    "boxstyle": "round,pad=0.16",
+                    "facecolor": "white",
+                    "edgecolor": "none",
+                    "alpha": 0.82,
+                },
+                zorder=6,
+            )
+
     ax.axvline(0.0, color="#999999", linewidth=1, linestyle="--")
     ax.axhline(0.0, color="#999999", linewidth=1, linestyle="--")
-    ax.set_xlabel("Within-City PR AUC Minus Retained Cross-City PR AUC")
-    ax.set_ylabel("Within-City Recall@Top10 Minus Retained Cross-City Recall@Top10")
-    ax.set_title("Supplemental Within-City vs Cross-City Gap Patterns")
+    ax.set_xlim(min(-0.065, float(ordered["pr_auc_gap"].min()) - 0.02), float(ordered["pr_auc_gap"].max()) + 0.035)
+    ax.set_ylim(min(-0.065, float(ordered["recall_gap"].min()) - 0.02), float(ordered["recall_gap"].max()) + 0.03)
+    ax.set_xlabel("Same city AP minus held out city AP")
+    ax.set_ylabel("Same city recall@top10 minus held out city recall@top10")
+    ax.set_title("Supplemental Same City vs Held Out City Gap Patterns")
     ax.grid(alpha=0.2)
 
     model_handles = [
@@ -923,7 +1012,7 @@ def plot_within_city_all_cities_gap_patterns(gap_by_city_df: pd.DataFrame, outpu
             markerfacecolor=color,
             markeredgecolor=color,
             markersize=8,
-            label=climate_group,
+            label=climate_labels.get(climate_group, climate_group),
         )
         for climate_group, color in climate_colors.items()
     ]
@@ -1679,7 +1768,7 @@ def generate_within_city_all_cities_supplemental_artifacts(
             },
         ),
         "",
-        "## Largest Positive Within-vs-Cross PR AUC Gaps",
+        "## Largest Positive Same City Versus Held Out City AP Gaps",
         "",
         _dataframe_to_markdown(
             largest_positive_gap_df[
@@ -2343,7 +2432,7 @@ def plot_feature_importance_summary(
     axes[1].barh(rf_y, rf_ordered["mean_pr_auc_drop"], color="#9b3d2f")
     axes[1].set_yticks(rf_y)
     axes[1].set_yticklabels(rf_ordered["feature_name"], fontsize=9)
-    axes[1].set_xlabel("Mean Held-Out PR AUC Drop")
+    axes[1].set_xlabel("Mean Held Out AP Drop")
     axes[1].set_title("Random-Forest Permutation Importance")
     axes[1].grid(axis="x", alpha=0.25)
 

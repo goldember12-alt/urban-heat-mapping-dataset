@@ -1,3 +1,0 @@
-best_params_signature,fold_count,mean_best_inner_cv_average_precision,outer_fold_min
-"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 300}",3,0.15897684625149802,1
-"{""model__max_depth"": 10, ""model__max_features"": ""sqrt"", ""model__min_samples_leaf"": 5, ""model__n_estimators"": 200}",2,0.1494030411718167,0

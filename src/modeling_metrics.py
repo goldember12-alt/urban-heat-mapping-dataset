@@ -11,7 +11,7 @@ from src.modeling_config import DEFAULT_CALIBRATION_BINS, DEFAULT_TOP_FRACTION, 
 
 
 def safe_average_precision(y_true: Sequence[int], y_score: Sequence[float]) -> float:
-    """Return PR AUC, or NaN when the target has fewer than two classes."""
+    """Return average precision, or NaN when the target has fewer than two classes."""
     y_true_array = np.asarray(y_true, dtype=np.int8)
     y_score_array = np.asarray(y_score, dtype=np.float64)
     if y_true_array.size == 0 or np.unique(y_true_array).size < 2:

@@ -17,9 +17,8 @@ The `docs/report/` folder contains the report source, rendered PDF, report-ready
 
 ## Internal And Development Notes
 
-The following files are maintained for development continuity, agent instructions, QA history, or repo-polish planning. They are not recommended as public entry points:
+The following files are maintained for development continuity, QA history, or repo-polish planning. They are not recommended as public entry points:
 
-- `../AGENTS.md`
 - [`chat_handoff.md`](chat_handoff.md)
 - [`repo_forward_facing_polish_plan.md`](repo_forward_facing_polish_plan.md)
 - [`internal/report_development/final_report_planning.md`](internal/report_development/final_report_planning.md)

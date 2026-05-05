@@ -244,7 +244,7 @@ def _build_setup_schematic(png_path: Path, svg_path: Path, data: PresentationDat
     ax.text(0.372, 0.280, "Held Out", fontsize=11.0, color=ACCENT_DARK, va="center")
 
     _panel(ax, 0.530, 0.110, 0.435, 0.445, fill=WHITE, edge=ACCENT_DARK, linewidth=1.8)
-    ax.text(0.560, 0.485, "City-Held-Out Transfer", fontsize=16.4, fontweight="bold", color=ACCENT_DARK)
+    ax.text(0.560, 0.485, "Held-Out-City Transfer", fontsize=16.4, fontweight="bold", color=ACCENT_DARK)
     ax.text(0.560, 0.433, f"{data.outer_fold_count} outer folds; {data.held_out_cities_per_fold} unseen cities per fold.", fontsize=11.5, color=MUTED)
     for fold_idx in range(data.outer_fold_count):
         held = set(range(fold_idx * data.held_out_cities_per_fold, (fold_idx + 1) * data.held_out_cities_per_fold))
@@ -402,8 +402,8 @@ def _plot_partner_bars(ax, data: PresentationData) -> None:
 
 def _plot_transfer_dots(ax, data: PresentationData) -> None:
     metrics = [
-        ("Pooled\nPR AUC", data.logistic_5k.pooled_pr_auc, data.rf_frontier.pooled_pr_auc),
-        ("Mean City\nPR AUC", data.logistic_5k.mean_city_pr_auc, data.rf_frontier.mean_city_pr_auc),
+        ("Pooled\nAP", data.logistic_5k.pooled_pr_auc, data.rf_frontier.pooled_pr_auc),
+        ("Mean City\nAP", data.logistic_5k.mean_city_pr_auc, data.rf_frontier.mean_city_pr_auc),
         ("Recall\n@ Top 10%", data.logistic_5k.pooled_recall_at_top_10pct, data.rf_frontier.pooled_recall_at_top_10pct),
     ]
     y_positions = [2.1, 1.05, 0.0]
@@ -418,7 +418,7 @@ def _plot_transfer_dots(ax, data: PresentationData) -> None:
     ax.set_yticks(y_positions, [row[0] for row in metrics])
     ax.set_xticks([0.14, 0.16, 0.18, 0.20])
     ax.set_xlabel("Held-Out City Score", fontsize=11.4, color=MUTED, labelpad=8)
-    ax.set_title("City-Held-Out Transfer", loc="left", fontsize=15.0, fontweight="bold", color=ACCENT_DARK, pad=26)
+    ax.set_title("Held-Out-City Transfer", loc="left", fontsize=15.0, fontweight="bold", color=ACCENT_DARK, pad=26)
     ax.text(
         0.0,
         1.030,
@@ -496,7 +496,7 @@ def _build_city_signal_transfer(png_path: Path, svg_path: Path, df: pd.DataFrame
         "pr_auc_rf",
         "RF City Ranking Shifts",
         "Within-City RF Hotspot F1",
-        "City-Held-Out RF PR AUC",
+        "Held-Out-City RF AP",
     )
     _scatter_with_fit(
         axes[1],
@@ -505,7 +505,7 @@ def _build_city_signal_transfer(png_path: Path, svg_path: Path, df: pd.DataFrame
         "recall_at_top_10pct_rf",
         "Retrieval Signal Shifts",
         "Within-City Hotspot Recall",
-        "City-Held-Out RF Recall @ Top 10%",
+        "Held-Out-City RF Recall @ Top 10%",
     )
 
     for ax in axes:
@@ -578,9 +578,9 @@ def _build_comparison_table(png_path: Path, svg_path: Path, data: PresentationDa
         ("Within-City Hotspot Precision", f"{data.partner_logistic.class_1_precision_mean:.3f}", f"{data.partner_rf.class_1_precision_mean:.3f}"),
         ("Within-City Hotspot Recall", f"{data.partner_logistic.class_1_recall_mean:.3f}", f"{data.partner_rf.class_1_recall_mean:.3f}"),
         ("Within-City Hotspot F1", f"{data.partner_logistic.class_1_f1_mean:.3f}", f"{data.partner_rf.class_1_f1_mean:.3f}"),
-        ("City-Held-Out Pooled PR AUC", f"{data.logistic_5k.pooled_pr_auc:.4f}", f"{data.rf_frontier.pooled_pr_auc:.4f}"),
-        ("City-Held-Out Mean City PR AUC", f"{data.logistic_5k.mean_city_pr_auc:.4f}", f"{data.rf_frontier.mean_city_pr_auc:.4f}"),
-        ("City-Held-Out Recall @ Top 10%", f"{data.logistic_5k.pooled_recall_at_top_10pct:.4f}", f"{data.rf_frontier.pooled_recall_at_top_10pct:.4f}"),
+        ("Held-Out-City Pooled AP", f"{data.logistic_5k.pooled_pr_auc:.4f}", f"{data.rf_frontier.pooled_pr_auc:.4f}"),
+        ("Held-Out-City Mean City AP", f"{data.logistic_5k.mean_city_pr_auc:.4f}", f"{data.rf_frontier.mean_city_pr_auc:.4f}"),
+        ("Held-Out-City Recall @ Top 10%", f"{data.logistic_5k.pooled_recall_at_top_10pct:.4f}", f"{data.rf_frontier.pooled_recall_at_top_10pct:.4f}"),
     ]
     y = 0.675
     row_h = 0.100

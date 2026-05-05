@@ -8,10 +8,10 @@ centroid_lat,Cell centroid latitude in WGS84.,Mapping metadata,No
 impervious_pct,NLCD impervious percentage for the cell.,Predictor,Yes
 land_cover_class,NLCD land-cover class code for the cell.,Predictor / water filter,Yes
 elevation_m,DEM-derived elevation in meters.,Predictor,Yes
-dist_to_water_m,Distance from the cell to the nearest hydro feature in meters.,Predictor,Yes
+dist_to_water_m,Distance from the cell to the nearest selected water feature in meters.,Predictor,Yes
 ndvi_median_may_aug,Median May-August NDVI derived from AppEEARS MODIS/Terra MOD13A1.061 inputs.,Predictor,Yes
-lst_median_may_aug,Median May-August 2023 daytime land surface temperature derived from ECOSTRESS/AppEEARS inputs.,Outcome ingredient,No
-n_valid_ecostress_passes,Number of valid ECOSTRESS observations contributing to the cell-level LST summary.,Quality filter / support field,No
+lst_median_may_aug,Median May-August 2023 daytime land surface temperature derived from ECOSTRESS/AppEEARS inputs.,Outcome source,No
+n_valid_ecostress_passes,Number of valid ECOSTRESS observations contributing to the cell-level LST summary.,Observation-count filter,No
 hotspot_10pct,Binary indicator for whether the cell falls in the within-city top 10% of valid LST values.,Target,Target only
 tree_cover_proxy_pct_270m,Share of nearby 30 m cells within an approximately 270 m neighborhood in NLCD forest classes 41/42/43.,Supplemental neighborhood-context feature,No
 vegetated_cover_proxy_pct_270m,Share of nearby 30 m cells within an approximately 270 m neighborhood in selected NLCD vegetated classes.,Supplemental neighborhood-context feature,No

@@ -1,4 +1,4 @@
-Outer fold,Train rows,Test rows,Pos.,Test prev.,Logit PR AUC,RF PR AUC,RF - Logit PR AUC,Logit R@10,RF R@10,RF - Logit R@10
+Outer fold,Train rows,Test rows,Pos.,Test prev.,Logit AP,RF AP,RF - Logit AP,Logit R@10,RF R@10,RF - Logit R@10
 0,120000,30000,3000,0.1,0.161,0.1773,0.0163,0.217,0.2217,0.0047
 1,120000,30000,3000,0.1,0.2006,0.1598,-0.0408,0.2563,0.2087,-0.0477
 2,120000,30000,3000,0.1,0.1436,0.1301,-0.0135,0.1777,0.1443,-0.0333

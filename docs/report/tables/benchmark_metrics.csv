@@ -1,5 +1,5 @@
-Model checkpoint,Rows per city,Pooled PR AUC,Mean city PR AUC,Recall at top 10%,Runtime (min),Report note
-No-skill / prevalence reference,5k sampled,0.1,0.1,0.1,,Random ranking reference for a 10% hotspot target.
+Model checkpoint,Rows per city,Pooled AP,Mean city AP,Recall at top 10%,Runtime (min),Report note
+No skill reference,5k sampled,0.1,0.1,0.1,,Random ranking reference for a 10% hotspot target.
 Global mean,5k sampled,0.0982,0.0997,0.0971,,Training-city prevalence assigned to held-out rows.
 Climate only,5k sampled,0.0982,0.0997,0.0975,,Training-city prevalence by climate group.
 Impervious only,5k sampled,0.1351,0.1519,0.1858,,Training-city prevalence by imperviousness bin.

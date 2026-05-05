@@ -1,4 +1,0 @@
-climate_group,city_count,mean_partner_logistic_class1_recall,mean_partner_rf_class1_recall,mean_partner_recall_delta,mean_partner_f1_delta,mean_repo_pr_auc_delta,mean_repo_recall_delta
-hot_arid,10,0.1,0.5,0.4,0.47000000000000003,0.03363298054247231,0.07619999999999999
-hot_humid,10,0.064,0.192,0.128,0.185,-0.012289794246153571,-0.016399999999999963
-mild_cool,10,0.054000000000000006,0.33799999999999997,0.284,0.364,-0.028120284676048664,-0.02799999999999997

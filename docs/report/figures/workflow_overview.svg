@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
   <title id="title">Cross-city urban heat workflow overview</title>
-  <desc id="desc">Schematic showing study areas and grids, remote sensing and support layers, per-city feature assembly, final dataset creation, auditing and folds, and cross-city benchmarking and transfer packaging.</desc>
+  <desc id="desc">Schematic showing study areas and grids, remote sensing and support layers, per-city feature assembly, final dataset creation, auditing and folds, and held-out-city model evaluation.</desc>
   <defs>
     <style>
       .bg { fill: #fbf8f2; }
@@ -52,16 +52,16 @@
   <text class="body" x="280" y="449" text-anchor="middle">one row per 30 m cell per city</text>
 
   <rect class="accent" x="470" y="320" width="280" height="150" />
-  <text class="stage" x="610" y="360" text-anchor="middle">Audit And Split Contract</text>
-  <text class="body" x="610" y="395" text-anchor="middle">Required columns and missingness audit</text>
-  <text class="body" x="610" y="422" text-anchor="middle">Binary target validation</text>
-  <text class="body" x="610" y="449" text-anchor="middle">Deterministic city-held-out folds</text>
+  <text class="stage" x="610" y="360" text-anchor="middle">Audit and Fold Assignment</text>
+  <text class="body" x="610" y="395" text-anchor="middle">Column and missingness checks</text>
+  <text class="body" x="610" y="422" text-anchor="middle">Hotspot-label validation</text>
+  <text class="body" x="610" y="449" text-anchor="middle">Deterministic held-out-city folds</text>
 
   <rect class="box" x="810" y="320" width="320" height="150" />
-  <text class="stage" x="970" y="360" text-anchor="middle">Modeling And Delivery</text>
-  <text class="body" x="970" y="395" text-anchor="middle">Leakage-safe cross-city benchmarking</text>
-  <text class="body" x="970" y="422" text-anchor="middle">Held-out prediction tables and maps</text>
-  <text class="body" x="970" y="449" text-anchor="middle">Final-train transfer package and inference</text>
+  <text class="stage" x="970" y="360" text-anchor="middle">Model Evaluation</text>
+  <text class="body" x="970" y="395" text-anchor="middle">Training-city preprocessing</text>
+  <text class="body" x="970" y="422" text-anchor="middle">Held-out-city metrics</text>
+  <text class="body" x="970" y="449" text-anchor="middle">Predictions and maps</text>
 
   <path class="arrow" d="M250 145 L280 145" />
   <path class="arrow" d="M490 145 L520 145" />
@@ -70,5 +70,5 @@
   <path class="arrow" d="M410 395 L470 395" />
   <path class="arrow" d="M750 395 L810 395" />
 
-  <text class="small" x="600" y="502" text-anchor="middle">Canonical benchmark story: data construction leads to a city-held-out transfer test, not a same-city interpolation exercise.</text>
+  <text class="small" x="600" y="502" text-anchor="middle">Data construction leads to held-out-city transfer evaluation, not only same-city interpolation.</text>
 </svg>

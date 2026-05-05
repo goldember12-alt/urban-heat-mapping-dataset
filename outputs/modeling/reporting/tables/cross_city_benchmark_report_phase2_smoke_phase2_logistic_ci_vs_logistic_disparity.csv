@@ -1,3 +1,0 @@
-metric,baseline_climate_group_range,interaction_climate_group_range,range_delta_interaction_minus_baseline
-pr_auc,0.08046084062303996,0.06118525815699455,-0.01927558246604541
-recall_at_top_10pct,0.12079999999999998,0.1036,-0.01719999999999998

@@ -1,5 +1,0 @@
-comparison,n_cities,pearson_correlation
-logistic_class1_recall_vs_repo_recall_top10,30,0.12841753829466873
-rf_class1_recall_vs_repo_recall_top10,30,0.03323104595933764
-rf_minus_logistic_class1_recall_delta_vs_repo_recall_delta,30,0.2035780829213248
-rf_minus_logistic_class1_f1_delta_vs_repo_pr_auc_delta,30,0.02565257575745753

@@ -1,5 +1,547 @@
 # Chat Handoff - Urban Heat Mapping Dataset Project
 
+### 2026-05-05 - Checkpoint: Root Bootstrap And Agent File Untracking
+
+- Date / checkpoint:
+  - 2026-05-05 requested cleanup of root repo bootstrap/agent files plus a conservative docs-removal pass.
+- Change made:
+  - Restored local copies of `AGENTS.md` and `bootstrap.ps1` after clarifying they should remain on disk.
+  - Added `.gitignore` entries so `AGENTS.md` and `bootstrap.ps1` are local-only once removed from the Git index.
+  - Removed the stale `../AGENTS.md` public-navigation reference from `docs/README.md`.
+  - Updated `docs/internal_docs_triage.md` to mark `AGENTS.md` as targeted for repository removal rather than public retention.
+- Verification status:
+  - Confirmed both root files exist locally after restoration.
+  - Attempted index-only removal with `git rm --cached AGENTS.md bootstrap.ps1`, but Git could not create `.git/index.lock` in the OneDrive-backed checkout: `Permission denied`.
+  - Scanned `docs/` references and classified likely removable artifact documents without deleting additional docs in this pass.
+- Manual verification status:
+  - No tests or report render were run because this was a repository-file cleanup and documentation triage pass only.
+
+### 2026-05-04 - Checkpoint: Reproducibility Note Page Break
+
+- Date / checkpoint:
+  - 2026-05-04 targeted page break before the Data and Code Availability / Reproducibility Note.
+- Change made:
+  - Added `\newpage` immediately before `### Data and Code Availability / Reproducibility Note` in `docs/report/draft.md`.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the page break is immediately before the reproducibility note heading.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `AAAE2971E98E33725FA8C4D62C6317E5EE45C4F2588712E9B42FA0D62FCDB99B`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this pagination-only tweak; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Appendix B Shortening
+
+- Date / checkpoint:
+  - 2026-05-04 targeted Appendix B replacement.
+- Change made:
+  - Replaced Appendix B in `docs/report/draft.md` with the shorter same-city modeling code note requested by the user.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed Appendix B now contains only the shortened repository/file paragraph and the sklearn preprocessing paragraph before the Data and Code Availability section.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `C198E88628F98ECBBDF69AD55CAB94220EFA3FB2DA9E291ABF66299127BEB313`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose replacement; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Appendix Table A2 Pagination Fix
+
+- Date / checkpoint:
+  - 2026-05-04 targeted Appendix Table A2 pagination fix.
+- Change made:
+  - Added a page break before Appendix Table A2 in `docs/report/draft.md` so its title and caption stay with the table.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed `\newpage` now appears immediately before `### Appendix Table A2. RF Minus Logistic Performance by Climate Group`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `96F784DA06003257ECB78882F61ED2DADA2E38806D25B13AC35E4FCA6B400978`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this pagination-only tweak; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Table 3 Pagination Fix
+
+- Date / checkpoint:
+  - 2026-05-04 targeted Table 3 pagination fix.
+- Change made:
+  - Added a page break before Table 3 in `docs/report/draft.md` so the Table 3 title and lead-in text move onto the same page as the table.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed `\newpage` now appears immediately before `### Table 3. Main Held-Out-City Model Metrics`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `FF4FAEE4D74178D6648C1DFEE55792E7CC85770A9B30613EDFEE2CE5E5D7B56C`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this pagination-only tweak; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Final Report Small Fixes And Appendix Polish
+
+- Date / checkpoint:
+  - 2026-05-04 targeted small-fix pass across captions, appendix text, Table 2 wording, and Appendix A2 spacing.
+- Change made:
+  - Fixed Section 5.5 subject agreement from `matches` to `match`.
+  - Fixed Section 6 future-work grammar to read `model families, cities, and smoothing scales`.
+  - Changed Table 2 header from `Hotspot prev.` to `Hotspot prevalence`.
+  - Merged the Figure 4 AP note into the Figure 4 caption paragraph and inserted a page break before Figure 4 so the figure and full caption stay together more cleanly.
+  - Replaced the Figure 6 caption wording with the diagnostic-example language.
+  - Shortened Appendix Figure A2 title to `Strong and Weak Spatial Alignment Examples`.
+  - Updated Appendix Figure A3 caption wording.
+  - Replaced Appendix B and the Data and Code Availability / Reproducibility Note with the revised prose, using code spans for `appendix_within_city_code.md` and `docs/report/archive/` to avoid the filename splitting awkwardly in the rendered PDF.
+  - Tightened the Appendix Figure A2 composite spacing in `src/report_artifacts.py` while preserving equal map aspect ratios, regenerated report artifacts, rerendered `docs/report/draft.pdf`, and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -u -m src.run_report_artifacts --project-root "."` passed.
+  - `py_compile src/report_artifacts.py` passed.
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source scans confirmed the requested replacement snippets are present and the stale phrases `underlying urban form matches`, `model families, cities, smoothing scales`, `operational targeting evidence`, `Selected Strong and Weak Spatial Alignment Map Contrast`, and `reference file is named` are absent.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `D598901314EFA501D07D36FF812A6A0BD0C39878F4D5B99DDD488F3347C15713`.
+- Manual verification status:
+  - Viewed regenerated `docs/report/figures/selected_spatial_alignment_map_contrast.png`; map aspect ratios are preserved and the vertical spacing between Nashville and San Francisco rows is tighter than before.
+
+### 2026-05-04 - Checkpoint: Section 7 Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of Section 7, Conclusion.
+- Change made:
+  - Replaced the body text for `docs/report/draft.md` Section 7 with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised conclusion opening, held-out-city spatial interpretation, and final local screening / transfer / spatial placement sentence are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `33709A1444D5D3E3D6EC8419ABA6C0FD382551B6073185F18ED307084DDD5E24`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose replacement; verification used successful render, source inspection, UTF-8 source check, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Section 6 Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of Section 6, Limitations and Future Work.
+- Change made:
+  - Replaced the body text for `docs/report/draft.md` Section 6 with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised limitations opening, sampled benchmark limitation, outcome limitation, external-validity note, same-city future work, transfer future work, and spatial/outcome future work are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `982FDAF946D557DB5A87E7B34A2E9A72D20BCE1795F4223BC4003C825F9C1029`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose replacement; verification used successful render, source inspection, UTF-8 source check, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Sections 5.4 and 5.5 Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of Results Sections 5.4 and 5.5.
+- Change made:
+  - Replaced the body text for `docs/report/draft.md` Sections 5.4, `Broad Spatial Placement`, and 5.5, `Predictive Interpretation`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised Denver example, Nashville/San Francisco spatial-placement interpretation, broader held-out-city interpretation, and predictive interpretation summary are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `5AC0516FF60FDE3F2E7A6277EBC25F1D98F0F114F419CC8A76A600BC92C385C5`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose replacement; verification used successful render, source inspection, UTF-8 source check, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Section 5.3 Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of Results Section 5.3.
+- Change made:
+  - Replaced the body text for `docs/report/draft.md` Section 5.3, `Transfer Heterogeneity and Signal Shift`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised Section 5.3 opening, Figure 5 interpretation, Appendix Figure A1 interpretation, Nashville/San Francisco interpretation, and city-to-city heterogeneity paragraph are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `D761BE1D60D41EF360D06EEE496C55A0D283980F51A6FEE48B01F919FF7328B0`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose replacement; verification used successful render, source inspection, UTF-8 source check, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Sections 5.1 and 5.2 Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of Results Sections 5.1 and 5.2.
+- Change made:
+  - Replaced the body text for `docs/report/draft.md` Sections 5.1, `Same-City Screening`, and 5.2, `Held-Out-City Transfer`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed Sections 5.1 and 5.2 contain the revised same-city interpretation, matched 5000-row comparison, runtime note, prioritization interpretation, and validation-contrast paragraph.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `04F2B580F22A6A4362FE855B246A7EA8F861AECECEF82B09488886D38E05E337`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose replacement; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Section 5.3 Appendix Figure A1 Interpretation
+
+- Date / checkpoint:
+  - 2026-05-04 targeted interpretation edit in Results Section 5.3 only.
+- Change made:
+  - Updated `docs/report/draft.md` Section 5.3 to explain why the Appendix Figure A1 AP-gap and recall-gap relationship is strong.
+  - Clarified that Reno random forest is the clearest outlier and that Reno also has the highest within-city RF hotspot F1 and within-city hotspot recall, so the large validation gap reflects unusually strong local learning that does not transfer with the same strength.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the change is contained in Section 5.3.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `FC454E2E1C43AFE0A2C02ABCACCD52318D595038BA998518FE9D61A1504B9D4C`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted prose edit; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Model and Method Section Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of the final-report Model and Method section body.
+- Change made:
+  - Replaced the body text under `docs/report/draft.md` Section 4, `Model and Method`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised opening task paragraph, unseen-city transfer design paragraph, sampled held-out-city benchmark paragraph, and final spatial-analysis paragraph are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `5F957A185FA489388583B26BFBC2218CA892C8D09732234EEB5EEB180DF92DEF`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted replacement; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Dataset Construction Section Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of the final-report Dataset Construction section body.
+- Change made:
+  - Replaced the body text under `docs/report/draft.md` Section 3, `Dataset Construction`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised Dataset Construction opening, grid/resolution paragraphs, final assembly paragraph, audit paragraph, and Figure 2 summary paragraph are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `4E07BC0EE6DF4F4CAF2BB64C5E356E14360647F620E4E3BA9500771EB3411A60`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted replacement; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Research Questions Section Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of the final-report Research Questions section body.
+- Change made:
+  - Replaced the body text under `docs/report/draft.md` Section 2, `Research Questions`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the revised primary question, secondary questions, and `hotspot_10pct` interpretation paragraph are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `0755A768F3AA47A30F93A00C5984EC0BB951FCF5E86E0DC81A92C36E4033D750`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted replacement; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Background Section Replacement
+
+- Date / checkpoint:
+  - 2026-05-04 direct replacement of the final-report Background section.
+- Change made:
+  - Replaced the full body of `docs/report/draft.md` Section 1, `Background Information`, with the user-provided revised prose.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source check confirmed the new Background opening, `Heldout-city transfer` wording, AppEEARS paragraph, and final contributions paragraph are present in `docs/report/draft.md`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `7065F4FD045579F6EDAA17E8F97C2C13E31304E483689F80D5DBD2EC618AFF22`.
+- Manual verification status:
+  - No PDF visual/text extraction pass was performed for this targeted replacement; verification used successful render, source inspection, and matching PDF hashes.
+
+### 2026-05-04 - Checkpoint: Held-Out-City Transfer Prose Polish
+
+- Date / checkpoint:
+  - 2026-05-04 targeted final-report prose pass for the held-out-city transfer results and nearby results/discussion wording.
+- Change made:
+  - Edited `docs/report/draft.md` Section 5.2 so the held-out-city transfer paragraphs open with clearer comparison logic and close with concrete interpretation.
+  - Preserved the reported AP, recall, mean-city AP, and baseline values while clarifying that transfer performance is above no-skill, modest beyond imperviousness and land-cover baselines, and concentrated in selected hot arid cities.
+  - Added a brief interpretation of the slightly stronger logistic mean city AP as a small city-weighted edge that does not overturn the pooled AP and top-decile recall gains.
+  - Standardized reader-facing hyphenation for held-out-city, same-city, 5,000-row-per-city, 20,000-row-per-city, impervious-only, and related compound modifiers in the active report prose and captions.
+  - Replaced several weak signposting phrases in the surrounding results/discussion and reproducibility text with more direct interpretive claims.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with the existing `header.tex`.
+  - Source scan found `0` remaining occurrences in `docs/report/draft.md` for the flagged stale phrases: `held out city`, `Held Out City`, `5,000 rows-per`, `20,000 rows-per`, `both panels matter`, `In practical terms`, `should be read as`, `provides context`, and `pooled AP 0.1486`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after rerender: `6F0F733F6260E9AEB3809F94F0428E3B7A0A68B8133221B720E977FA14187820`.
+- Manual verification status:
+  - No PDF text extractor such as `pypdf`, `pdftotext`, `mutool`, or Ghostscript was available in the active environment/path, so final verification used successful render, source scan, and PDF hash checks.
+
+### 2026-05-03 - Checkpoint: Final Figure/Table And PDF Polish Pass
+
+- Date / checkpoint:
+  - 2026-05-03 final report figure/table and PDF polish pass for the active STAT 5630 submission draft.
+- Change made:
+  - Treated `docs/report/draft.md` as the canonical report source and `docs/report/draft.pdf` / `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` as the rendered outputs.
+  - Confirmed `src/report_artifacts.py` generates Figures 1, 2, 3, 5, 6, 7 and report tables, copies Appendix Figure A1 from the within-city supplemental figure, and composes Appendix Figure A2 from the retained Nashville/San Francisco spatial-alignment maps.
+  - Confirmed Appendix Figure A3 comes from `src.modeling_supplemental.plot_feature_importance_summary` using existing feature-importance summary CSVs under `outputs/modeling/supplemental/feature_importance/tables/`.
+  - Updated Figure 6 generation in `src/report_artifacts.py` from a very wide triptych to a more page-filling 2-by-1 composite with predicted and observed panels above the error panel.
+  - Increased Figure 5 export size slightly and adjusted Figure 7 label offsets for the crowded center labels.
+  - Updated Appendix Figure A3 axis wording from `Mean Held-Out PR AUC Drop` to `Mean Held Out AP Drop`, then regenerated and copied `docs/report/figures/feature_importance_ranked_summary.png`.
+  - Polished `docs/report/draft.md` captions for Figures 2, 4, 5, 6, Appendix Figures A1-A2, standardized the Table 3 no-skill reference wording, cited `docs/report/archive/appendix_within_city_code.md` in Appendix B, removed one unnecessary forced table page break, and converted Table 1 to booktabs-style LaTeX with ragged column wrapping.
+  - Updated `docs/report/header.tex` with a reusable ragged table column type and moderate hyphenation penalties.
+  - Regenerated report artifacts with `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -u -m src.run_report_artifacts --project-root "."`.
+  - Rerendered `docs/report/draft.pdf` from `docs/report`, then refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - `py_compile src/report_artifacts.py src/modeling_supplemental.py` passed.
+  - Pandoc/XeLaTeX render from `docs/report` passed with exit code `0` and no stderr output in `C:\Users\golde\.tmp\STAT5630_FinalProject_DataProcessing\stat5630_report_pandoc_20260503.log`.
+  - Render command used: `C:\Users\golde\AppData\Local\Programs\Quarto\bin\tools\pandoc.exe draft.md --from markdown+pipe_tables+raw_tex+link_attributes-implicit_figures --to pdf --standalone --pdf-engine=xelatex --include-in-header=header.tex -V geometry:margin=1in -V fontsize=12pt -V papersize=letter -o draft.pdf`.
+  - Bundled `pypdf` inspection reported `27` pages and found `0` occurrences of `??`, `Figure ?`, `Table ?`, `placeholder`, `TODO`, `PR AUC`, stale `Appendix Figure A4`, and stale `Appendix Figure A6`.
+  - Bundled `pypdf` inspection found Figures 1-7 and Appendix Figures A1-A3 on expected pages; embedded-image inspection found report figures present on pages 17-21 and appendix figures on pages 24-26.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after the rerender.
+- Manual verification status:
+  - Viewed regenerated report figure assets for Figure 4, Figure 5, Figure 6, Figure 7, Appendix Figure A1, and Appendix Figure A3.
+  - Confirmed Figure 6 is no longer a thin horizontal strip, Appendix Figure A3 now says AP rather than PR AUC, and Figure 7 retains readable Nashville and San Francisco labels.
+  - No PDF page rasterizer such as Poppler, Ghostscript, or PyMuPDF was available in the local tool path, so final PDF verification used successful render, source inspection, report figure image inspection, `pypdf` text checks, and embedded image checks.
+
+### 2026-05-03 - Checkpoint: Appendix Figure A2 Natural Aspect Ratio And Crop Fix
+
+- Date / checkpoint:
+  - 2026-05-03 targeted fix for Appendix Figure A2 map stretching/cutoff and Figure 3 label placement.
+- Change made:
+  - Updated `src/report_artifacts.py` so Appendix Figure A2 uses `aspect="equal"` for the cropped map panels, preserving the natural map aspect ratio instead of forcing horizontal or vertical stretch.
+  - Increased the Appendix Figure A2 composite height so the natural-aspect panels can still scale up when included at page width.
+  - Expanded the Appendix Figure A2 crop window so the full selected map panels are preserved instead of cutting off the bottom/side of the maps.
+  - Moved the `One Outer Fold` box/title upward in Figure 3 to prevent overlap with the city-block grid.
+  - Regenerated report artifacts with `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -u -m src.run_report_artifacts --project-root "."`.
+  - Rerendered `docs/report/draft.pdf` from `docs/report` with the minimal `header.tex`, then refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - `py_compile src/report_artifacts.py` passed.
+  - Pandoc/XeLaTeX render from `docs/report` passed.
+  - Regenerated Appendix Figure A2 asset is `3238 x 2370`, timestamp `2026-05-03 19:52:27`, size `1,685,281` bytes.
+  - Regenerated final PDF timestamp is `2026-05-03 19:53:55`; `draft.pdf` and `5630 Final Report MaxClements NicholasMachado.pdf` have identical SHA-256 hash `A0BA69254963E7C39B476A8949491BA94A48E8C0A1B760AD06645E2ACC584998`.
+  - Bundled `pypdf` inspection reported `27` pages, Appendix Figure A2 present, Figure 3 present, and `0` occurrences of `PR AUC`.
+  - PDF image inspection found the Appendix Figure A2 page embeds `Im8.png` at `3238 x 2370`, matching the regenerated natural-aspect asset.
+- Manual verification status:
+  - Viewed regenerated `docs/report/figures/selected_spatial_alignment_map_contrast.png`; panels now preserve natural map aspect rather than using forced `aspect="auto"`, while retaining more of the map extent.
+  - Viewed regenerated `docs/report/figures/evaluation_design.png`; `One Outer Fold` is lifted clear of the city-block grid.
+
+### 2026-05-03 - Checkpoint: Clean PDF Render With Minimal Header
+
+- Date / checkpoint:
+  - 2026-05-03 render repair after Appendix Figure A2 was regenerated as a taller, non-stretched map composite.
+- Change made:
+  - Added `docs/report/header.tex` with only `graphicx`, `booktabs`, `longtable`, and `array` so `\resizebox` works without pulling in unavailable TinyTeX packages such as `caption`.
+  - Rendered from `docs/report` so relative image paths like `figures/*.png` resolve correctly.
+  - Rerendered `docs/report/draft.pdf` and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - Pandoc/XeLaTeX render from `docs/report` passed with `--include-in-header=header.tex`.
+  - Final PDF timestamp updated to `2026-05-03 19:42:28`; previous stale PDF timestamp was `2026-05-03 19:00:09`.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after the rerender.
+  - Bundled `pypdf` inspection reported `27` pages, `0` occurrences of `PR AUC`, Appendix Table A1 present, Figure 3 present, and Appendix Figure A2 present.
+  - PDF image inspection found the Appendix Figure A2 page embeds `Im8.png` at `3286 x 1869`, matching the regenerated taller `docs/report/figures/selected_spatial_alignment_map_contrast.png` asset.
+- Manual verification status:
+  - No rasterized page render was available in this pass; verification was via successful PDF render, file timestamp/hash checks, PDF text extraction, and embedded-image dimension inspection.
+
+### 2026-05-03 - Checkpoint: Final PDF Figure/Table Layout Touchup
+
+- Date / checkpoint:
+  - 2026-05-03 targeted layout touchup for the active final-report PDF.
+- Change made:
+  - Updated `src/report_artifacts.py` Figure 3 generation so the colored city boxes sit farther above the `24 training cities; 6 held out cities` label.
+  - Updated Appendix Figure A2 generation so the three selected spatial-map crops fill their side-by-side cells across the figure width, with a shorter bottom note.
+  - Updated `docs/report/draft.md` Appendix Table A1 so the city and fold composition table is wrapped in `\resizebox{\linewidth}{!}{...}` and fits the available page width.
+  - Regenerated report artifacts, rerendered `docs/report/draft.pdf`, and refreshed `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`.
+- Verification status:
+  - `src.run_report_artifacts` passed.
+  - `py_compile src/report_artifacts.py` passed.
+  - Pandoc/XeLaTeX render to `docs/report/draft.pdf` passed.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` are identical after the rerender.
+  - Bundled `pypdf` inspection reported `26` pages, `0` occurrences of `PR AUC`, Appendix Table A1 present, Appendix Figure A2 present, and Figure 3 present.
+- Manual verification status:
+  - Viewed regenerated `docs/report/figures/evaluation_design.png` and confirmed the Figure 3 label no longer sits directly under the city boxes.
+  - Viewed regenerated `docs/report/figures/selected_spatial_alignment_map_contrast.png` and confirmed the map panels occupy the width of the composite more fully.
+
+### 2026-05-03 - Checkpoint: Final Report Appendix Order and Figure Sizing Polish
+
+- Date / checkpoint:
+  - 2026-05-03 targeted final polish pass on the active final-report draft and rendered submission PDFs.
+- Change made:
+  - Reordered the appendix figures in `docs/report/draft.md`: Appendix Figure A1 is now the same city versus held out city gap, Appendix Figure A2 is the Nashville/San Francisco spatial map contrast, and Appendix Figure A3 is the feature importance summary.
+  - Updated Section 5.3, Section 5.4, Section 5.5, appendix captions, and figure headings to match the new appendix figure order.
+  - Computed the gap-plot correlations from `outputs/modeling/supplemental/within_city_all_cities/tables/within_city_all_cities_cross_city_gap_by_city.csv`: Pearson correlation `0.9514`, Spearman correlation `0.9378`, using the 60 logistic/random-forest city-model points with nonmissing AP and recall gaps.
+  - Added the rounded Pearson value (`0.95`) to the Section 5.3 discussion and Appendix Figure A1 caption, while preserving the Reno, El Paso, Las Vegas, San Jose, Los Angeles, Portland, Detroit, Nashville, and San Francisco interpretation.
+  - Standardized the manuscript figure includes for Figures 1-7 and Appendix Figures A1-A3 to `width=\linewidth`; Appendix Figure A2 now renders at full line width.
+  - Kept the lower-hyphen style while rewording awkward phrases such as `30 m cell level errors` to `errors at the 30 m cell scale`; added/kept hyphens only for terms such as `one-hot encoding`, `land-cover` modifiers, and `precision-recall`.
+  - Regenerated report artifacts with `src.run_report_artifacts`, then rerendered `docs/report/draft.pdf` and refreshed both submission-named PDFs from it.
+- Verification status:
+  - `src.run_report_artifacts` passed.
+  - Pandoc/XeLaTeX render to `docs/report/draft.pdf` passed.
+  - Bundled `pypdf` text inspection reported `26` pages, `0` occurrences of `PR AUC`, `0` stale `Appendix Figure A4` / `Appendix Figure A6` references, `0` `No-skill`, and `0` `Held-Out-City`.
+  - Rendered text inspection found Appendix Figure A1 on pages `10`, `23`, and `24`; Appendix Figure A2 on pages `10`, `11`, and `24`; Appendix Figure A3 on pages `11` and `25`; the Pearson `0.95` sentence is present.
+  - SHA-256 check confirmed `docs/report/draft.pdf`, `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`, and `docs/report/SHaowenZhou5630 Final Report MaxClements NicholasMachado.pdf` are identical after the rerender.
+- Manual verification status:
+  - No rasterized page image visual QA was available in this pass because Ghostscript/Poppler/PyMuPDF were not available in the local tool path. Verification was by source inspection, generated artifact inspection, PDF render success, and PDF text extraction.
+
+### 2026-05-03 - Checkpoint: Partner Comment Report Update
+
+- Date / checkpoint:
+  - 2026-05-03 partner-comment pass on the final submission document.
+- Change made:
+  - Treated `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` as the final submission PDF moving forward.
+  - Updated `docs/report/draft.md` Section 5.3 with a brief discussion of Appendix Figure A6, including the positive diagonal gap pattern, Reno random forest as the largest outlier, and the high-gap group of El Paso RF, Las Vegas logistic regression, San Jose RF, and Los Angeles RF.
+  - Added Appendix Figure A6 back to the appendix using `docs/report/figures/within_vs_cross_gap.png` under its old label: `Appendix Figure A6. Supplemental Within-City Versus Cross-City Gap`.
+  - Updated Future Work to recommend repeated within-city cross-fold validation, with preprocessing inside each fold and spatially separated folds or blocks where possible.
+  - Rerendered `docs/report/draft.pdf`, then refreshed both `docs/report/5630 Final Report MaxClements NicholasMachado.pdf` and `docs/report/SHaowenZhou5630 Final Report MaxClements NicholasMachado.pdf` from the rendered draft.
+- Follow-up figure/prose pass:
+  - Relabeled the restored gap figure from Appendix Figure A6 to Appendix Figure A3 because there are no Appendix Figures A4-A6 in the current draft.
+  - Updated `src/modeling_supplemental.py` so the gap figure labels Nashville RF, San Francisco RF, Portland logistic regression, and Detroit logistic regression in addition to the largest positive gap cases.
+  - Added a fitted trend line to the gap figure, changed the plot title and axes to plainer "same city" / "held out city" language, and changed climate legend labels from underscored names to reader-facing labels.
+  - Regenerated `figures/modeling/supplemental/within_city_all_cities/within_city_all_cities_within_vs_cross_gap.png` and `docs/report/figures/within_vs_cross_gap.png` from the retained gap table using the production plotting function.
+  - Rewrote Section 5.3 and the Appendix Figure A3 caption to explain the deeper transfer story: Nashville appears to align with the six predictors better, while San Francisco likely depends more on local processes outside the feature set.
+  - Explained that the two lower-left points are Portland logistic regression and Detroit logistic regression, where retained transfer scores are slightly higher than repeated same city split scores.
+  - Reduced repeated hyphenated report shorthand in the edited sections and captions.
+- Verification status:
+  - Pandoc/XeLaTeX render to `docs/report/draft.pdf` passed.
+  - `py_compile src/modeling_supplemental.py` passed.
+  - Rendered PDF text inspection with bundled `pypdf` reported `26` pages.
+  - Rendered page boundaries: `Tables and Figures` begins page `15`, `Appendix` begins page `22`, Appendix Figure A3 appears on page `25`, and Data and Code appears on page `26`.
+  - Image-reference scan found `10` Markdown image references and `0` missing local figure files.
+  - SHA-256 check confirmed `docs/report/draft.pdf`, `docs/report/5630 Final Report MaxClements NicholasMachado.pdf`, and `docs/report/SHaowenZhou5630 Final Report MaxClements NicholasMachado.pdf` are identical after the rerender.
+  - Source scan found no remaining `A6` references in `docs/report/draft.md`.
+- Manual verification status:
+  - Viewed `docs/report/figures/within_vs_cross_gap.png` and confirmed it contains the intended Reno RF outlier, high-gap group, Nashville/San Francisco labels, Portland/Detroit logistic labels, and positive trend pattern.
+
+### 2026-05-03 - Checkpoint: Draft PDF Rubric Formatting Pass
+
+- Date / checkpoint:
+  - 2026-05-03 final-report formatting pass on the active submission draft.
+- Change made:
+  - Updated `docs/report/draft.md` with a standalone pseudo-APA title page containing the project title, subtitle, collaborators, University of Virginia affiliation, course, instructor, and date.
+  - Promoted main-text section headings to a cleaner primary section level and kept Results subsections one level below the main Results and Discussion section.
+  - Added a hard page break before `Tables and Figures` so the required report parts are visually separated: title page, main text/references, tables and figures, and appendix.
+  - Added a hard page break before `References` so the references section starts on its own page.
+  - Rerendered `docs/report/draft.pdf` from `docs/report/draft.md` using the existing Pandoc/XeLaTeX workflow.
+  - Added a submission-named PDF copy at `docs/report/SHaowenZhou5630 Final Report MaxClements NicholasMachado.pdf` while keeping `docs/report/draft.pdf` as the working draft.
+- Verification status:
+  - Pandoc/XeLaTeX render to `docs/report/draft.pdf` passed.
+  - Rendered PDF text inspection with bundled `pypdf` reported `24` pages.
+  - Rendered page boundaries: title page on page `1`, main text begins page `2`, `References` begins page `13`, `Tables and Figures` begins page `14`, and `Appendix` begins page `21`.
+  - Main text plus references spans pages `2-13`, staying under the assignment's `15` page cap for a two-person project when title page, tables/figures, and appendix are excluded.
+  - Image-reference scan found `9` Markdown image references and `0` missing local figure files.
+  - SHA-256 check confirmed `docs/report/draft.pdf` and `docs/report/SHaowenZhou5630 Final Report MaxClements NicholasMachado.pdf` are identical after the rerender.
+- Manual verification status:
+  - No full rasterized page-by-page visual QA was performed in this pass; verification was text/structure based.
+
+### 2026-05-03 - Checkpoint: Expanded Polished Manuscript Draft
+
+- Date / checkpoint:
+  - 2026-05-03 expanded-polish paper revision pass.
+- Change made:
+  - Created `docs/report/paper_draft_expanded_polished.md` from the polished draft direction and the richer `stat5630_final_report_draft.md` content.
+  - Rendered `docs/report/paper_draft_expanded_polished.pdf`.
+  - Created `docs/report/expanded_polish_revision_log.md`.
+  - Restored literature grounding, dataset construction detail, same-city and whole-city validation methods, metric explanations, sampling details, spatial-alignment diagnostic detail, references, reproducibility note, and selected appendices.
+  - Replaced the two polished-draft `[partner paragraph]` placeholders with integrated prose.
+  - Included the same-city partner-code appendix by reference to `docs/report/appendix_within_city_code.md` and labeled it as illustrative rather than production-equivalent.
+- Appendix status:
+  - Retained Appendix Table A1, Appendix Tables A2-A4, Appendix Figure A1, Appendix Figure A2, and Appendix B.
+  - Omitted dense duplicate appendix tables and several embedded appendix figures to keep the rendered manuscript near the requested length while preserving their supporting claims in prose/tables and existing figure files.
+- Verification status:
+  - Pandoc/xelatex render of `docs/report/paper_draft_expanded_polished.md` to `docs/report/paper_draft_expanded_polished.pdf` passed.
+  - Rendered PDF length checked with `pypdf`: `23` pages.
+  - Markdown word count checked with PowerShell: approximately `7,752` words after the style-thinning pass.
+  - `rg` scan found no `TODO`, `[partner`, `artifacted`, `validation-design`, `city-held-out`, `surface-temperature cells`, `evaluation uses`, `smoothed parts`, `surface-hotspot screening target`, `thermal outcome ingredient`, `analytic backbone`, `verified`, `six-feature`, `higher-sample`, `pure spatial noise`, `prevalence-style`, `hotspot-like`, `contract`, `target-rate`, `diagnostic`, or `benchmark` text in the expanded draft.
+  - Image-reference scan found `0` missing local image files.
+- Style-thinning pass:
+  - Replaced the recurring internal vocabulary flagged by the user with plainer academic wording.
+  - Replaced "partner-code appendix" with "supplemental code appendix" and removed "authors" wording outside literature-reference contexts.
+  - Rerendered the PDF successfully after the wording pass; rendered length remained `23` pages.
+- Final small-issue pass:
+  - Reworded Table 3's runtime note so `n/a` baseline entries are justified as deterministic scoring rules rather than missing internal metadata.
+  - Updated `src/report_artifacts.py` and regenerated report artifacts so Figure 7 labels every city point.
+  - Reworded the climate-group appendix table note to avoid internal "secondary to the main benchmark table" phrasing.
+  - Wrapped long lines in `docs/report/appendix_within_city_code.md`; a temporary appendix PDF render passed with no pandoc warnings and was removed after verification.
+  - Rerendered `docs/report/paper_draft_expanded_polished.pdf`; rendered length remained `23` pages.
+  - Focused tests passed: `python -m pytest tests\test_report_artifacts.py -q` returned `3 passed`.
+  - Follow-up PDF width fix: shortened the inline `docs/report/appendix_within_city_code.md` reference in Appendix B because the full path did not wrap cleanly, then rerendered the manuscript PDF successfully.
+- Held-out-city terminology and figure-label pass:
+  - Standardized the latest reader-facing terminology around "same-city evaluation," "held-out-city transfer," and "broader spatial alignment."
+  - Removed remaining "withheld-city" compounds and retained "withheld" only as a verb where it describes cities excluded from training.
+  - Reworded remaining heavy phrases around inference scope, water-feature distance, ECOSTRESS observation counts, no-skill references, and city-to-city model heterogeneity.
+  - Regenerated Figure 2 with reader-facing labels: "Audit and Fold Assignment," "Model Evaluation," and "Predictions and maps."
+  - Regenerated Figure 3 with "Held-out-city transfer design."
+  - Standardized generated labels from "No-skill / prevalence reference" to "No-skill reference."
+- Archive cleanup:
+  - Moved superseded report artifacts from `docs/report/` to `docs/report/archive/`:
+    - `20260503_paper_draft_polished.md`
+    - `20260503_paper_draft_polished.pdf`
+    - `20260503_figure_table_revision_checklist.md`
+  - Kept the active expanded manuscript, rendered PDF, revision log, and supplemental same-city code appendix in the report root.
+- Metric naming and spatial-alignment interpretation pass:
+  - Standardized report-facing metric terminology from `PR AUC` to average precision (`AP`) in the manuscript, Table 3, Figure 4 labels/caption, Figure 5 labels/caption, Appendix Tables A2-A4, generated report CSVs, and report SVG/PNG labels.
+  - Confirmed the metric source: `src.modeling_metrics.safe_average_precision()` calls `sklearn.metrics.average_precision_score`; retained model metadata records `scoring = "average_precision"`; historical output columns are still named `pr_auc`.
+  - Rewrote Section 5.4 to state the feature-set interpretation directly: random forest prediction maps can be coherent urban-structure maps, but transfer succeeds only where that learned pattern matches observed hotspot geography in the held-out city.
+  - Added explicit Nashville and San Francisco interpretation. Nashville is now described as the strongest 300 m alignment case; San Francisco is described as a coherent-but-misaligned prediction case.
+  - Regenerated report artifacts and the presentation-derived Figure 4 copy under `docs/report/figures/within_city_vs_transfer_results.png`.
+  - Renumbered retained appendix items so tables run A1-A4 and figures run A1-A2, then updated all current manuscript cross-references.
+  - Rerendered `docs/report/paper_draft_expanded_polished.pdf` after appendix renumbering.
+- Manual verification status:
+  - Viewed the regenerated Figure 3 image and confirmed the held-out-city terminology is visible and consistent.
+  - Viewed regenerated Figure 4, Figure 5, and Appendix Figure A2 after the AP/spatial-interpretation pass.
+  - No full visual page-by-page PDF QA was performed in this turn.
+- Latest verification status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts --project-root .` passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py -q` passed with `3 passed` when run with `MPLBACKEND=Agg`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py tests\test_presentation_deck_builder.py -q` passed with `6 passed`.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\modeling_metrics.py src\report_artifacts.py src\presentation_visual_assets.py` passed.
+  - Pandoc/xelatex render of `docs/report/paper_draft_expanded_polished.md` to `docs/report/paper_draft_expanded_polished.pdf` passed.
+  - Rendered PDF length checked with `pypdf`: `23` pages; Markdown word count is approximately `7,921` words.
+  - Rendered PDF text scan found `0` occurrences of `withheld-city`, `prevalence reference`, `Audit and Split Contract`, `Modeling and Delivery`, `Transfer-oriented model package`, `City-held-out`, and `30-city aligned dataset`.
+  - Rendered PDF text scan found `0` occurrences of `PR AUC`, `reported as PR AUC`, `Pooled PR`, `Mean city PR`, `RF PR`, `Logit PR`, `spatial-placement diagnostic`, `diagnostic layer`, `support field`, and `contract`.
+  - Rendered PDF text scan found `0` stale appendix labels for Appendix Tables A5-A7 and Appendix Figure A7; current rendered labels are Appendix Tables A1-A4 and Appendix Figures A1-A2.
+- Immediate Next Step:
+  - Visually inspect `docs/report/paper_draft_expanded_polished.pdf`, especially Tables 2-3, Figure 5, Appendix Figure A2, and the Data and Code Availability heading, before submission.
+
+### 2026-05-03 - Checkpoint: Table 3 Runtime Resolution And Polished Report Render
+
+- Date / checkpoint:
+  - 2026-05-03 Table 3 baseline-runtime pass for `docs/report/paper_draft_polished.md`.
+- Runtime-source inspection:
+  - Checked `outputs/modeling/baselines/`, `outputs/modeling/baselines/metrics_summary.csv`, `outputs/modeling/baselines/run_metadata.json`, `outputs/modeling/run_registry.jsonl`, `outputs/modeling/tuning_history.csv`, and `outputs/modeling/reporting/tables/cross_city_benchmark_report_benchmark_table.csv`.
+  - The retained baseline metrics exist, but baseline runtime values were not recorded in the baseline metadata, run registry, tuning history, or reporting benchmark table.
+  - Did not infer runtime from file timestamps.
+- Change made:
+  - Removed the Table 3 runtime TODO from `docs/report/paper_draft_polished.md`.
+  - Kept the Table 3 baseline runtime entries as `n/a` and added a reader-facing note that baseline runtime was not recorded in the retained baseline metadata.
+  - Updated `docs/report/figure_table_revision_checklist.md` to mark the Table 3 baseline-runtime item as resolved.
+  - Regenerated report artifacts with `src.run_report_artifacts --project-root .`, including `docs/report/tables/benchmark_metrics.csv` and the report-facing figure bundle under `docs/report/figures/`.
+  - Rendered the polished submission target to `docs/report/paper_draft_polished.pdf`.
+- Source/script changes:
+  - No figure/table source script was changed in this pass.
+- Partner paragraph status:
+  - Both `[partner paragraph]` markers remain in `docs/report/paper_draft_polished.md`.
+- Verification status:
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m src.run_report_artifacts --project-root .` passed.
+  - Pandoc render of `docs/report/paper_draft_polished.md` to `docs/report/paper_draft_polished.pdf` passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m py_compile src\report_artifacts.py src\modeling_supplemental.py` passed.
+  - `C:\Users\golde\.venvs\STAT5630_FinalProject_DataProcessing\Scripts\python.exe -m pytest tests\test_report_artifacts.py tests\test_modeling_supplemental.py -q` passed with `15 passed`.
+  - `rg` scan of `docs/report/paper_draft_polished.md` and `docs/report/figure_table_revision_checklist.md` found no remaining `TODO`, `Partial TODO`, or `Confirm whether Table 3` text; it found only the two intentional `[partner paragraph]` markers.
+- Manual review still needed:
+  - Review `docs/report/paper_draft_polished.pdf` visually before submission, especially table/figure placement and the intentionally preserved partner paragraphs.
+  - Confirm that the shortened reference list in `paper_draft_polished.md` is acceptable, or replace it with full citation formatting from the existing final report draft.
+- Immediate Next Step:
+  - Do a final visual PDF QA pass on `docs/report/paper_draft_polished.pdf`, then decide whether to replace the partner paragraph markers or leave them for partner-supplied text.
+
+### 2026-05-03 - Checkpoint: Polished Report Draft And Figure/Table Fix Pass
+
+- Date / checkpoint:
+  - 2026-05-03 forward-facing manuscript polish pass using `lastcodexwritingpass.md` as the base draft and `Tablesandfiguresnotes.md` as the revision checklist.
+- Change made:
+  - Created `docs/report/paper_draft_polished.md` as the clean forward-facing draft with smoother prose, updated figure/table references, the newer spatial-alignment diagnostic framing, and both `[partner paragraph]` markers preserved.
+  - Created `docs/report/figure_table_revision_checklist.md` documenting each requested Table/Figure note, including the remaining Table 3 baseline-runtime TODO.
+  - Created `docs/report/appendix_within_city_code.md` with cleaned partner-code-derived same-city 70/30 sklearn examples, clearly labeled as illustrative supplemental code rather than the production transfer pipeline.
+  - Updated `src/modeling_supplemental.py` so Appendix Figure A6 labels the clear high-gap outlier and the nearby high-gap cluster.
+  - Regenerated the source A6 plot and report-facing A6 copy:
+    - `figures/modeling/supplemental/within_city_all_cities/within_city_all_cities_within_vs_cross_gap.png`
+    - `docs/report/figures/within_vs_cross_gap.png`
+  - Regenerated report artifacts once with `src.run_report_artifacts`, refreshing the report-facing figure bundle including Figure 7.
+  - Archived rough source notes after the polished outputs were created:
+    - `docs/report/archive/20260503_lastcodexwritingpass.md`
+    - `docs/report/archive/20260503_ourcurrentversion.md`
+    - `docs/report/archive/20260503_partnercodeappendices.md`
+    - `docs/report/archive/20260503_Tablesandfiguresnotes.md`
+- Partner paragraph status:
+  - Model choice / PR AUC partner paragraph preserved in Section 1 of `docs/report/paper_draft_polished.md`.
+  - Figure 5 / Nashville / climate-separation partner paragraph preserved in Section 5.3 of `docs/report/paper_draft_polished.md`.
+- Verification status:
+  - `python -m py_compile src/modeling_supplemental.py src/report_artifacts.py` passed.
+  - `python -m pytest tests/test_modeling_supplemental.py tests/test_report_artifacts.py -q` passed with `15 passed`.
+  - After the final label-offset adjustment, `python -m py_compile src/modeling_supplemental.py` passed.
+  - After the final label-offset adjustment, `python -m pytest tests/test_modeling_supplemental.py -q` passed with `12 passed`.
+  - Visually inspected `docs/report/figures/within_vs_cross_gap.png`; labels are present and readable in the high-gap cluster.
+- Manual review still needed:
+  - Review `docs/report/paper_draft_polished.md` before submission, especially the shortened reference list and final report formatting expectations.
+- Immediate Next Step:
+  - Superseded by the later Table 3 runtime-resolution checkpoint above.
+
 ### 2026-05-03 - Checkpoint: Remove Unpushed Parquet Artifacts From Git History
 
 - Date / checkpoint:
